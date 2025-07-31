@@ -1,0 +1,34 @@
+{
+  "name": "repo",
+  "version": "1.0.0",
+  "description": "A modular, responsive sketching tool for structural beam inspection. It enables precise elevation and cross-section markup using a hybrid graphics stack. Designed with tactility and clarity in mind, it supports fast field annotation, structured condition reporting, and exportable vector documentation for archival and engineering review.",
+  "main": "index.js",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc && vite build",
+    "preview": "vite preview",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/greasegum/phaserBeam.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/greasegum/phaserBeam/issues"
+  },
+  "homepage": "https://github.com/greasegum/phaserBeam#readme",
+  "dependencies": {
+    "@types/react": "^19.1.9",
+    "@types/react-dom": "^19.1.7",
+    "@vitejs/plugin-react": "^4.7.0",
+    "paper": "^0.12.18",
+    "phaser": "^3.90.0",
+    "react": "^19.1.1",
+    "react-dom": "^19.1.1",
+    "typescript": "^5.9.2",
+    "vite": "^7.0.6"
+  }
+}
