@@ -106,19 +106,59 @@ export const BeamViewer: React.FC<BeamViewerProps> = ({
       })
     }
 
-    // Draw section loss contours if any
-    if (sectionLossCells.length > 0) {
-      const contours = marchingSquares(sectionLossCells, 1, 1)
-      contours.forEach(contour => {
-        const path = new paperScope.Path({
-          segments: contour.map(pt => [centerX + pt.x * scale, centerY + pt.y * scale]),
-          closed: true,
-          fillColor: new paperScope.Color(1, 0.4, 0.4, 0.5),
-          strokeColor: new paperScope.Color(0.8, 0.2, 0.2),
-          strokeWidth: 1
-        })
-        path.smooth()
+    // Draw section loss overlay on cross-section
+    if (sectionLossCells.length > 0 && beamProfile) {
+      const totalHeight = webHeight + 2 * flangeThickness
+      
+      // Group cells by column (lengthwise position)
+      const columnLosses = new Map<number, Set<number>>()
+      sectionLossCells.forEach(cell => {
+        if (!columnLosses.has(cell.x)) {
+          columnLosses.set(cell.x, new Set())
+        }
+        columnLosses.get(cell.x)?.add(cell.y)
       })
+      
+      // For cross-section, show worst-case scenario
+      let maxLossRows = 0
+      let worstColumn = 0
+      columnLosses.forEach((rows, col) => {
+        if (rows.size > maxLossRows) {
+          maxLossRows = rows.size
+          worstColumn = col
+        }
+      })
+      
+      // Draw loss areas on cross-section for worst case
+      if (maxLossRows > 0) {
+        const worstRows = columnLosses.get(worstColumn)
+        if (worstRows) {
+          worstRows.forEach(row => {
+            // Calculate position on cross-section
+            const yOffset = (row / Math.ceil(totalHeight)) * totalHeight * scale
+            const lossY = centerY - (totalHeight * scale) / 2 + yOffset
+            
+            // Draw loss indicator across the beam width
+            new paperScope.Path.Rectangle({
+              point: [centerX - (flangeWidth * scale) / 2, lossY],
+              size: [flangeWidth * scale, scale],
+              fillColor: new paperScope.Color(1, 0.4, 0.4, 0.6),
+              strokeColor: new paperScope.Color(0.8, 0.2, 0.2),
+              strokeWidth: 0.5
+            })
+          })
+        }
+        
+        // Add loss percentage text
+        const lossPercentage = (maxLossRows / Math.ceil(totalHeight)) * 100
+        new paperScope.PointText({
+          point: [centerX, centerY + (totalHeight * scale) / 2 + 50],
+          content: `Max Section Loss: ${lossPercentage.toFixed(0)}%`,
+          fontSize: 14,
+          fillColor: new paperScope.Color(0.8, 0.2, 0.2),
+          justification: 'center'
+        })
+      }
     }
 
     // Label

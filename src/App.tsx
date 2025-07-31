@@ -44,9 +44,9 @@ export default function App() {
             <h3 style={{ marginBottom: '10px', color: '#333' }}>Instructions</h3>
             <ul style={{ fontSize: '14px', color: '#666', paddingLeft: '20px' }}>
               <li>Select a beam profile from the dropdown</li>
-              <li>Click on grid cells to mark section loss</li>
-              <li>Web grid shows cross-sectional loss</li>
-              <li>Flange grid shows lengthwise loss</li>
+              <li>Click grid cells on beam elevation to mark section loss</li>
+              <li>Grid overlays the beam profile at 1" intervals</li>
+              <li>Cross-section shows worst-case loss</li>
               <li>Red areas indicate section loss</li>
             </ul>
           </div>
@@ -54,7 +54,7 @@ export default function App() {
 
         <main style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
           <div style={{ backgroundColor: 'white', borderRadius: '8px', padding: '20px', boxShadow: '0 2px 4px rgba(0,0,0,0.1)' }}>
-            <h3 style={{ marginBottom: '10px', color: '#333', textAlign: 'center' }}>Interactive Grid - Click to Mark Section Loss</h3>
+            <h3 style={{ marginBottom: '10px', color: '#333', textAlign: 'center' }}>Beam Elevation - Click Grid to Mark Section Loss</h3>
             <PhaserCanvas beamProfile={selectedBeam} onCellChange={handleCellChange} />
           </div>
         </main>

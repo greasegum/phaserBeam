@@ -1,6 +1,6 @@
 import React, { useEffect, useRef } from 'react'
 import Phaser from 'phaser'
-import { GridScene } from '../scenes/GridScene'
+import { BeamElevationScene } from '../scenes/BeamElevationScene'
 import { BeamProfile, GridCell } from '../types/beam'
 
 interface PhaserCanvasProps {
@@ -21,7 +21,7 @@ export const PhaserCanvas: React.FC<PhaserCanvasProps> = ({ beamProfile, onCellC
       height: 600,
       parent: containerRef.current,
       backgroundColor: '#f0f0f0',
-      scene: [GridScene],
+      scene: [BeamElevationScene],
       physics: {
         default: 'arcade',
         arcade: {
@@ -34,9 +34,9 @@ export const PhaserCanvas: React.FC<PhaserCanvasProps> = ({ beamProfile, onCellC
     
     // Wait for scene to be ready then pass data
     gameRef.current.events.on('ready', () => {
-      const scene = gameRef.current?.scene.getScene('GridScene') as GridScene
+      const scene = gameRef.current?.scene.getScene('BeamElevationScene') as BeamElevationScene
       if (scene) {
-        scene.scene.start('GridScene', { beamProfile, onCellChange })
+        scene.scene.start('BeamElevationScene', { beamProfile, onCellChange })
       }
     })
 
@@ -48,7 +48,7 @@ export const PhaserCanvas: React.FC<PhaserCanvasProps> = ({ beamProfile, onCellC
   useEffect(() => {
     if (!gameRef.current || !beamProfile) return
     
-    const scene = gameRef.current.scene.getScene('GridScene') as GridScene
+    const scene = gameRef.current.scene.getScene('BeamElevationScene') as BeamElevationScene
     if (scene && scene.scene.isActive()) {
       scene.updateBeamProfile(beamProfile)
     }
