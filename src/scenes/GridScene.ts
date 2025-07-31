@@ -2,7 +2,6 @@ import Phaser from 'phaser'
 import { BeamProfile, GridCell } from '../types/beam'
 
 export class GridScene extends Phaser.Scene {
-  private gridCells: Phaser.GameObjects.Rectangle[][] = []
   private selectedCells: Set<string> = new Set()
   private beamProfile: BeamProfile | null = null
   private gridScale = 50 // pixels per inch
@@ -22,7 +21,7 @@ export class GridScene extends Phaser.Scene {
   create() {
     if (!this.beamProfile) return
 
-    const { webHeight, webThickness, flangeWidth, flangeThickness } = this.beamProfile
+    const { webHeight, webThickness, flangeThickness } = this.beamProfile
     
     // Center the beam in the scene
     const centerX = this.cameras.main.width / 2
@@ -115,7 +114,7 @@ export class GridScene extends Phaser.Scene {
     
     const cells: GridCell[] = []
     this.selectedCells.forEach(key => {
-      const [type, x, y] = key.split('_')
+      const [, x, y] = key.split('_')
       cells.push({
         x: parseInt(x),
         y: parseInt(y),

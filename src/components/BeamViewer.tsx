@@ -25,6 +25,8 @@ export const BeamViewer: React.FC<BeamViewerProps> = ({
     setPaperScope(scope)
 
     return () => {
+      scope.project.clear()
+      // @ts-ignore - remove() method exists but not in types
       scope.remove()
     }
   }, [])
@@ -43,7 +45,7 @@ export const BeamViewer: React.FC<BeamViewerProps> = ({
     const centerY = 200
 
     // Web
-    const web = new paperScope.Path.Rectangle({
+    new paperScope.Path.Rectangle({
       point: [centerX - (webThickness * scale) / 2, centerY - (webHeight * scale) / 2],
       size: [webThickness * scale, webHeight * scale],
       strokeColor: 'black',
@@ -52,7 +54,7 @@ export const BeamViewer: React.FC<BeamViewerProps> = ({
     })
 
     // Top flange
-    const topFlange = new paperScope.Path.Rectangle({
+    new paperScope.Path.Rectangle({
       point: [centerX - (flangeWidth * scale) / 2, centerY - (webHeight * scale) / 2 - flangeThickness * scale],
       size: [flangeWidth * scale, flangeThickness * scale],
       strokeColor: 'black',
@@ -61,7 +63,7 @@ export const BeamViewer: React.FC<BeamViewerProps> = ({
     })
 
     // Bottom flange
-    const bottomFlange = new paperScope.Path.Rectangle({
+    new paperScope.Path.Rectangle({
       point: [centerX - (flangeWidth * scale) / 2, centerY + (webHeight * scale) / 2],
       size: [flangeWidth * scale, flangeThickness * scale],
       strokeColor: 'black',
@@ -72,14 +74,14 @@ export const BeamViewer: React.FC<BeamViewerProps> = ({
     // Add dimensions if enabled
     if (showDimensions) {
       // Web height dimension
-      const dimLine1 = new paperScope.Path.Line({
+      new paperScope.Path.Line({
         from: [centerX + (flangeWidth * scale) / 2 + 20, centerY - (webHeight * scale) / 2],
         to: [centerX + (flangeWidth * scale) / 2 + 20, centerY + (webHeight * scale) / 2],
         strokeColor: 'black',
         strokeWidth: 1
       })
 
-      const dimText1 = new paperScope.PointText({
+      new paperScope.PointText({
         point: [centerX + (flangeWidth * scale) / 2 + 30, centerY],
         content: `${webHeight}"`,
         fontSize: 12,
@@ -88,14 +90,14 @@ export const BeamViewer: React.FC<BeamViewerProps> = ({
       })
 
       // Flange width dimension
-      const dimLine2 = new paperScope.Path.Line({
+      new paperScope.Path.Line({
         from: [centerX - (flangeWidth * scale) / 2, centerY + (webHeight * scale) / 2 + flangeThickness * scale + 20],
         to: [centerX + (flangeWidth * scale) / 2, centerY + (webHeight * scale) / 2 + flangeThickness * scale + 20],
         strokeColor: 'black',
         strokeWidth: 1
       })
 
-      const dimText2 = new paperScope.PointText({
+      new paperScope.PointText({
         point: [centerX, centerY + (webHeight * scale) / 2 + flangeThickness * scale + 30],
         content: `${flangeWidth}"`,
         fontSize: 12,
@@ -120,7 +122,7 @@ export const BeamViewer: React.FC<BeamViewerProps> = ({
     }
 
     // Label
-    const label = new paperScope.PointText({
+    new paperScope.PointText({
       point: [centerX, 50],
       content: beamProfile.name,
       fontSize: 18,
@@ -128,6 +130,7 @@ export const BeamViewer: React.FC<BeamViewerProps> = ({
       justification: 'center'
     })
 
+    // @ts-ignore - draw() method exists but not in types
     paperScope.view.draw()
   }, [paperScope, beamProfile, sectionLossCells, showDimensions])
 

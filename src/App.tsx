@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import { useState } from 'react'
 import { BeamSelector } from './components/BeamSelector'
 import { BeamViewer } from './components/BeamViewer'
 import { PhaserCanvas } from './components/PhaserCanvas'
