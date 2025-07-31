@@ -5,26 +5,30 @@ export class BeamElevationScene extends Phaser.Scene {
   private beamProfile: BeamProfile | null = null
   private gridSize = 30 // pixels per inch (smaller for better fit)
   private beamLength = 120 // inches (10 feet default)
+  private editMode = true
   private selectedCells: Set<string> = new Set()
   private gridCells: Map<string, Phaser.GameObjects.Rectangle> = new Map()
   private onCellChange?: (cells: GridCell[]) => void
   private beamGraphics?: Phaser.GameObjects.Graphics
+  private lossGraphics?: Phaser.GameObjects.Graphics
+  private gridContainer?: Phaser.GameObjects.Container
   private dimensionText: Phaser.GameObjects.Text[] = []
 
   constructor() {
     super({ key: 'BeamElevationScene' })
   }
 
-  init(data: { beamProfile: BeamProfile; beamLength?: number; onCellChange?: (cells: GridCell[]) => void }) {
+  init(data: { beamProfile: BeamProfile; beamLength?: number; editMode?: boolean; onCellChange?: (cells: GridCell[]) => void }) {
     this.beamProfile = data.beamProfile
     this.beamLength = data.beamLength || 120
+    this.editMode = data.editMode !== undefined ? data.editMode : true
     this.onCellChange = data.onCellChange
   }
 
   create() {
     if (!this.beamProfile) return
 
-    const { webHeight, flangeWidth, flangeThickness } = this.beamProfile
+    const { webHeight, flangeThickness } = this.beamProfile
     
     // Calculate scene dimensions
     const sceneWidth = this.cameras.main.width
@@ -41,8 +45,15 @@ export class BeamElevationScene extends Phaser.Scene {
     this.beamGraphics = this.add.graphics()
     this.drawBeamProfile(startX, centerY, availableWidth)
 
-    // Create grid overlay
-    this.createGrid(startX, centerY, availableWidth)
+    // Create loss graphics layer
+    this.lossGraphics = this.add.graphics()
+    this.drawSectionLoss(startX, centerY, availableWidth)
+
+    // Create grid overlay container
+    this.gridContainer = this.add.container()
+    if (this.editMode) {
+      this.createGrid(startX, centerY, availableWidth)
+    }
 
     // Add dimension lines and labels
     this.addDimensions(startX, centerY, availableWidth)
@@ -71,7 +82,7 @@ export class BeamElevationScene extends Phaser.Scene {
   private drawBeamProfile(startX: number, centerY: number, width: number) {
     if (!this.beamProfile || !this.beamGraphics) return
 
-    const { webHeight, flangeWidth, flangeThickness } = this.beamProfile
+    const { webHeight, flangeThickness } = this.beamProfile
     const webTop = centerY - (webHeight * this.gridSize) / 2
     const webBottom = centerY + (webHeight * this.gridSize) / 2
     const flangeTop = webTop - flangeThickness * this.gridSize
@@ -85,8 +96,7 @@ export class BeamElevationScene extends Phaser.Scene {
     this.beamGraphics.fillRect(startX, flangeTop, width, flangeThickness * this.gridSize)
     this.beamGraphics.strokeRect(startX, flangeTop, width, flangeThickness * this.gridSize)
 
-    // Draw web (center line for elevation view)
-    const webThicknessPixels = Math.max(2, this.gridSize * 0.5) // Visible web thickness
+    // Draw web
     this.beamGraphics.fillRect(
       startX, 
       webTop, 
@@ -112,10 +122,30 @@ export class BeamElevationScene extends Phaser.Scene {
     this.beamGraphics.strokePath()
   }
 
-  private createGrid(startX: number, centerY: number, width: number) {
-    if (!this.beamProfile) return
+  private drawSectionLoss(startX: number, centerY: number, width: number) {
+    if (!this.beamProfile || !this.lossGraphics) return
+    
+    this.lossGraphics.clear()
+    
+    const { webHeight, flangeThickness } = this.beamProfile
+    const totalHeight = webHeight + 2 * flangeThickness
+    const gridTop = centerY - (totalHeight * this.gridSize) / 2
+    
+    // Draw loss areas
+    this.selectedCells.forEach(key => {
+      const [col, row] = key.split('_').map(Number)
+      const x = startX + col * this.gridSize
+      const y = gridTop + row * this.gridSize
+      
+      this.lossGraphics.fillStyle(0xff6b6b, 0.6)
+      this.lossGraphics.fillRect(x, y, this.gridSize, this.gridSize)
+    })
+  }
 
-    const { webHeight, flangeWidth, flangeThickness } = this.beamProfile
+  private createGrid(startX: number, centerY: number, width: number) {
+    if (!this.beamProfile || !this.gridContainer) return
+
+    const { webHeight, flangeThickness } = this.beamProfile
     const totalHeight = webHeight + 2 * flangeThickness
     const gridTop = centerY - (totalHeight * this.gridSize) / 2
     
@@ -146,6 +176,12 @@ export class BeamElevationScene extends Phaser.Scene {
         
         const key = `${col}_${row}`
         this.gridCells.set(key, cell)
+        this.gridContainer.add(cell)
+        
+        // Restore selected state if cell was previously selected
+        if (this.selectedCells.has(key)) {
+          cell.setFillStyle(0xff6b6b, 0.6)
+        }
         
         this.setupCellInteraction(cell)
       }
@@ -154,6 +190,8 @@ export class BeamElevationScene extends Phaser.Scene {
 
   private setupCellInteraction(cell: Phaser.GameObjects.Rectangle) {
     cell.on('pointerdown', () => {
+      if (!this.editMode) return
+      
       const key = `${cell.getData('col')}_${cell.getData('row')}`
       
       if (this.selectedCells.has(key)) {
@@ -164,16 +202,25 @@ export class BeamElevationScene extends Phaser.Scene {
         cell.setFillStyle(0xff6b6b, 0.6)
       }
       
+      // Redraw loss graphics
+      const sceneWidth = this.cameras.main.width
+      const startX = 80
+      const endX = sceneWidth - 80
+      const availableWidth = endX - startX
+      this.drawSectionLoss(startX, this.cameras.main.height / 2, availableWidth)
+      
       this.notifyCellChange()
     })
 
     cell.on('pointerover', () => {
+      if (!this.editMode) return
       if (!this.selectedCells.has(`${cell.getData('col')}_${cell.getData('row')}`)) {
         cell.setFillStyle(0xeeeeee, 0.3)
       }
     })
 
     cell.on('pointerout', () => {
+      if (!this.editMode) return
       const key = `${cell.getData('col')}_${cell.getData('row')}`
       if (!this.selectedCells.has(key)) {
         cell.setFillStyle(0xffffff, 0)
@@ -250,12 +297,31 @@ export class BeamElevationScene extends Phaser.Scene {
     this.onCellChange(cells)
   }
 
-  updateBeamProfile(profile: BeamProfile, length?: number) {
+  updateBeamProfile(profile: BeamProfile, length?: number, editMode?: boolean) {
+    // Check if we just need to toggle edit mode
+    if (profile.id === this.beamProfile?.id && 
+        length === this.beamLength && 
+        editMode !== undefined && 
+        editMode !== this.editMode) {
+      
+      this.editMode = editMode
+      
+      // Toggle grid visibility
+      if (this.gridContainer) {
+        this.gridContainer.setVisible(this.editMode)
+      }
+      
+      return
+    }
+    
+    // Otherwise restart the scene
     this.beamProfile = profile
     this.beamLength = length || this.beamLength
+    this.editMode = editMode !== undefined ? editMode : this.editMode
     this.scene.restart({ 
       beamProfile: profile, 
       beamLength: this.beamLength,
+      editMode: this.editMode,
       onCellChange: this.onCellChange 
     })
   }
