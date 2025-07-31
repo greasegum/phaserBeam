@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { BeamSelector } from './components/BeamSelector'
 import { BeamViewer } from './components/BeamViewer'
 import { PhaserCanvas } from './components/PhaserCanvas'
 import { BeamProfile, GridCell } from './types/beam'
@@ -44,27 +45,11 @@ export default function App() {
             }}>PhaserBeam</h1>
             
             <div style={{ display: 'flex', alignItems: 'center', gap: '20px' }}>
-              <select 
-                value={selectedBeam?.id || ''} 
-                onChange={(e) => {
-                  const beam = beamCatalog.find(b => b.id === e.target.value)
-                  if (beam) setSelectedBeam(beam)
-                }}
-                style={{
-                  padding: '8px 12px',
-                  fontSize: '16px',
-                  border: '1px solid #ccc',
-                  borderRadius: '4px',
-                  backgroundColor: 'white'
-                }}
-              >
-                <option value="">Select Beam Profile...</option>
-                {beamCatalog.map(beam => (
-                  <option key={beam.id} value={beam.id}>
-                    {beam.name} - {beam.weight} lb/ft
-                  </option>
-                ))}
-              </select>
+              <BeamSelector 
+                beams={beamCatalog}
+                selectedBeam={selectedBeam}
+                onBeamSelect={setSelectedBeam}
+              />
 
               <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
                 <label style={{ color: '#666' }}>Length:</label>

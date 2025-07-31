@@ -6,6 +6,7 @@ export interface BeamProfile {
   flangeWidth: number
   flangeThickness: number
   weight: number
+  filletRadius?: number
 }
 
 export interface GridCell {
