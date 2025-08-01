@@ -359,20 +359,26 @@ export class BeamElevationScene extends Phaser.Scene {
         this.lossGraphics.strokePath()
       }
       
-      // Left edge
+      // Left edge - check if at beam edge
       if (!regionSet.has(`${cell.x - 1},${cell.y}`)) {
-        this.lossGraphics.beginPath()
-        this.lossGraphics.moveTo(x, y)
-        this.lossGraphics.lineTo(x, y + this.gridSize)
-        this.lossGraphics.strokePath()
+        // Only draw if not at beam left edge
+        if (cell.x !== 0) {
+          this.lossGraphics.beginPath()
+          this.lossGraphics.moveTo(x, y)
+          this.lossGraphics.lineTo(x, y + this.gridSize)
+          this.lossGraphics.strokePath()
+        }
       }
       
-      // Right edge
+      // Right edge - check if at beam edge
       if (!regionSet.has(`${cell.x + 1},${cell.y}`)) {
-        this.lossGraphics.beginPath()
-        this.lossGraphics.moveTo(x + this.gridSize, y)
-        this.lossGraphics.lineTo(x + this.gridSize, y + this.gridSize)
-        this.lossGraphics.strokePath()
+        // Only draw if not at beam right edge
+        if (cell.x !== Math.ceil(this.beamLength) - 1) {
+          this.lossGraphics.beginPath()
+          this.lossGraphics.moveTo(x + this.gridSize, y)
+          this.lossGraphics.lineTo(x + this.gridSize, y + this.gridSize)
+          this.lossGraphics.strokePath()
+        }
       }
     })
   }
@@ -469,9 +475,23 @@ export class BeamElevationScene extends Phaser.Scene {
       }
       
       // Draw outline for this segment
-      const leftX = startX + segment[0] * this.gridSize
-      const rightX = startX + (segment[segment.length - 1] + 1) * this.gridSize
+      let leftX = startX + segment[0] * this.gridSize
+      let rightX = startX + (segment[segment.length - 1] + 1) * this.gridSize
       const height = flangeThickness * this.gridSize
+      
+      // Check if segment touches beam edges and extend to actual edge
+      const beamLeft = startX
+      const beamRight = startX + this.beamLength * this.gridSize
+      
+      // If first cell is at column 0, extend to beam edge
+      if (segment[0] === 0) {
+        leftX = beamLeft
+      }
+      
+      // If last cell is at the end, extend to beam edge
+      if (segment[segment.length - 1] === Math.ceil(this.beamLength) - 1) {
+        rightX = beamRight
+      }
       
       // Top edge
       this.lossGraphics.beginPath()
@@ -485,17 +505,21 @@ export class BeamElevationScene extends Phaser.Scene {
       this.lossGraphics.lineTo(rightX, flangeY + height)
       this.lossGraphics.strokePath()
       
-      // Left edge
-      this.lossGraphics.beginPath()
-      this.lossGraphics.moveTo(leftX, flangeY)
-      this.lossGraphics.lineTo(leftX, flangeY + height)
-      this.lossGraphics.strokePath()
+      // Left edge - only draw if not at beam edge
+      if (segment[0] !== 0) {
+        this.lossGraphics.beginPath()
+        this.lossGraphics.moveTo(leftX, flangeY)
+        this.lossGraphics.lineTo(leftX, flangeY + height)
+        this.lossGraphics.strokePath()
+      }
       
-      // Right edge
-      this.lossGraphics.beginPath()
-      this.lossGraphics.moveTo(rightX, flangeY)
-      this.lossGraphics.lineTo(rightX, flangeY + height)
-      this.lossGraphics.strokePath()
+      // Right edge - only draw if not at beam edge
+      if (segment[segment.length - 1] !== Math.ceil(this.beamLength) - 1) {
+        this.lossGraphics.beginPath()
+        this.lossGraphics.moveTo(rightX, flangeY)
+        this.lossGraphics.lineTo(rightX, flangeY + height)
+        this.lossGraphics.strokePath()
+      }
     })
   }
 
@@ -541,16 +565,16 @@ export class BeamElevationScene extends Phaser.Scene {
     if (this.showTopFlange) {
       for (let col = 0; col < cols; col++) {
         const x = startX + col * this.gridSize
-        const y = flangeTop + flangeThickness * this.gridSize / 2
-        this.createGridCell(x, y - this.gridSize / 2, col, 0, 'flange-top', true)
+        const y = flangeTop
+        this.createGridCell(x, y, col, 0, 'flange-top', true)
       }
     }
     
     // Bottom flange - 1D linear grid
     for (let col = 0; col < cols; col++) {
       const x = startX + col * this.gridSize
-      const y = webBottom + flangeThickness * this.gridSize / 2
-      this.createGridCell(x, y - this.gridSize / 2, col, 0, 'flange-bottom', true)
+      const y = webBottom
+      this.createGridCell(x, y, col, 0, 'flange-bottom', true)
     }
   }
   
@@ -650,16 +674,32 @@ export class BeamElevationScene extends Phaser.Scene {
     // Draw all dimension lines with consistent style
     graphics.lineStyle(1, 0x666666, 0.8)
     
+    // Extension line offset from actual points
+    const extOffset = 2 // pixels to stop short of vertices
+    const beamEdgeX = this.gridOrigin === 'left' ? startX : startX + width
+    const extDir = this.gridOrigin === 'left' ? -1 : 1
+    
     // Top flange dimension (closest to beam)
+    // Extension lines
     graphics.beginPath()
-    graphics.moveTo(dim1X, flangeTop)
-    graphics.lineTo(dim1X, webTop)
+    graphics.moveTo(beamEdgeX - extDir * 5, flangeTop)
+    graphics.lineTo(dim1X + extDir * 5, flangeTop)
+    graphics.moveTo(beamEdgeX - extDir * 5, webTop)
+    graphics.lineTo(dim1X + extDir * 5, webTop)
     graphics.strokePath()
-    // Tick marks
-    graphics.moveTo(dim1X - 3, flangeTop)
-    graphics.lineTo(dim1X + 3, flangeTop)
-    graphics.moveTo(dim1X - 3, webTop)
-    graphics.lineTo(dim1X + 3, webTop)
+    
+    // Dimension line
+    graphics.beginPath()
+    graphics.moveTo(dim1X, flangeTop + extOffset)
+    graphics.lineTo(dim1X, webTop - extOffset)
+    graphics.strokePath()
+    // Arrows
+    graphics.moveTo(dim1X - 2, flangeTop + extOffset + 3)
+    graphics.lineTo(dim1X, flangeTop + extOffset)
+    graphics.lineTo(dim1X + 2, flangeTop + extOffset + 3)
+    graphics.moveTo(dim1X - 2, webTop - extOffset - 3)
+    graphics.lineTo(dim1X, webTop - extOffset)
+    graphics.lineTo(dim1X + 2, webTop - extOffset - 3)
     graphics.strokePath()
     
     this.add.text(dim1X + (this.gridOrigin === 'left' ? -5 : 5), flangeTop + (webTop - flangeTop) / 2, `${flangeThickness.toFixed(3)}"`, {
@@ -668,15 +708,26 @@ export class BeamElevationScene extends Phaser.Scene {
     }).setOrigin(this.gridOrigin === 'left' ? 1 : 0, 0.5)
     
     // Web height dimension (middle)
+    // Extension lines
     graphics.beginPath()
-    graphics.moveTo(dim2X, webTop)
-    graphics.lineTo(dim2X, webBottom)
+    graphics.moveTo(beamEdgeX - extDir * 5, webTop)
+    graphics.lineTo(dim2X + extDir * 5, webTop)
+    graphics.moveTo(beamEdgeX - extDir * 5, webBottom)
+    graphics.lineTo(dim2X + extDir * 5, webBottom)
     graphics.strokePath()
-    // Tick marks
-    graphics.moveTo(dim2X - 3, webTop)
-    graphics.lineTo(dim2X + 3, webTop)
-    graphics.moveTo(dim2X - 3, webBottom)
-    graphics.lineTo(dim2X + 3, webBottom)
+    
+    // Dimension line
+    graphics.beginPath()
+    graphics.moveTo(dim2X, webTop + extOffset)
+    graphics.lineTo(dim2X, webBottom - extOffset)
+    graphics.strokePath()
+    // Arrows
+    graphics.moveTo(dim2X - 2, webTop + extOffset + 3)
+    graphics.lineTo(dim2X, webTop + extOffset)
+    graphics.lineTo(dim2X + 2, webTop + extOffset + 3)
+    graphics.moveTo(dim2X - 2, webBottom - extOffset - 3)
+    graphics.lineTo(dim2X, webBottom - extOffset)
+    graphics.lineTo(dim2X + 2, webBottom - extOffset - 3)
     graphics.strokePath()
     
     // Web height label - rotated vertically
@@ -688,15 +739,26 @@ export class BeamElevationScene extends Phaser.Scene {
     webText.setRotation(this.gridOrigin === 'left' ? -Math.PI/2 : Math.PI/2)
     
     // Bottom flange dimension (closest to beam)
+    // Extension lines
     graphics.beginPath()
-    graphics.moveTo(dim1X, webBottom)
-    graphics.lineTo(dim1X, bottomY)
+    graphics.moveTo(beamEdgeX - extDir * 5, webBottom)
+    graphics.lineTo(dim1X + extDir * 5, webBottom)
+    graphics.moveTo(beamEdgeX - extDir * 5, bottomY)
+    graphics.lineTo(dim1X + extDir * 5, bottomY)
     graphics.strokePath()
-    // Tick marks
-    graphics.moveTo(dim1X - 3, webBottom)
-    graphics.lineTo(dim1X + 3, webBottom)
-    graphics.moveTo(dim1X - 3, bottomY)
-    graphics.lineTo(dim1X + 3, bottomY)
+    
+    // Dimension line
+    graphics.beginPath()
+    graphics.moveTo(dim1X, webBottom + extOffset)
+    graphics.lineTo(dim1X, bottomY - extOffset)
+    graphics.strokePath()
+    // Arrows
+    graphics.moveTo(dim1X - 2, webBottom + extOffset + 3)
+    graphics.lineTo(dim1X, webBottom + extOffset)
+    graphics.lineTo(dim1X + 2, webBottom + extOffset + 3)
+    graphics.moveTo(dim1X - 2, bottomY - extOffset - 3)
+    graphics.lineTo(dim1X, bottomY - extOffset)
+    graphics.lineTo(dim1X + 2, bottomY - extOffset - 3)
     graphics.strokePath()
     
     this.add.text(dim1X + (this.gridOrigin === 'left' ? -5 : 5), webBottom + (bottomY - webBottom) / 2, `${flangeThickness.toFixed(3)}"`, {
@@ -706,15 +768,27 @@ export class BeamElevationScene extends Phaser.Scene {
     
     // Overall height dimension (farthest)
     graphics.lineStyle(1, 0x333333)
+    
+    // Extension lines
     graphics.beginPath()
-    graphics.moveTo(dim3X, topY)
-    graphics.lineTo(dim3X, bottomY)
+    graphics.moveTo(beamEdgeX - extDir * 5, topY)
+    graphics.lineTo(dim3X + extDir * 5, topY)
+    graphics.moveTo(beamEdgeX - extDir * 5, bottomY)
+    graphics.lineTo(dim3X + extDir * 5, bottomY)
     graphics.strokePath()
-    // Tick marks
-    graphics.moveTo(dim3X - 5, topY)
-    graphics.lineTo(dim3X + 5, topY)
-    graphics.moveTo(dim3X - 5, bottomY)
-    graphics.lineTo(dim3X + 5, bottomY)
+    
+    // Dimension line
+    graphics.beginPath()
+    graphics.moveTo(dim3X, topY + extOffset)
+    graphics.lineTo(dim3X, bottomY - extOffset)
+    graphics.strokePath()
+    // Arrows
+    graphics.moveTo(dim3X - 3, topY + extOffset + 4)
+    graphics.lineTo(dim3X, topY + extOffset)
+    graphics.lineTo(dim3X + 3, topY + extOffset + 4)
+    graphics.moveTo(dim3X - 3, bottomY - extOffset - 4)
+    graphics.lineTo(dim3X, bottomY - extOffset)
+    graphics.lineTo(dim3X + 3, bottomY - extOffset - 4)
     graphics.strokePath()
     
     // Overall height label - rotated vertically
