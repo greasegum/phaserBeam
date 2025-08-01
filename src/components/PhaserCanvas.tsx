@@ -109,12 +109,12 @@ export const PhaserCanvas: React.FC<PhaserCanvasProps> = ({
             gridOrigin,
             showTopFlange,
             gridCells,
-          elevationView
+            elevationView
           })
         }
       })
     }
-  }, [beamProfile, beamLength, editMode, onCellChange, showGrid, gridOrigin, showTopFlange, gridCells, beamDirection])
+  }, [beamProfile, beamLength, editMode, onCellChange, showGrid, gridOrigin, showTopFlange, gridCells, elevationView])
 
   if (!beamProfile) {
     return (
