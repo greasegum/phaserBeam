@@ -331,8 +331,11 @@ export class BeamElevationScene extends Phaser.Scene {
           // Transform from grid coordinates to screen coordinates
           // Subtract 1 to account for padding, then scale and position
           const x = startX + (point.x - 1) * this.gridSize
-          // Grid y=0 is at top, so we need to invert: webTop + (point.y - 1) * gridSize
-          const y = webTop + (point.y - 1) * this.gridSize
+          // Grid array has low indices at top, high indices at bottom
+          // point.y from marching squares is in grid array coordinates
+          // We need to convert back to cell coordinates then to screen
+          const cellY = (paddedRows - 2) - (point.y - 1) // Invert and remove padding
+          const y = webBottom - (cellY + 1) * this.gridSize
           
           // Clamp to beam boundaries
           const clampedX = Math.max(startX, Math.min(startX + this.beamLength * this.gridSize, x))
