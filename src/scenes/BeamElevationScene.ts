@@ -1,5 +1,6 @@
 import Phaser from 'phaser'
 import { BeamProfile, GridCell } from '../types/beam'
+import { marchingSquaresSimple } from '../utils/marchingSquaresSimple'
 
 export class BeamElevationScene extends Phaser.Scene {
   private beamProfile: BeamProfile | null = null
@@ -226,21 +227,68 @@ export class BeamElevationScene extends Phaser.Scene {
     
     const { webHeight } = this.beamProfile
     const webBottom = centerY + (webHeight * this.gridSize) / 2
+    const webTop = centerY - (webHeight * this.gridSize) / 2
     
-    // First fill the section loss areas
+    // Set fill style
     this.lossGraphics.fillStyle(0xFFB3BA, 0.8)
     
-    webCells.forEach(cell => {
-      // cell.x and cell.y are grid coordinates (col, row)
-      const x = startX + cell.x * this.gridSize
-      const y = webBottom - (cell.y + 1) * this.gridSize
+    // If grid is visible, use rectangular rendering
+    if (this.editMode && this.showGrid) {
+      // Fill individual cells
+      webCells.forEach(cell => {
+        const x = startX + cell.x * this.gridSize
+        const y = webBottom - (cell.y + 1) * this.gridSize
+        this.lossGraphics.fillRect(x, y, this.gridSize, this.gridSize)
+      })
       
-      this.lossGraphics.fillRect(x, y, this.gridSize, this.gridSize)
-    })
-    
-    // Draw outlines around connected regions
-    this.lossGraphics.lineStyle(2, 0xFF6B6B)
-    
+      // Draw rectangular outlines
+      this.lossGraphics.lineStyle(2, 0xFF6B6B)
+      this.drawRectangularOutlines(webCells, startX, webBottom)
+    } else {
+      // Grid is off, use marching squares for smooth boundaries
+      const cols = Math.ceil(this.beamLength)
+      const rows = Math.ceil(webHeight)
+      
+      // Create a grid for marching squares (0 = empty, 1 = filled)
+      const grid: number[][] = Array(rows + 1).fill(null).map(() => Array(cols + 1).fill(0))
+      
+      // Fill the grid based on web cells
+      webCells.forEach(cell => {
+        if (cell.x >= 0 && cell.x < cols && cell.y >= 0 && cell.y < rows) {
+          grid[cell.y][cell.x] = 1
+        }
+      })
+      
+      // Apply marching squares
+      const contours = marchingSquaresSimple(grid, 0.5)
+      
+      // Draw smooth contours
+      this.lossGraphics.lineStyle(2, 0xFF6B6B)
+      
+      contours.forEach(contour => {
+        if (contour.length < 2) return
+        
+        this.lossGraphics.beginPath()
+        
+        contour.forEach((point, index) => {
+          const x = startX + point.x * this.gridSize
+          const y = webBottom - point.y * this.gridSize
+          
+          if (index === 0) {
+            this.lossGraphics.moveTo(x, y)
+          } else {
+            this.lossGraphics.lineTo(x, y)
+          }
+        })
+        
+        this.lossGraphics.closePath()
+        this.lossGraphics.fillPath()
+        this.lossGraphics.strokePath()
+      })
+    }
+  }
+  
+  private drawRectangularOutlines(webCells: {x: number, y: number}[], startX: number, webBottom: number) {
     // Create a set for quick lookup
     const cellSet = new Set(webCells.map(c => `${c.x},${c.y}`))
     const visited = new Set<string>()
@@ -364,21 +412,90 @@ export class BeamElevationScene extends Phaser.Scene {
       this.drawWebSectionLoss(allWebCells, startX, centerY, width)
     }
     
-    // Draw flange section loss as rectangles
-    allFlangeCells.forEach(cell => {
-      // Skip top flange cells if top flange is disabled
-      if (cell.zone === 'flange-top' && !this.showTopFlange) {
-        return
+    // Draw flange section loss
+    const topFlangeCells = allFlangeCells.filter(c => c.zone === 'flange-top' && this.showTopFlange)
+    const bottomFlangeCells = allFlangeCells.filter(c => c.zone === 'flange-bottom')
+    
+    if (topFlangeCells.length > 0) {
+      this.drawFlangeSectionLoss(topFlangeCells, startX, flangeTop, flangeThickness)
+    }
+    
+    if (bottomFlangeCells.length > 0) {
+      this.drawFlangeSectionLoss(bottomFlangeCells, startX, webBottom, flangeThickness)
+    }
+  }
+  
+  private drawFlangeSectionLoss(flangeCells: {zone: string, x: number, y: number}[], startX: number, flangeY: number, flangeThickness: number) {
+    if (!this.lossGraphics) return
+    
+    // Set fill style
+    this.lossGraphics.fillStyle(0xFFB3BA, 0.8)
+    
+    // Fill individual cells
+    flangeCells.forEach(cell => {
+      const x = startX + cell.x * this.gridSize
+      this.lossGraphics.fillRect(x, flangeY, this.gridSize, flangeThickness * this.gridSize)
+    })
+    
+    // Draw outlines - darker red for flanges
+    this.lossGraphics.lineStyle(2, 0xCC5555)
+    
+    // Create a set for quick lookup
+    const cellSet = new Set(flangeCells.map(c => c.x))
+    const visited = new Set<number>()
+    
+    // Find continuous segments and draw their outlines
+    flangeCells.forEach(cell => {
+      if (visited.has(cell.x)) return
+      
+      // Find all cells in this continuous segment
+      const segment: number[] = [cell.x]
+      visited.add(cell.x)
+      
+      // Extend left
+      let current = cell.x - 1
+      while (cellSet.has(current) && !visited.has(current)) {
+        segment.unshift(current)
+        visited.add(current)
+        current--
       }
       
-      // Cells are stored with their absolute positions now
-      const x = startX + cell.x * this.gridSize
-      const y = cell.zone === 'flange-top' ? flangeTop : webBottom
-        
-      this.lossGraphics.fillStyle(0xFFB3BA, 0.8)
-      this.lossGraphics.lineStyle(1, 0xFF6B6B)
-      this.lossGraphics.fillRect(x, y, this.gridSize, flangeThickness * this.gridSize)
-      this.lossGraphics.strokeRect(x, y, this.gridSize, flangeThickness * this.gridSize)
+      // Extend right
+      current = cell.x + 1
+      while (cellSet.has(current) && !visited.has(current)) {
+        segment.push(current)
+        visited.add(current)
+        current++
+      }
+      
+      // Draw outline for this segment
+      const leftX = startX + segment[0] * this.gridSize
+      const rightX = startX + (segment[segment.length - 1] + 1) * this.gridSize
+      const height = flangeThickness * this.gridSize
+      
+      // Top edge
+      this.lossGraphics.beginPath()
+      this.lossGraphics.moveTo(leftX, flangeY)
+      this.lossGraphics.lineTo(rightX, flangeY)
+      this.lossGraphics.strokePath()
+      
+      // Bottom edge
+      this.lossGraphics.beginPath()
+      this.lossGraphics.moveTo(leftX, flangeY + height)
+      this.lossGraphics.lineTo(rightX, flangeY + height)
+      this.lossGraphics.strokePath()
+      
+      // Left edge
+      this.lossGraphics.beginPath()
+      this.lossGraphics.moveTo(leftX, flangeY)
+      this.lossGraphics.lineTo(leftX, flangeY + height)
+      this.lossGraphics.strokePath()
+      
+      // Right edge
+      this.lossGraphics.beginPath()
+      this.lossGraphics.moveTo(rightX, flangeY)
+      this.lossGraphics.lineTo(rightX, flangeY + height)
+      this.lossGraphics.strokePath()
     })
   }
 
@@ -736,6 +853,16 @@ export class BeamElevationScene extends Phaser.Scene {
         this.gridContainer.setVisible(this.editMode && this.showGrid)
       }
       
+      // Redraw section loss with appropriate style
+      const sceneWidth = this.cameras.main.width
+      const padding = 100
+      const startX = padding
+      const beamWidth = this.beamLength * this.gridSize
+      this.drawSectionLoss(startX, this.cameras.main.height / 2, beamWidth)
+      
+      // Update grid cell visibility
+      this.updateGridCellVisibility()
+      
       return
     }
     
@@ -751,6 +878,16 @@ export class BeamElevationScene extends Phaser.Scene {
       if (this.gridContainer) {
         this.gridContainer.setVisible(this.editMode && this.showGrid)
       }
+      
+      // Redraw section loss with appropriate style
+      const sceneWidth = this.cameras.main.width
+      const padding = 100
+      const startX = padding
+      const beamWidth = this.beamLength * this.gridSize
+      this.drawSectionLoss(startX, this.cameras.main.height / 2, beamWidth)
+      
+      // Update grid cell visibility
+      this.updateGridCellVisibility()
       
       return
     }
