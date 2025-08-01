@@ -109,6 +109,8 @@ export class BeamElevationScene extends Phaser.Scene {
     this.gridContainer = this.add.container()
     if (this.editMode && this.showGrid) {
       this.createGrid(startX, centerY, beamWidth)
+      // Update grid cell visibility after creating grid
+      this.updateGridCellVisibility()
     }
 
     // Add dimension lines and labels
@@ -213,9 +215,8 @@ export class BeamElevationScene extends Phaser.Scene {
     const { webHeight } = this.beamProfile
     const webBottom = centerY + (webHeight * this.gridSize) / 2
     
-    // First, let's draw simple rectangles to debug the positioning
+    // First fill the section loss areas
     this.lossGraphics.fillStyle(0xFFB3BA, 0.8)
-    this.lossGraphics.lineStyle(1, 0xFF6B6B)
     
     webCells.forEach(cell => {
       // cell.x and cell.y are grid coordinates (col, row)
@@ -223,10 +224,8 @@ export class BeamElevationScene extends Phaser.Scene {
       const y = webBottom - (cell.y + 1) * this.gridSize
       
       this.lossGraphics.fillRect(x, y, this.gridSize, this.gridSize)
-      this.lossGraphics.strokeRect(x, y, this.gridSize, this.gridSize)
+      // Don't draw individual cell strokes - we'll use marching squares for the outline
     })
-    
-    return // Temporarily return to debug positioning
     
     // Create a grid for marching squares
     const cols = Math.ceil(this.beamLength)
@@ -390,10 +389,19 @@ export class BeamElevationScene extends Phaser.Scene {
       for (let col = 0; col < cols; col++) {
         const x = startX + col * this.gridSize
         const y = webBottom - (row + 1) * this.gridSize
-        // Only create cell if it's within the web bounds
-        if (y >= webTop) {
-          this.createGridCell(x, y, col, row, 'web')
+        
+        // Calculate cell height - truncate if it extends above web top
+        let cellHeight = this.gridSize
+        let cellY = y
+        
+        if (y < webTop) {
+          // Cell extends above web top - truncate it
+          cellHeight = y + this.gridSize - webTop
+          cellY = webTop
+          if (cellHeight <= 0) continue // Skip cells completely above the web
         }
+        
+        this.createGridCell(x, cellY, col, row, 'web', false, cellHeight)
       }
     }
     
@@ -414,11 +422,12 @@ export class BeamElevationScene extends Phaser.Scene {
     }
   }
   
-  private createGridCell(x: number, y: number, col: number, row: number, zone: string, isLinear: boolean = false) {
-    const height = isLinear && this.beamProfile ? this.beamProfile.flangeThickness * this.gridSize - 1 : this.gridSize - 1
+  private createGridCell(x: number, y: number, col: number, row: number, zone: string, isLinear: boolean = false, customHeight?: number) {
+    const height = customHeight !== undefined ? customHeight - 1 : 
+                  (isLinear && this.beamProfile ? this.beamProfile.flangeThickness * this.gridSize - 1 : this.gridSize - 1)
     const cell = this.add.rectangle(
       x + this.gridSize / 2,
-      y + this.gridSize / 2,
+      y + height / 2,
       this.gridSize - 1,
       height,
       0xffffff,
@@ -568,9 +577,7 @@ export class BeamElevationScene extends Phaser.Scene {
     
     // Draw inch markers every 12 inches based on grid origin
     for (let i = 0; i <= this.beamLength; i += 12) {
-      const x = this.gridOrigin === 'left' 
-        ? startX + i * this.gridSize 
-        : startX + width - i * this.gridSize
+      const x = startX + i * this.gridSize
       
       graphics.beginPath()
       graphics.moveTo(x, dimY - 5)
@@ -610,6 +617,19 @@ export class BeamElevationScene extends Phaser.Scene {
     })
     
     this.onCellChange(cells)
+  }
+  
+  private updateGridCellVisibility() {
+    // Update stroke visibility for all grid cells based on whether they're selected
+    this.gridCells.forEach((cell, key) => {
+      if (this.selectedCells.has(key)) {
+        // Hide stroke for selected cells (section loss areas)
+        cell.setStrokeStyle(0, 0x999999, 0)
+      } else {
+        // Show stroke for non-selected cells
+        cell.setStrokeStyle(1, 0x999999, 0.8)
+      }
+    })
   }
 
   updateBeamProfile(profile: BeamProfile, length?: number, editMode?: boolean, showGrid?: boolean, gridOrigin?: 'left' | 'right', showTopFlange?: boolean, gridCells?: GridCell[], elevationView?: 'N' | 'S' | 'E' | 'W') {
