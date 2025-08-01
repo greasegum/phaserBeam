@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from 'react'
+import React, { useEffect, useRef, useState } from 'react'
 import Phaser from 'phaser'
 import { BeamElevationScene } from '../scenes/BeamElevationScene'
 import { BeamProfile, GridCell } from '../types/beam'
@@ -11,7 +11,8 @@ interface PhaserCanvasProps {
   showGrid?: boolean
   gridOrigin?: 'left' | 'right'
   showTopFlange?: boolean
-  currentCells?: GridCell[]
+  leftCells?: GridCell[]
+  rightCells?: GridCell[]
 }
 
 export const PhaserCanvas: React.FC<PhaserCanvasProps> = ({ 
@@ -22,7 +23,8 @@ export const PhaserCanvas: React.FC<PhaserCanvasProps> = ({
   showGrid = true,
   gridOrigin = 'left',
   showTopFlange = true,
-  currentCells = [] 
+  leftCells = [],
+  rightCells = []
 }) => {
   const gameRef = useRef<Phaser.Game | null>(null)
   const containerRef = useRef<HTMLDivElement>(null)
@@ -79,7 +81,7 @@ export const PhaserCanvas: React.FC<PhaserCanvasProps> = ({
     const scene = gameRef.current.scene.getScene('BeamElevationScene') as BeamElevationScene
     if (scene) {
       if (scene.scene.isActive()) {
-        scene.updateBeamProfile(beamProfile, beamLength, editMode, showGrid, gridOrigin, showTopFlange, currentCells)
+        scene.updateBeamProfile(beamProfile, beamLength, editMode, showGrid, gridOrigin, showTopFlange, leftCells, rightCells)
       } else {
         scene.scene.start('BeamElevationScene', { 
           beamProfile, 
@@ -89,7 +91,8 @@ export const PhaserCanvas: React.FC<PhaserCanvasProps> = ({
           showGrid,
           gridOrigin,
           showTopFlange,
-          currentCells 
+          leftCells,
+          rightCells 
         })
       }
     } else {
@@ -105,12 +108,13 @@ export const PhaserCanvas: React.FC<PhaserCanvasProps> = ({
             showGrid,
             gridOrigin,
             showTopFlange,
-            currentCells 
+            leftCells,
+          rightCells 
           })
         }
       })
     }
-  }, [beamProfile, beamLength, editMode, onCellChange, showGrid, gridOrigin, showTopFlange, currentCells])
+  }, [beamProfile, beamLength, editMode, onCellChange, showGrid, gridOrigin, showTopFlange, leftCells, rightCells])
 
   if (!beamProfile) {
     return (

@@ -1,7 +1,6 @@
 import { useState } from 'react'
 import { SetupPopup } from './components/SetupPopup'
 import { PhaserCanvas } from './components/PhaserCanvas'
-import { SectionLossOverlay } from './components/SectionLossOverlay'
 import { BeamProfile, GridCell } from './types/beam'
 
 export default function App() {
@@ -160,16 +159,8 @@ export default function App() {
             showGrid={showGrid}
             gridOrigin={gridOrigin}
             showTopFlange={showTopFlange}
-            currentCells={gridOrigin === 'left' ? leftGridCells : rightGridCells}
-          />
-          <SectionLossOverlay
-            cells={[...leftGridCells, ...rightGridCells]}
-            beamProfile={selectedBeam}
-            beamLength={beamLength}
-            gridSize={40}
-            startX={100}
-            centerY={(window.innerHeight - 100) / 2}
-            showGrid={showGrid}
+            leftCells={leftGridCells}
+            rightCells={rightGridCells}
           />
         </div>
       </main>

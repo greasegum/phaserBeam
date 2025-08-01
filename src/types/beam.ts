@@ -14,6 +14,7 @@ export interface GridCell {
   y: number
   selected: boolean
   severity?: number
+  zone?: 'web' | 'flange-top' | 'flange-bottom'
 }
 
 export interface SectionLoss {
