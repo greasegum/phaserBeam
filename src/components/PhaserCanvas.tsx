@@ -10,6 +10,8 @@ interface PhaserCanvasProps {
   beamLength: number
   showGrid?: boolean
   gridOrigin?: 'left' | 'right'
+  showTopFlange?: boolean
+  currentCells?: GridCell[]
 }
 
 export const PhaserCanvas: React.FC<PhaserCanvasProps> = ({ 
@@ -18,7 +20,9 @@ export const PhaserCanvas: React.FC<PhaserCanvasProps> = ({
   editMode,
   beamLength,
   showGrid = true,
-  gridOrigin = 'left' 
+  gridOrigin = 'left',
+  showTopFlange = true,
+  currentCells = [] 
 }) => {
   const gameRef = useRef<Phaser.Game | null>(null)
   const containerRef = useRef<HTMLDivElement>(null)
@@ -75,7 +79,7 @@ export const PhaserCanvas: React.FC<PhaserCanvasProps> = ({
     const scene = gameRef.current.scene.getScene('BeamElevationScene') as BeamElevationScene
     if (scene) {
       if (scene.scene.isActive()) {
-        scene.updateBeamProfile(beamProfile, beamLength, editMode, showGrid, gridOrigin)
+        scene.updateBeamProfile(beamProfile, beamLength, editMode, showGrid, gridOrigin, showTopFlange, currentCells)
       } else {
         scene.scene.start('BeamElevationScene', { 
           beamProfile, 
@@ -83,7 +87,9 @@ export const PhaserCanvas: React.FC<PhaserCanvasProps> = ({
           editMode,
           onCellChange,
           showGrid,
-          gridOrigin 
+          gridOrigin,
+          showTopFlange,
+          currentCells 
         })
       }
     } else {
@@ -97,12 +103,14 @@ export const PhaserCanvas: React.FC<PhaserCanvasProps> = ({
             editMode,
             onCellChange,
             showGrid,
-            gridOrigin 
+            gridOrigin,
+            showTopFlange,
+            currentCells 
           })
         }
       })
     }
-  }, [beamProfile, beamLength, editMode, onCellChange, showGrid, gridOrigin])
+  }, [beamProfile, beamLength, editMode, onCellChange, showGrid, gridOrigin, showTopFlange, currentCells])
 
   if (!beamProfile) {
     return (

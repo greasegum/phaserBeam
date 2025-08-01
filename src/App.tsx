@@ -7,10 +7,12 @@ import { BeamProfile, GridCell } from './types/beam'
 export default function App() {
   const [selectedBeam, setSelectedBeam] = useState<BeamProfile | null>(null)
   const [beamLength, setBeamLength] = useState<number>(120)
-  const [sectionLossCells, setSectionLossCells] = useState<GridCell[]>([])
+  const [leftGridCells, setLeftGridCells] = useState<GridCell[]>([])
+  const [rightGridCells, setRightGridCells] = useState<GridCell[]>([])
   const [showSetup, setShowSetup] = useState<boolean>(true)
   const [showGrid, setShowGrid] = useState<boolean>(true)
   const [gridOrigin, setGridOrigin] = useState<'left' | 'right'>('left')
+  const [showTopFlange, setShowTopFlange] = useState<boolean>(true)
 
   const handleSetupComplete = (beam: BeamProfile, length: number) => {
     setSelectedBeam(beam)
@@ -19,7 +21,11 @@ export default function App() {
   }
 
   const handleCellChange = (cells: GridCell[]) => {
-    setSectionLossCells(cells)
+    if (gridOrigin === 'left') {
+      setLeftGridCells(cells)
+    } else {
+      setRightGridCells(cells)
+    }
   }
 
   if (showSetup) {
@@ -71,23 +77,45 @@ export default function App() {
             Grid: {showGrid ? 'ON' : 'OFF'}
           </button>
           {showGrid && (
-            <button
-              onClick={() => setGridOrigin(gridOrigin === 'left' ? 'right' : 'left')}
-              style={{
-                padding: '6px 12px',
-                backgroundColor: '#2196F3',
-                color: 'white',
-                border: 'none',
-                borderRadius: '4px',
-                cursor: 'pointer',
-                fontSize: '14px'
-              }}
-            >
-              Origin: {gridOrigin === 'left' ? 'Left' : 'Right'}
-            </button>
+            <>
+              <button
+                onClick={() => setGridOrigin(gridOrigin === 'left' ? 'right' : 'left')}
+                style={{
+                  padding: '6px 12px',
+                  backgroundColor: '#2196F3',
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: '4px',
+                  cursor: 'pointer',
+                  fontSize: '14px'
+                }}
+              >
+                Origin: {gridOrigin === 'left' ? 'Left' : 'Right'}
+              </button>
+              <button
+                onClick={() => setShowTopFlange(!showTopFlange)}
+                style={{
+                  padding: '6px 12px',
+                  backgroundColor: showTopFlange ? '#9C27B0' : '#999',
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: '4px',
+                  cursor: 'pointer',
+                  fontSize: '14px'
+                }}
+              >
+                Top Flange: {showTopFlange ? 'ON' : 'OFF'}
+              </button>
+            </>
           )}
           <button
-            onClick={() => setSectionLossCells([])}
+            onClick={() => {
+              if (gridOrigin === 'left') {
+                setLeftGridCells([])
+              } else {
+                setRightGridCells([])
+              }
+            }}
             style={{
               padding: '6px 12px',
               backgroundColor: '#ff9999',
@@ -98,7 +126,7 @@ export default function App() {
               fontSize: '14px'
             }}
           >
-            Clear
+            Clear {gridOrigin === 'left' ? 'Left' : 'Right'}
           </button>
           <button
             onClick={() => setShowSetup(true)}
@@ -131,9 +159,11 @@ export default function App() {
             beamLength={beamLength}
             showGrid={showGrid}
             gridOrigin={gridOrigin}
+            showTopFlange={showTopFlange}
+            currentCells={gridOrigin === 'left' ? leftGridCells : rightGridCells}
           />
           <SectionLossOverlay
-            cells={sectionLossCells}
+            cells={[...leftGridCells, ...rightGridCells]}
             beamProfile={selectedBeam}
             beamLength={beamLength}
             gridSize={40}
@@ -155,7 +185,7 @@ export default function App() {
         justifyContent: 'space-between'
       }}>
         <span>Click cells to mark section loss</span>
-        <span>Cells marked: {sectionLossCells.length}</span>
+        <span>Left: {leftGridCells.length} | Right: {rightGridCells.length}</span>
       </footer>
     </div>
   )
