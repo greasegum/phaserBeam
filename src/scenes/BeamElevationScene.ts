@@ -7,6 +7,7 @@ export class BeamElevationScene extends Phaser.Scene {
   private beamLength = 120 // inches (10 feet default)
   private editMode = true
   private showGrid = true
+  private gridOrigin: 'left' | 'right' = 'left'
   private selectedCells: Set<string> = new Set()
   private gridCells: Map<string, Phaser.GameObjects.Rectangle> = new Map()
   private onCellChange?: (cells: GridCell[]) => void
@@ -19,11 +20,12 @@ export class BeamElevationScene extends Phaser.Scene {
     super({ key: 'BeamElevationScene' })
   }
 
-  init(data: { beamProfile: BeamProfile; beamLength?: number; editMode?: boolean; showGrid?: boolean; onCellChange?: (cells: GridCell[]) => void }) {
+  init(data: { beamProfile: BeamProfile; beamLength?: number; editMode?: boolean; showGrid?: boolean; gridOrigin?: 'left' | 'right'; onCellChange?: (cells: GridCell[]) => void }) {
     this.beamProfile = data.beamProfile
     this.beamLength = data.beamLength || 120
     this.editMode = data.editMode !== undefined ? data.editMode : true
     this.showGrid = data.showGrid !== undefined ? data.showGrid : true
+    this.gridOrigin = data.gridOrigin || 'left'
     this.onCellChange = data.onCellChange
   }
 
@@ -168,7 +170,6 @@ export class BeamElevationScene extends Phaser.Scene {
     if (!this.beamProfile || !this.gridContainer) return
 
     const { webHeight, flangeThickness } = this.beamProfile
-    const totalHeight = webHeight + 2 * flangeThickness
     const webTop = centerY - (webHeight * this.gridSize) / 2
     const webBottom = centerY + (webHeight * this.gridSize) / 2
     const flangeTop = webTop - flangeThickness * this.gridSize
@@ -179,65 +180,65 @@ export class BeamElevationScene extends Phaser.Scene {
     const webRows = Math.ceil(webHeight)
     const flangeRows = Math.ceil(flangeThickness)
     
-    // Draw centerline
-    const centerlineGraphics = this.add.graphics()
-    centerlineGraphics.lineStyle(2, 0x0000FF, 0.5)
-    centerlineGraphics.beginPath()
-    centerlineGraphics.moveTo(startX + width / 2, flangeTop)
-    centerlineGraphics.lineTo(startX + width / 2, flangeBottom)
-    centerlineGraphics.strokePath()
-    this.gridContainer.add(centerlineGraphics)
-    
-    // Create web grid with dual origin
-    const midCol = Math.floor(cols / 2)
-    
-    // Left side of web (origin at bottom left)
-    for (let row = 0; row < webRows; row++) {
-      for (let col = 0; col <= midCol; col++) {
-        const x = startX + col * this.gridSize
-        const y = webBottom - (row + 1) * this.gridSize // Origin at bottom
-        
-        this.createGridCell(x, y, col, row, 'web-left')
+    // Create grid based on origin selection
+    if (this.gridOrigin === 'left') {
+      // Origin at left end
+      // Web grid - 2D with origin at web/flange corner (top of bottom flange)
+      for (let row = 0; row < webRows; row++) {
+        for (let col = 0; col < cols; col++) {
+          const x = startX + col * this.gridSize
+          const y = webBottom - (row + 1) * this.gridSize
+          this.createGridCell(x, y, col, row, 'web')
+        }
       }
-    }
-    
-    // Right side of web (origin at bottom right)
-    for (let row = 0; row < webRows; row++) {
-      for (let col = midCol; col < cols; col++) {
-        const x = startX + width - (cols - col) * this.gridSize
-        const y = webBottom - (row + 1) * this.gridSize // Origin at bottom
-        
-        this.createGridCell(x, y, col, row, 'web-right')
-      }
-    }
-    
-    // Top flange grid (single origin)
-    for (let row = 0; row < flangeRows; row++) {
+      
+      // Top flange - 1D linear grid
       for (let col = 0; col < cols; col++) {
         const x = startX + col * this.gridSize
-        const y = flangeTop + row * this.gridSize
-        
-        this.createGridCell(x, y, col, row + webRows, 'flange-top')
+        const y = flangeTop + flangeThickness * this.gridSize / 2
+        this.createGridCell(x, y - this.gridSize / 2, col, 0, 'flange-top', true)
       }
-    }
-    
-    // Bottom flange grid (single origin)
-    for (let row = 0; row < flangeRows; row++) {
+      
+      // Bottom flange - 1D linear grid
       for (let col = 0; col < cols; col++) {
         const x = startX + col * this.gridSize
-        const y = webBottom + row * this.gridSize
-        
-        this.createGridCell(x, y, col, row, 'flange-bottom')
+        const y = webBottom + flangeThickness * this.gridSize / 2
+        this.createGridCell(x, y - this.gridSize / 2, col, 0, 'flange-bottom', true)
+      }
+    } else {
+      // Origin at right end
+      // Web grid - 2D with origin at web/flange corner (top of bottom flange)
+      for (let row = 0; row < webRows; row++) {
+        for (let col = 0; col < cols; col++) {
+          const x = startX + width - (col + 1) * this.gridSize
+          const y = webBottom - (row + 1) * this.gridSize
+          this.createGridCell(x, y, col, row, 'web')
+        }
+      }
+      
+      // Top flange - 1D linear grid
+      for (let col = 0; col < cols; col++) {
+        const x = startX + width - (col + 1) * this.gridSize
+        const y = flangeTop + flangeThickness * this.gridSize / 2
+        this.createGridCell(x, y - this.gridSize / 2, col, 0, 'flange-top', true)
+      }
+      
+      // Bottom flange - 1D linear grid
+      for (let col = 0; col < cols; col++) {
+        const x = startX + width - (col + 1) * this.gridSize
+        const y = webBottom + flangeThickness * this.gridSize / 2
+        this.createGridCell(x, y - this.gridSize / 2, col, 0, 'flange-bottom', true)
       }
     }
   }
   
-  private createGridCell(x: number, y: number, col: number, row: number, zone: string) {
+  private createGridCell(x: number, y: number, col: number, row: number, zone: string, isLinear: boolean = false) {
+    const height = isLinear && this.beamProfile ? this.beamProfile.flangeThickness * this.gridSize - 1 : this.gridSize - 1
     const cell = this.add.rectangle(
       x + this.gridSize / 2,
       y + this.gridSize / 2,
       this.gridSize - 1,
-      this.gridSize - 1,
+      height,
       0xffffff,
       0
     )
@@ -247,6 +248,7 @@ export class BeamElevationScene extends Phaser.Scene {
     cell.setData('col', col)
     cell.setData('row', row)
     cell.setData('zone', zone)
+    cell.setData('isLinear', isLinear)
     
     const key = `${zone}_${col}_${row}`
     this.gridCells.set(key, cell)
@@ -380,7 +382,30 @@ export class BeamElevationScene extends Phaser.Scene {
     this.onCellChange(cells)
   }
 
-  updateBeamProfile(profile: BeamProfile, length?: number, editMode?: boolean, showGrid?: boolean) {
+  updateBeamProfile(profile: BeamProfile, length?: number, editMode?: boolean, showGrid?: boolean, gridOrigin?: 'left' | 'right') {
+    // Check if we just need to toggle grid origin
+    if (profile.id === this.beamProfile?.id && 
+        length === this.beamLength && 
+        editMode === this.editMode &&
+        showGrid === this.showGrid &&
+        gridOrigin !== undefined && 
+        gridOrigin !== this.gridOrigin) {
+      
+      this.gridOrigin = gridOrigin
+      
+      // Need to recreate grid with new origin
+      this.scene.restart({ 
+        beamProfile: profile, 
+        beamLength: this.beamLength,
+        editMode: this.editMode,
+        showGrid: this.showGrid,
+        gridOrigin: this.gridOrigin,
+        onCellChange: this.onCellChange 
+      })
+      
+      return
+    }
+    
     // Check if we just need to toggle grid visibility
     if (profile.id === this.beamProfile?.id && 
         length === this.beamLength && 
@@ -419,11 +444,13 @@ export class BeamElevationScene extends Phaser.Scene {
     this.beamLength = length || this.beamLength
     this.editMode = editMode !== undefined ? editMode : this.editMode
     this.showGrid = showGrid !== undefined ? showGrid : this.showGrid
+    this.gridOrigin = gridOrigin !== undefined ? gridOrigin : this.gridOrigin
     this.scene.restart({ 
       beamProfile: profile, 
       beamLength: this.beamLength,
       editMode: this.editMode,
       showGrid: this.showGrid,
+      gridOrigin: this.gridOrigin,
       onCellChange: this.onCellChange 
     })
   }

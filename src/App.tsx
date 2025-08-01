@@ -10,6 +10,7 @@ export default function App() {
   const [sectionLossCells, setSectionLossCells] = useState<GridCell[]>([])
   const [showSetup, setShowSetup] = useState<boolean>(true)
   const [showGrid, setShowGrid] = useState<boolean>(true)
+  const [gridOrigin, setGridOrigin] = useState<'left' | 'right'>('left')
 
   const handleSetupComplete = (beam: BeamProfile, length: number) => {
     setSelectedBeam(beam)
@@ -69,6 +70,22 @@ export default function App() {
           >
             Grid: {showGrid ? 'ON' : 'OFF'}
           </button>
+          {showGrid && (
+            <button
+              onClick={() => setGridOrigin(gridOrigin === 'left' ? 'right' : 'left')}
+              style={{
+                padding: '6px 12px',
+                backgroundColor: '#2196F3',
+                color: 'white',
+                border: 'none',
+                borderRadius: '4px',
+                cursor: 'pointer',
+                fontSize: '14px'
+              }}
+            >
+              Origin: {gridOrigin === 'left' ? 'Left' : 'Right'}
+            </button>
+          )}
           <button
             onClick={() => setSectionLossCells([])}
             style={{
@@ -106,22 +123,25 @@ export default function App() {
         position: 'relative',
         overflow: 'auto'
       }}>
-        <PhaserCanvas 
-          beamProfile={selectedBeam} 
-          onCellChange={handleCellChange}
-          editMode={true}
-          beamLength={beamLength}
-          showGrid={showGrid}
-        />
-        <SectionLossOverlay
-          cells={sectionLossCells}
-          beamProfile={selectedBeam}
-          beamLength={beamLength}
-          gridSize={40}
-          startX={100}
-          centerY={(window.innerHeight - 100) / 2}
-          showGrid={showGrid}
-        />
+        <div style={{ position: 'relative', minWidth: '100%', height: '100%' }}>
+          <PhaserCanvas 
+            beamProfile={selectedBeam} 
+            onCellChange={handleCellChange}
+            editMode={true}
+            beamLength={beamLength}
+            showGrid={showGrid}
+            gridOrigin={gridOrigin}
+          />
+          <SectionLossOverlay
+            cells={sectionLossCells}
+            beamProfile={selectedBeam}
+            beamLength={beamLength}
+            gridSize={40}
+            startX={100}
+            centerY={(window.innerHeight - 100) / 2}
+            showGrid={showGrid}
+          />
+        </div>
       </main>
 
       {/* Minimal footer */}

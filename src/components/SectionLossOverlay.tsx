@@ -40,10 +40,17 @@ export const SectionLossOverlay: React.FC<SectionLossOverlayProps> = ({
   }, [])
 
   useEffect(() => {
-    if (!paperScope || !beamProfile || cells.length === 0) return
+    if (!paperScope || !beamProfile) return
 
     paperScope.activate()
     paperScope.project.clear()
+    
+    // If no cells selected, just clear and return
+    if (cells.length === 0) {
+      // @ts-ignore
+      paperScope.view.draw()
+      return
+    }
 
     const { webHeight, flangeThickness } = beamProfile
     const totalHeight = webHeight + 2 * flangeThickness
@@ -55,17 +62,26 @@ export const SectionLossOverlay: React.FC<SectionLossOverlayProps> = ({
     // Initialize grid with 0s
     const grid: number[][] = Array(rows + 2).fill(null).map(() => Array(cols + 2).fill(0))
     
-    // Fill grid with 1s where cells are selected
+    // Group cells into clusters for better shape generation
+    const cellMap = new Map<string, boolean>()
+    cells.forEach(cell => {
+      cellMap.set(`${cell.x},${cell.y}`, true)
+    })
+    
+    // Fill grid based on cell clusters
     cells.forEach(cell => {
       if (cell.x >= 0 && cell.x < cols && cell.y >= 0 && cell.y < rows) {
-        // Add padding around selected cells for smoother shapes
-        for (let dy = -1; dy <= 1; dy++) {
-          for (let dx = -1; dx <= 1; dx++) {
+        // Set the main cell
+        grid[cell.y + 1][cell.x + 1] = 1
+        
+        // Add gradient falloff for smoother edges
+        for (let dy = -2; dy <= 2; dy++) {
+          for (let dx = -2; dx <= 2; dx++) {
             const ny = cell.y + dy + 1
             const nx = cell.x + dx + 1
             if (ny >= 0 && ny < grid.length && nx >= 0 && nx < grid[0].length) {
               const distance = Math.sqrt(dx * dx + dy * dy)
-              const value = distance === 0 ? 1 : (distance <= 1 ? 0.7 : 0.3)
+              const value = Math.max(0, 1 - distance / 3)
               grid[ny][nx] = Math.max(grid[ny][nx], value)
             }
           }
