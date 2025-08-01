@@ -2,7 +2,7 @@
 
 ## Overview
 
-This document defines a bulletproof coordinate system strategy for the beam inspection application. The system establishes clear, consistent coordinate models for different domains (web vs flanges) and provides unambiguous transformation rules between world coordinates, grid coordinates, and screen coordinates.
+This document codifies the coordinate system currently implemented in the beam inspection prototype. It establishes clear, consistent coordinate models for different domains (web vs flanges) and documents the transformation rules between world coordinates, grid coordinates, and screen coordinates as they exist in the current implementation.
 
 ## Core Principles
 
@@ -53,16 +53,23 @@ This document defines a bulletproof coordinate system strategy for the beam insp
 
 **Origin**: Top-left of canvas (standard screen coordinates)
 
+**Current Implementation**:
+- Beam is centered vertically at `centerY`
+- `webBottom = centerY + (webHeight * gridSize) / 2`
+- `webTop = centerY - (webHeight * gridSize) / 2`
+- Bottom flange starts at `webBottom`
+- Top flange bottom edge at `webTop`
+
 **Transformation from World**:
 ```
-screenX = viewportPadding + worldX * gridSize
+screenX = startX + worldX * gridSize
 screenY = webBottom - worldY * gridSize
 ```
 
 Where:
-- `viewportPadding`: Horizontal padding for labels/dimensions
+- `startX`: Left edge of beam rendering (includes viewport padding)
 - `gridSize`: Pixels per inch (zoom factor)
-- `webBottom`: Screen Y coordinate of web bottom edge
+- `webBottom`: Screen Y coordinate of web bottom edge (top of bottom flange)
 
 ## Coordinate Transformations
 
@@ -90,29 +97,29 @@ maxWorldY = min(gridY + 1, webHeight)
 
 ### World ↔ Screen
 
-**World to Screen**:
+**World to Screen** (as implemented):
 ```typescript
-screenX = viewportPadding + worldX * gridSize
+screenX = startX + worldX * gridSize
 screenY = webBottom - worldY * gridSize  // Y-axis inverted
 ```
 
 **Screen to World**:
 ```typescript
-worldX = (screenX - viewportPadding) / gridSize
+worldX = (screenX - startX) / gridSize
 worldY = (webBottom - screenY) / gridSize
 ```
 
 ### Grid ↔ Screen
 
-**Grid to Screen (cell corner)**:
+**Grid to Screen (cell corner)** (as implemented):
 ```typescript
-screenX = viewportPadding + gridX * gridSize
-screenY = webBottom - (gridY + 1) * gridSize
+screenX = startX + gridX * gridSize
+screenY = webBottom - (gridY + 1) * gridSize  // Cell y position
 ```
 
 **Screen to Grid**:
 ```typescript
-gridX = Math.floor((screenX - viewportPadding) / gridSize)
+gridX = Math.floor((screenX - startX) / gridSize)
 gridY = Math.floor((webBottom - screenY) / gridSize)
 ```
 
@@ -291,8 +298,19 @@ class CoordinateDebugger {
 4. **Phase 4**: Add coordinate debugging overlay
 5. **Phase 5**: Update all coordinate-dependent code to use new system
 
+## Current Implementation Notes
+
+The prototype currently implements this coordinate system with the following key characteristics:
+
+1. **Web cells**: Created with `y = webBottom - (row + 1) * gridSize` where row 0 is at the bottom
+2. **Grid origin**: Always at the left end of the beam, regardless of the `gridOrigin` setting (which only affects dimension labels)
+3. **Flange representation**: 1D linear grids at fixed Y positions
+4. **Marching squares**: Uses inverted Y coordinates in the padded grid array
+
+This documentation reflects the existing implementation to ensure future features align with the established coordinate system.
+
 ## Version History
 
-- v1.0 (2025-08-01): Initial strategy document
+- v1.0 (2025-08-01): Initial strategy document documenting current implementation
 - Future: Add support for rotated coordinate systems
 - Future: Add support for multiple beam segments
