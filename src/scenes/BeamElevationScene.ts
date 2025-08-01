@@ -294,21 +294,30 @@ export class BeamElevationScene extends Phaser.Scene {
             grid[gridY][paddedCols - 1] = 1 // Extend to right boundary
           }
           if (cell.y === 0) {
-            grid[paddedRows - 1][gridX] = 1 // Extend to bottom boundary (y=0 is bottom)
+            // y=0 is bottom row, gridY = paddedRows - 2
+            // Bottom padding is at paddedRows - 1
+            grid[paddedRows - 1][gridX] = 1 // Extend to bottom boundary
           }
           if (cell.y === rows - 1) {
-            grid[0][gridX] = 1 // Extend to top boundary (y=rows-1 is top)
+            // y=rows-1 is top row, gridY = paddedRows - 2 - (rows-1) = paddedRows - rows - 1 = 1
+            // Top padding is at 0
+            grid[0][gridX] = 1 // Extend to top boundary
           }
         }
       })
       
       // Debug: Log grid for verification (uncomment if needed)
       // console.log('Grid dimensions:', paddedRows, 'x', paddedCols)
+      // console.log('Web cells:', webCells)
       // console.log('Grid values:')
       // grid.forEach((row, i) => console.log(i, row.join('')))
       
       // Apply interpolated marching squares
       const contours = marchingSquaresInterpolated(grid, 0.5)
+      // console.log('Generated contours:', contours.length, 'contours')
+      // contours.forEach((contour, i) => {
+      //   console.log(`Contour ${i}: ${contour.length} points`)
+      // })
       
       // Draw smooth contours with proper coordinate transformation
       this.lossGraphics.lineStyle(2, 0xFF6B6B)
