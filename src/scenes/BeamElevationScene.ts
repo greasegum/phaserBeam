@@ -1,6 +1,6 @@
 import Phaser from 'phaser'
 import { BeamProfile, GridCell } from '../types/beam'
-import { marchingSquaresSimple } from '../utils/marchingSquaresSimple'
+import { marchingSquaresInterpolated } from '../utils/marchingSquaresInterpolated'
 
 export class BeamElevationScene extends Phaser.Scene {
   private beamProfile: BeamProfile | null = null
@@ -269,39 +269,63 @@ export class BeamElevationScene extends Phaser.Scene {
       this.lossGraphics.lineStyle(2, 0xFF6B6B)
       this.drawRectangularOutlines(webCells, startX, webBottom)
     } else {
-      // Grid is off, use marching squares for smooth boundaries
+      // Grid is off, use interpolated marching squares for smooth boundaries
       const cols = Math.ceil(this.beamLength)
       const rows = Math.ceil(webHeight)
       
-      // Create a grid for marching squares (0 = empty, 1 = filled)
-      const grid: number[][] = Array(rows + 1).fill(null).map(() => Array(cols + 1).fill(0))
+      // Create a larger grid with padding for proper boundary handling
+      const paddedCols = cols + 2
+      const paddedRows = rows + 2
+      const grid: number[][] = Array(paddedRows).fill(null).map(() => Array(paddedCols).fill(0))
       
-      // Fill the grid based on web cells
+      // Fill the grid based on web cells, with 1-cell padding
       webCells.forEach(cell => {
-        if (cell.x >= 0 && cell.x < cols && cell.y >= 0 && cell.y < rows) {
-          grid[cell.y][cell.x] = 1
+        const gridX = cell.x + 1 // Add padding offset
+        const gridY = cell.y + 1 // Add padding offset
+        if (gridX >= 0 && gridX < paddedCols && gridY >= 0 && gridY < paddedRows) {
+          grid[gridY][gridX] = 1
+          
+          // For edge cells, extend to boundary by filling adjacent padding cells
+          if (cell.x === 0) {
+            grid[gridY][0] = 1 // Extend to left boundary
+          }
+          if (cell.x === cols - 1) {
+            grid[gridY][paddedCols - 1] = 1 // Extend to right boundary
+          }
+          if (cell.y === 0) {
+            grid[paddedRows - 1][gridX] = 1 // Extend to bottom boundary
+          }
+          if (cell.y === rows - 1) {
+            grid[0][gridX] = 1 // Extend to top boundary
+          }
         }
       })
       
-      // Apply marching squares
-      const contours = marchingSquaresSimple(grid, 0.5)
+      // Apply interpolated marching squares
+      const contours = marchingSquaresInterpolated(grid, 0.5)
       
-      // Draw smooth contours
+      // Draw smooth contours with proper coordinate transformation
       this.lossGraphics.lineStyle(2, 0xFF6B6B)
       
       contours.forEach(contour => {
-        if (contour.length < 2) return
+        if (contour.length < 3) return
         
         this.lossGraphics.beginPath()
         
         contour.forEach((point, index) => {
-          const x = startX + point.x * this.gridSize
-          const y = webBottom - point.y * this.gridSize
+          // Transform from grid coordinates to screen coordinates
+          // Subtract 1 to account for padding, then scale and position
+          const x = startX + (point.x - 1) * this.gridSize
+          const y = webBottom - (point.y - 1) * this.gridSize
+          
+          // Clamp to beam boundaries
+          const clampedX = Math.max(startX, Math.min(startX + this.beamLength * this.gridSize, x))
+          const clampedY = Math.max(webTop, Math.min(webBottom, y))
           
           if (index === 0) {
-            this.lossGraphics.moveTo(x, y)
+            this.lossGraphics.moveTo(clampedX, clampedY)
           } else {
-            this.lossGraphics.lineTo(x, y)
+            this.lossGraphics.lineTo(clampedX, clampedY)
           }
         })
         
@@ -472,10 +496,24 @@ export class BeamElevationScene extends Phaser.Scene {
     // Set fill style
     this.lossGraphics.fillStyle(0xFFB3BA, 0.8)
     
-    // Fill individual cells
+    // Fill individual cells with proper edge extension
     flangeCells.forEach(cell => {
-      const x = startX + cell.x * this.gridSize
-      this.lossGraphics.fillRect(x, flangeY, this.gridSize, flangeThickness * this.gridSize)
+      let x = startX + cell.x * this.gridSize
+      let cellWidth = this.gridSize
+      
+      // Extend to beam edges if at boundaries
+      const beamLeft = startX
+      const beamRight = startX + this.beamLength * this.gridSize
+      const maxCol = Math.ceil(this.beamLength) - 1
+      
+      if (cell.x === 0) {
+        x = beamLeft
+        cellWidth = startX + this.gridSize - beamLeft
+      } else if (cell.x === maxCol) {
+        cellWidth = beamRight - x
+      }
+      
+      this.lossGraphics.fillRect(x, flangeY, cellWidth, flangeThickness * this.gridSize)
     })
     
     // Draw outlines - darker red for flanges
