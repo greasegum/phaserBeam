@@ -131,15 +131,28 @@ export class BeamElevationScene extends Phaser.Scene {
     }).setOrigin(0.5)
 
     // Add end labels based on elevation view
-    // North/South elevations show East-West ends
-    // East/West elevations show North-South ends
+    // When looking at an elevation, the ends are perpendicular to the view direction
     let leftLabel: string, rightLabel: string
-    if (this.elevationView === 'N' || this.elevationView === 'S') {
-      leftLabel = 'East End'
-      rightLabel = 'West End'
-    } else {
-      leftLabel = 'North End'
-      rightLabel = 'South End'
+    switch (this.elevationView) {
+      case 'N': // Looking at North elevation
+        leftLabel = 'East End'
+        rightLabel = 'West End'
+        break
+      case 'S': // Looking at South elevation
+        leftLabel = 'West End'
+        rightLabel = 'East End'
+        break
+      case 'E': // Looking at East elevation
+        leftLabel = 'South End'
+        rightLabel = 'North End'
+        break
+      case 'W': // Looking at West elevation
+        leftLabel = 'North End'
+        rightLabel = 'South End'
+        break
+      default:
+        leftLabel = 'Left End'
+        rightLabel = 'Right End'
     }
     
     // Position labels above the beam ends
@@ -234,57 +247,23 @@ export class BeamElevationScene extends Phaser.Scene {
     // Initialize grid with 0s
     const grid: number[][] = Array(rows + 2).fill(null).map(() => Array(cols + 2).fill(0))
     
-    // Fill grid based on web cells with gradient falloff
+    // Fill grid based on web cells - simple binary grid
     // Note: webCells are already in grid coordinates, not absolute positions
     webCells.forEach(cell => {
-      // Convert cell coordinates to absolute grid position
       const gridX = cell.x
       const gridY = cell.y
       
       if (gridX >= 0 && gridX < cols && gridY >= 0 && gridY < rows) {
-        // Set the main cell
+        // Set the cell in the grid (adding 1 for padding)
         grid[gridY + 1][gridX + 1] = 1
-        
-        // Add gradient falloff for smoother edges
-        for (let dy = -2; dy <= 2; dy++) {
-          for (let dx = -2; dx <= 2; dx++) {
-            const ny = gridY + dy + 1
-            const nx = gridX + dx + 1
-            if (ny >= 0 && ny < grid.length && nx >= 0 && nx < grid[0].length) {
-              const distance = Math.sqrt(dx * dx + dy * dy)
-              const value = Math.max(0, 1 - distance / 3)
-              grid[ny][nx] = Math.max(grid[ny][nx], value)
-            }
-          }
-        }
       }
     })
-    
-    // Apply smoothing
-    for (let i = 0; i < 2; i++) {
-      const smoothed = grid.map(row => [...row])
-      for (let y = 1; y < grid.length - 1; y++) {
-        for (let x = 1; x < grid[0].length - 1; x++) {
-          let sum = 0
-          let count = 0
-          for (let dy = -1; dy <= 1; dy++) {
-            for (let dx = -1; dx <= 1; dx++) {
-              sum += grid[y + dy][x + dx]
-              count++
-            }
-          }
-          smoothed[y][x] = sum / count
-        }
-      }
-      grid.forEach((row, y) => row.forEach((_, x) => grid[y][x] = smoothed[y][x]))
-    }
     
     // Generate contours
     const threshold = 0.5
     const contours = marchingSquares(grid, threshold)
     
-    // Draw the contours
-    this.lossGraphics.fillStyle(0xFFB3BA, 0.8)
+    // Draw the contours - only the outline
     this.lossGraphics.lineStyle(2, 0xFF6B6B)
     
     contours.forEach(contour => {
@@ -309,7 +288,6 @@ export class BeamElevationScene extends Phaser.Scene {
       })
       
       this.lossGraphics.closePath()
-      this.lossGraphics.fillPath()
       this.lossGraphics.strokePath()
     })
   }
@@ -503,74 +481,96 @@ export class BeamElevationScene extends Phaser.Scene {
     const topY = centerY - (totalHeight * this.gridSize) / 2
     const bottomY = centerY + (totalHeight * this.gridSize) / 2
 
-    // Height dimension line - position based on grid origin
-    const dimX = this.gridOrigin === 'left' ? startX - 30 : startX + width + 30
+    // Height dimension lines - position based on grid origin
     const graphics = this.add.graphics()
-    graphics.lineStyle(1, 0x333333)
     
-    // Vertical line
-    graphics.beginPath()
-    graphics.moveTo(dimX, topY)
-    graphics.lineTo(dimX, bottomY)
-    graphics.strokePath()
-
-    // End caps
-    graphics.beginPath()
-    graphics.moveTo(dimX - 5, topY)
-    graphics.lineTo(dimX + 5, topY)
-    graphics.moveTo(dimX - 5, bottomY)
-    graphics.lineTo(dimX + 5, bottomY)
-    graphics.strokePath()
-
-    // Height label
-    const labelOffset = this.gridOrigin === 'left' ? -10 : 10
-    this.add.text(dimX + labelOffset, centerY, `${totalHeight.toFixed(3)}"`, {
-      fontSize: '14px',
-      color: '#333',
-      fontWeight: 'bold'
-    }).setOrigin(this.gridOrigin === 'left' ? 1 : 0, 0.5)
+    // Dimension positions
+    const dim1X = this.gridOrigin === 'left' ? startX - 20 : startX + width + 20  // Closest to beam
+    const dim2X = this.gridOrigin === 'left' ? startX - 35 : startX + width + 35  // Middle
+    const dim3X = this.gridOrigin === 'left' ? startX - 55 : startX + width + 55  // Farthest
     
-    // Add detailed dimensions
     const webTop = centerY - (webHeight * this.gridSize) / 2
     const webBottom = centerY + (webHeight * this.gridSize) / 2
     const flangeTop = topY
     
-    // Top flange thickness
-    const detailOffset = this.gridOrigin === 'left' ? -50 : 50
-    graphics.lineStyle(1, 0x666666, 0.5)
+    // Draw all dimension lines with consistent style
+    graphics.lineStyle(1, 0x666666, 0.8)
     
-    // Top flange dimension
+    // Top flange dimension (closest to beam)
     graphics.beginPath()
-    graphics.moveTo(dimX + detailOffset, flangeTop)
-    graphics.lineTo(dimX + detailOffset, webTop)
+    graphics.moveTo(dim1X, flangeTop)
+    graphics.lineTo(dim1X, webTop)
+    graphics.strokePath()
+    // Tick marks
+    graphics.moveTo(dim1X - 3, flangeTop)
+    graphics.lineTo(dim1X + 3, flangeTop)
+    graphics.moveTo(dim1X - 3, webTop)
+    graphics.lineTo(dim1X + 3, webTop)
     graphics.strokePath()
     
-    this.add.text(dimX + detailOffset + labelOffset/2, flangeTop + (webTop - flangeTop) / 2, `${flangeThickness.toFixed(3)}"`, {
-      fontSize: '12px',
+    this.add.text(dim1X + (this.gridOrigin === 'left' ? -5 : 5), flangeTop + (webTop - flangeTop) / 2, `${flangeThickness.toFixed(3)}"`, {
+      fontSize: '11px',
       color: '#666'
     }).setOrigin(this.gridOrigin === 'left' ? 1 : 0, 0.5)
     
-    // Web height dimension
+    // Web height dimension (middle)
     graphics.beginPath()
-    graphics.moveTo(dimX + detailOffset, webTop)
-    graphics.lineTo(dimX + detailOffset, webBottom)
+    graphics.moveTo(dim2X, webTop)
+    graphics.lineTo(dim2X, webBottom)
+    graphics.strokePath()
+    // Tick marks
+    graphics.moveTo(dim2X - 3, webTop)
+    graphics.lineTo(dim2X + 3, webTop)
+    graphics.moveTo(dim2X - 3, webBottom)
+    graphics.lineTo(dim2X + 3, webBottom)
     graphics.strokePath()
     
-    this.add.text(dimX + detailOffset + labelOffset/2, centerY, `${webHeight.toFixed(3)}"`, {
-      fontSize: '12px',
+    // Web height label - rotated vertically
+    const webText = this.add.text(dim2X + (this.gridOrigin === 'left' ? -5 : 5), centerY, `${webHeight.toFixed(3)}"`, {
+      fontSize: '11px',
+      color: '#666'
+    })
+    webText.setOrigin(0.5, this.gridOrigin === 'left' ? 1 : 0)
+    webText.setRotation(this.gridOrigin === 'left' ? -Math.PI/2 : Math.PI/2)
+    
+    // Bottom flange dimension (closest to beam)
+    graphics.beginPath()
+    graphics.moveTo(dim1X, webBottom)
+    graphics.lineTo(dim1X, bottomY)
+    graphics.strokePath()
+    // Tick marks
+    graphics.moveTo(dim1X - 3, webBottom)
+    graphics.lineTo(dim1X + 3, webBottom)
+    graphics.moveTo(dim1X - 3, bottomY)
+    graphics.lineTo(dim1X + 3, bottomY)
+    graphics.strokePath()
+    
+    this.add.text(dim1X + (this.gridOrigin === 'left' ? -5 : 5), webBottom + (bottomY - webBottom) / 2, `${flangeThickness.toFixed(3)}"`, {
+      fontSize: '11px',
       color: '#666'
     }).setOrigin(this.gridOrigin === 'left' ? 1 : 0, 0.5)
     
-    // Bottom flange dimension
+    // Overall height dimension (farthest)
+    graphics.lineStyle(1, 0x333333)
     graphics.beginPath()
-    graphics.moveTo(dimX + detailOffset, webBottom)
-    graphics.lineTo(dimX + detailOffset, bottomY)
+    graphics.moveTo(dim3X, topY)
+    graphics.lineTo(dim3X, bottomY)
+    graphics.strokePath()
+    // Tick marks
+    graphics.moveTo(dim3X - 5, topY)
+    graphics.lineTo(dim3X + 5, topY)
+    graphics.moveTo(dim3X - 5, bottomY)
+    graphics.lineTo(dim3X + 5, bottomY)
     graphics.strokePath()
     
-    this.add.text(dimX + detailOffset + labelOffset/2, webBottom + (bottomY - webBottom) / 2, `${flangeThickness.toFixed(3)}"`, {
-      fontSize: '12px',
-      color: '#666'
-    }).setOrigin(this.gridOrigin === 'left' ? 1 : 0, 0.5)
+    // Overall height label - rotated vertically
+    const heightText = this.add.text(dim3X + (this.gridOrigin === 'left' ? -8 : 8), centerY, `${totalHeight.toFixed(3)}"`, {
+      fontSize: '13px',
+      color: '#333',
+      fontWeight: 'bold'
+    })
+    heightText.setOrigin(0.5, this.gridOrigin === 'left' ? 1 : 0)
+    heightText.setRotation(this.gridOrigin === 'left' ? -Math.PI/2 : Math.PI/2)
 
     // Length dimension markers at bottom
     const dimY = bottomY + 40
