@@ -193,6 +193,21 @@ export class BeamElevationScene extends Phaser.Scene {
     const { webHeight } = this.beamProfile
     const webBottom = centerY + (webHeight * this.gridSize) / 2
     
+    // First, let's draw simple rectangles to debug the positioning
+    this.lossGraphics.fillStyle(0xFFB3BA, 0.8)
+    this.lossGraphics.lineStyle(1, 0xFF6B6B)
+    
+    webCells.forEach(cell => {
+      // cell.x and cell.y are grid coordinates (col, row)
+      const x = startX + cell.x * this.gridSize
+      const y = webBottom - (cell.y + 1) * this.gridSize
+      
+      this.lossGraphics.fillRect(x, y, this.gridSize, this.gridSize)
+      this.lossGraphics.strokeRect(x, y, this.gridSize, this.gridSize)
+    })
+    
+    return // Temporarily return to debug positioning
+    
     // Create a grid for marching squares
     const cols = Math.ceil(this.beamLength)
     const rows = Math.ceil(webHeight)
@@ -260,8 +275,11 @@ export class BeamElevationScene extends Phaser.Scene {
       
       contour.forEach((point, index) => {
         // Convert grid coordinates to screen coordinates
-        // The grid is always in absolute coordinates (from left)
+        // point[0] is the x position in the grid (0 to cols)
+        // point[1] is the y position in the grid (0 to rows)
+        // The -1 offset is because marching squares adds padding
         const x = startX + (point[0] - 1) * this.gridSize
+        // Y coordinate: row 0 is at the bottom of the web, so we need to invert
         const y = webBottom - (point[1] - 1) * this.gridSize
         
         if (index === 0) {
