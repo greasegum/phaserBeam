@@ -28,6 +28,7 @@ export const PhaserCanvas: React.FC<PhaserCanvasProps> = ({
 }) => {
   const gameRef = useRef<Phaser.Game | null>(null)
   const containerRef = useRef<HTMLDivElement>(null)
+  const scrollContainerRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     if (!containerRef.current) return
@@ -133,8 +134,28 @@ export const PhaserCanvas: React.FC<PhaserCanvasProps> = ({
     )
   }
 
+  // Add mouse wheel handler for horizontal scrolling
+  useEffect(() => {
+    const handleWheel = (e: WheelEvent) => {
+      if (scrollContainerRef.current) {
+        e.preventDefault()
+        // Convert vertical scroll to horizontal
+        scrollContainerRef.current.scrollLeft += e.deltaY
+      }
+    }
+
+    const container = scrollContainerRef.current
+    if (container) {
+      container.addEventListener('wheel', handleWheel, { passive: false })
+      
+      return () => {
+        container.removeEventListener('wheel', handleWheel)
+      }
+    }
+  }, [])
+
   return (
-    <div style={{ width: '100%', height: '100%', overflow: 'auto' }}>
+    <div ref={scrollContainerRef} style={{ width: '100%', height: '100%', overflow: 'auto' }}>
       <div ref={containerRef} style={{ minWidth: '100%', height: '100%' }} />
     </div>
   )

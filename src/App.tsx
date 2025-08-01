@@ -62,7 +62,7 @@ export default function App() {
             onClick={() => setShowGrid(!showGrid)}
             style={{
               padding: '6px 12px',
-              backgroundColor: showGrid ? '#4CAF50' : '#999',
+              backgroundColor: showGrid ? '#4CAF50' : '#2196F3',
               color: 'white',
               border: 'none',
               borderRadius: '4px',
@@ -70,40 +70,38 @@ export default function App() {
               fontSize: '14px'
             }}
           >
-            Grid: {showGrid ? 'ON' : 'OFF'}
+            {showGrid ? 'Edit Mode' : 'View Mode'}
           </button>
-          {showGrid && (
-            <>
-              <button
-                onClick={() => setGridOrigin(gridOrigin === 'left' ? 'right' : 'left')}
-                style={{
-                  padding: '6px 12px',
-                  backgroundColor: '#2196F3',
-                  color: 'white',
-                  border: 'none',
-                  borderRadius: '4px',
-                  cursor: 'pointer',
-                  fontSize: '14px'
-                }}
-              >
-                Origin: {gridOrigin === 'left' ? 'Left' : 'Right'}
-              </button>
-              <button
-                onClick={() => setShowTopFlange(!showTopFlange)}
-                style={{
-                  padding: '6px 12px',
-                  backgroundColor: showTopFlange ? '#9C27B0' : '#999',
-                  color: 'white',
-                  border: 'none',
-                  borderRadius: '4px',
-                  cursor: 'pointer',
-                  fontSize: '14px'
-                }}
-              >
-                Top Flange: {showTopFlange ? 'ON' : 'OFF'}
-              </button>
-            </>
-          )}
+          <button
+            onClick={() => setGridOrigin(gridOrigin === 'left' ? 'right' : 'left')}
+            style={{
+              padding: '6px 12px',
+              backgroundColor: '#2196F3',
+              color: 'white',
+              border: 'none',
+              borderRadius: '4px',
+              cursor: 'pointer',
+              fontSize: '14px'
+            }}
+          >
+            Origin: {gridOrigin === 'left' ? 'Left' : 'Right'}
+          </button>
+          <button
+            onClick={() => setShowTopFlange(!showTopFlange)}
+            disabled={!showGrid}
+            style={{
+              padding: '6px 12px',
+              backgroundColor: showTopFlange ? '#9C27B0' : '#999',
+              color: 'white',
+              border: 'none',
+              borderRadius: '4px',
+              cursor: showGrid ? 'pointer' : 'not-allowed',
+              fontSize: '14px',
+              opacity: showGrid ? 1 : 0.6
+            }}
+          >
+            Top Flange: {showTopFlange ? 'ON' : 'OFF'}
+          </button>
           <button
             onClick={() => setGridCells([])}
             style={{

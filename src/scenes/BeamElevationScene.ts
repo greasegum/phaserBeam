@@ -20,6 +20,9 @@ export class BeamElevationScene extends Phaser.Scene {
   private lossGraphics?: Phaser.GameObjects.Graphics
   private gridContainer?: Phaser.GameObjects.Container
   private dimensionText: Phaser.GameObjects.Text[] = []
+  private isMouseDown = false
+  private isPainting = false
+  private paintMode: 'add' | 'remove' | null = null
 
   constructor() {
     super({ key: 'BeamElevationScene' })
@@ -64,6 +67,13 @@ export class BeamElevationScene extends Phaser.Scene {
     if (!this.beamProfile) return
 
     const { webHeight, flangeThickness } = this.beamProfile
+    
+    // Set up global mouse up handler for paint mode
+    this.input.on('pointerup', () => {
+      this.isMouseDown = false
+      this.isPainting = false
+      this.paintMode = null
+    })
     
     // Calculate scene dimensions
     const sceneWidth = this.cameras.main.width
@@ -236,9 +246,23 @@ export class BeamElevationScene extends Phaser.Scene {
     if (this.editMode && this.showGrid) {
       // Fill individual cells
       webCells.forEach(cell => {
-        const x = startX + cell.x * this.gridSize
+        let x = startX + cell.x * this.gridSize
         const y = webBottom - (cell.y + 1) * this.gridSize
-        this.lossGraphics.fillRect(x, y, this.gridSize, this.gridSize)
+        let cellWidth = this.gridSize
+        
+        // Extend to beam edges if at boundaries
+        const beamLeft = startX
+        const beamRight = startX + this.beamLength * this.gridSize
+        const maxCol = Math.ceil(this.beamLength) - 1
+        
+        if (cell.x === 0) {
+          x = beamLeft
+          cellWidth = startX + this.gridSize - beamLeft
+        } else if (cell.x === maxCol) {
+          cellWidth = beamRight - x
+        }
+        
+        this.lossGraphics.fillRect(x, y, cellWidth, this.gridSize)
       })
       
       // Draw rectangular outlines
@@ -336,18 +360,31 @@ export class BeamElevationScene extends Phaser.Scene {
     
     // Create a set for quick lookup
     const regionSet = new Set(region.map(c => `${c.x},${c.y}`))
+    const maxCol = Math.ceil(this.beamLength) - 1
     
     // For each cell in the region, draw edges that border empty cells
     region.forEach(cell => {
-      const x = startX + cell.x * this.gridSize
+      let x = startX + cell.x * this.gridSize
       const y = webBottom - (cell.y + 1) * this.gridSize
+      let cellWidth = this.gridSize
+      
+      // Extend to beam edges if at boundaries
+      const beamLeft = startX
+      const beamRight = startX + this.beamLength * this.gridSize
+      
+      if (cell.x === 0) {
+        x = beamLeft
+        cellWidth = startX + this.gridSize - beamLeft
+      } else if (cell.x === maxCol) {
+        cellWidth = beamRight - x
+      }
       
       // Check each edge
       // Top edge
       if (!regionSet.has(`${cell.x},${cell.y + 1}`)) {
         this.lossGraphics.beginPath()
         this.lossGraphics.moveTo(x, y)
-        this.lossGraphics.lineTo(x + this.gridSize, y)
+        this.lossGraphics.lineTo(x + cellWidth, y)
         this.lossGraphics.strokePath()
       }
       
@@ -355,13 +392,12 @@ export class BeamElevationScene extends Phaser.Scene {
       if (!regionSet.has(`${cell.x},${cell.y - 1}`)) {
         this.lossGraphics.beginPath()
         this.lossGraphics.moveTo(x, y + this.gridSize)
-        this.lossGraphics.lineTo(x + this.gridSize, y + this.gridSize)
+        this.lossGraphics.lineTo(x + cellWidth, y + this.gridSize)
         this.lossGraphics.strokePath()
       }
       
-      // Left edge - check if at beam edge
+      // Left edge - only draw if not at beam edge or if neighbor exists
       if (!regionSet.has(`${cell.x - 1},${cell.y}`)) {
-        // Only draw if not at beam left edge
         if (cell.x !== 0) {
           this.lossGraphics.beginPath()
           this.lossGraphics.moveTo(x, y)
@@ -370,13 +406,12 @@ export class BeamElevationScene extends Phaser.Scene {
         }
       }
       
-      // Right edge - check if at beam edge
+      // Right edge - only draw if not at beam edge or if neighbor exists
       if (!regionSet.has(`${cell.x + 1},${cell.y}`)) {
-        // Only draw if not at beam right edge
-        if (cell.x !== Math.ceil(this.beamLength) - 1) {
+        if (cell.x !== maxCol) {
           this.lossGraphics.beginPath()
-          this.lossGraphics.moveTo(x + this.gridSize, y)
-          this.lossGraphics.lineTo(x + this.gridSize, y + this.gridSize)
+          this.lossGraphics.moveTo(x + cellWidth, y)
+          this.lossGraphics.lineTo(x + cellWidth, y + this.gridSize)
           this.lossGraphics.strokePath()
         }
       }
@@ -616,13 +651,19 @@ export class BeamElevationScene extends Phaser.Scene {
       const zone = cell.getData('zone') || 'default'
       const key = `${zone}_${cell.getData('col')}_${cell.getData('row')}`
       
+      // Set paint mode based on current cell state
       if (this.selectedCells.has(key)) {
+        this.paintMode = 'remove'
         this.selectedCells.delete(key)
         cell.setFillStyle(0xffffff, 0)
       } else {
+        this.paintMode = 'add'
         this.selectedCells.add(key)
         cell.setFillStyle(0x888888, 0.3) // Light gray to indicate selection
       }
+      
+      this.isMouseDown = true
+      this.isPainting = true
       
       // Redraw loss graphics
       const sceneWidth = this.cameras.main.width
@@ -631,12 +672,47 @@ export class BeamElevationScene extends Phaser.Scene {
       const beamWidth = this.beamLength * this.gridSize
       this.drawSectionLoss(startX, this.cameras.main.height / 2, beamWidth)
       
+      // Update grid cell visibility based on selection
+      this.updateGridCellVisibility()
+      
       this.notifyCellChange()
     })
 
     cell.on('pointerover', () => {
       if (!this.editMode) return
-      if (!this.selectedCells.has(`${cell.getData('col')}_${cell.getData('row')}`)) {
+      
+      const zone = cell.getData('zone') || 'default'
+      const key = `${zone}_${cell.getData('col')}_${cell.getData('row')}`
+      
+      // If mouse is down and we're painting, apply the paint mode
+      if (this.isMouseDown && this.isPainting && this.paintMode) {
+        if (this.paintMode === 'add' && !this.selectedCells.has(key)) {
+          this.selectedCells.add(key)
+          cell.setFillStyle(0x888888, 0.3)
+          
+          // Redraw section loss and notify
+          const sceneWidth = this.cameras.main.width
+          const padding = 100
+          const startX = padding
+          const beamWidth = this.beamLength * this.gridSize
+          this.drawSectionLoss(startX, this.cameras.main.height / 2, beamWidth)
+          this.updateGridCellVisibility()
+          this.notifyCellChange()
+        } else if (this.paintMode === 'remove' && this.selectedCells.has(key)) {
+          this.selectedCells.delete(key)
+          cell.setFillStyle(0xffffff, 0)
+          
+          // Redraw section loss and notify
+          const sceneWidth = this.cameras.main.width
+          const padding = 100
+          const startX = padding
+          const beamWidth = this.beamLength * this.gridSize
+          this.drawSectionLoss(startX, this.cameras.main.height / 2, beamWidth)
+          this.updateGridCellVisibility()
+          this.notifyCellChange()
+        }
+      } else if (!this.selectedCells.has(key)) {
+        // Just hover effect
         cell.setFillStyle(0xeeeeee, 0.3)
       }
     })

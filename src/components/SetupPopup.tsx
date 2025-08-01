@@ -7,15 +7,18 @@ interface SetupPopupProps {
 }
 
 export const SetupPopup: React.FC<SetupPopupProps> = ({ onComplete }) => {
-  const [selectedBeam, setSelectedBeam] = useState<BeamProfile | null>(null)
-  const [beamLengthFeet, setBeamLengthFeet] = useState<number>(10) // Default 10 feet
+  // Reverse the beam catalog and set default to first item
+  const reversedCatalog = [...beamCatalog].reverse()
+  const [selectedBeam, setSelectedBeam] = useState<BeamProfile | null>(reversedCatalog[0] || null)
+  const [beamLengthFeet, setBeamLengthFeet] = useState<number>(10)
+  const [beamLengthInches, setBeamLengthInches] = useState<number>(0)
   const [elevationView, setElevationView] = useState<'N' | 'S' | 'E' | 'W'>('N') // Default North
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
     if (selectedBeam) {
-      const lengthInches = Math.round(beamLengthFeet * 12) // Convert feet to inches
-      onComplete(selectedBeam, lengthInches, elevationView)
+      const totalLengthInches = beamLengthFeet * 12 + beamLengthInches
+      onComplete(selectedBeam, totalLengthInches, elevationView)
     }
   }
 
@@ -69,7 +72,7 @@ export const SetupPopup: React.FC<SetupPopupProps> = ({ onComplete }) => {
               required
             >
               <option value="">-- Select a beam --</option>
-              {beamCatalog.map(beam => (
+              {reversedCatalog.map(beam => (
                 <option key={beam.id} value={beam.id}>
                   {beam.name} (Web: {beam.webHeight}" × {beam.webThickness}", 
                   Flange: {beam.flangeWidth}" × {beam.flangeThickness}")
@@ -85,30 +88,67 @@ export const SetupPopup: React.FC<SetupPopupProps> = ({ onComplete }) => {
               fontWeight: 'bold',
               color: '#555'
             }}>
-              Beam Length (feet):
+              Beam Length:
             </label>
-            <input
-              type="number"
-              value={beamLengthFeet}
-              onChange={(e) => setBeamLengthFeet(Math.max(1, Math.min(40, parseFloat(e.target.value) || 10)))}
-              min="1"
-              max="40"
-              step="0.5"
-              style={{
-                width: '100%',
-                padding: '10px',
-                fontSize: '16px',
-                border: '1px solid #ccc',
-                borderRadius: '4px'
-              }}
-              required
-            />
+            <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
+              <div style={{ flex: 1 }}>
+                <input
+                  type="number"
+                  value={beamLengthFeet}
+                  onChange={(e) => setBeamLengthFeet(Math.max(0, Math.min(40, parseInt(e.target.value) || 0)))}
+                  min="0"
+                  max="40"
+                  style={{
+                    width: '100%',
+                    padding: '10px',
+                    fontSize: '16px',
+                    border: '1px solid #ccc',
+                    borderRadius: '4px'
+                  }}
+                  required
+                />
+                <div style={{ 
+                  marginTop: '5px', 
+                  fontSize: '12px', 
+                  color: '#666',
+                  textAlign: 'center'
+                }}>
+                  feet
+                </div>
+              </div>
+              <div style={{ flex: 1 }}>
+                <input
+                  type="number"
+                  value={beamLengthInches}
+                  onChange={(e) => setBeamLengthInches(Math.max(0, Math.min(11, parseInt(e.target.value) || 0)))}
+                  min="0"
+                  max="11"
+                  style={{
+                    width: '100%',
+                    padding: '10px',
+                    fontSize: '16px',
+                    border: '1px solid #ccc',
+                    borderRadius: '4px'
+                  }}
+                  required
+                />
+                <div style={{ 
+                  marginTop: '5px', 
+                  fontSize: '12px', 
+                  color: '#666',
+                  textAlign: 'center'
+                }}>
+                  inches
+                </div>
+              </div>
+            </div>
             <div style={{ 
-              marginTop: '5px', 
+              marginTop: '10px', 
               fontSize: '14px', 
-              color: '#666' 
+              color: '#666',
+              textAlign: 'center'
             }}>
-              {Math.round(beamLengthFeet * 12)} inches
+              Total: {beamLengthFeet * 12 + beamLengthInches} inches ({beamLengthFeet}' {beamLengthInches}")
             </div>
           </div>
 
