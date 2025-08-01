@@ -1,6 +1,5 @@
 import Phaser from 'phaser'
 import { BeamProfile, GridCell } from '../types/beam'
-import { marchingSquares } from '../utils/marchingSquaresNew'
 
 export class BeamElevationScene extends Phaser.Scene {
   private beamProfile: BeamProfile | null = null
@@ -237,58 +236,96 @@ export class BeamElevationScene extends Phaser.Scene {
       const y = webBottom - (cell.y + 1) * this.gridSize
       
       this.lossGraphics.fillRect(x, y, this.gridSize, this.gridSize)
-      // Don't draw individual cell strokes - we'll use marching squares for the outline
     })
     
-    // Create a grid for marching squares
-    const cols = Math.ceil(this.beamLength)
-    const rows = Math.ceil(webHeight)
-    
-    // Initialize grid with 0s
-    const grid: number[][] = Array(rows + 2).fill(null).map(() => Array(cols + 2).fill(0))
-    
-    // Fill grid based on web cells - simple binary grid
-    // Note: webCells are already in grid coordinates, not absolute positions
-    webCells.forEach(cell => {
-      const gridX = cell.x
-      const gridY = cell.y
-      
-      if (gridX >= 0 && gridX < cols && gridY >= 0 && gridY < rows) {
-        // Set the cell in the grid (adding 1 for padding)
-        grid[gridY + 1][gridX + 1] = 1
-      }
-    })
-    
-    // Generate contours
-    const threshold = 0.5
-    const contours = marchingSquares(grid, threshold)
-    
-    // Draw the contours - only the outline
+    // Draw outlines around connected regions
     this.lossGraphics.lineStyle(2, 0xFF6B6B)
     
-    contours.forEach(contour => {
-      if (contour.length < 3) return
+    // Create a set for quick lookup
+    const cellSet = new Set(webCells.map(c => `${c.x},${c.y}`))
+    const visited = new Set<string>()
+    
+    // Find connected regions and draw their outlines
+    webCells.forEach(cell => {
+      const key = `${cell.x},${cell.y}`
+      if (visited.has(key)) return
       
-      this.lossGraphics.beginPath()
+      // Find all cells in this connected region
+      const region: {x: number, y: number}[] = []
+      const queue = [cell]
       
-      contour.forEach((point, index) => {
-        // Convert grid coordinates to screen coordinates
-        // point[0] is the x position in the grid (0 to cols)
-        // point[1] is the y position in the grid (0 to rows)
-        // The -1 offset is because marching squares adds padding
-        const x = startX + (point[0] - 1) * this.gridSize
-        // Y coordinate: row 0 is at the bottom of the web, so we need to invert
-        const y = webBottom - (point[1] - 1) * this.gridSize
+      while (queue.length > 0) {
+        const current = queue.pop()!
+        const currentKey = `${current.x},${current.y}`
         
-        if (index === 0) {
-          this.lossGraphics.moveTo(x, y)
-        } else {
-          this.lossGraphics.lineTo(x, y)
-        }
-      })
+        if (visited.has(currentKey)) continue
+        visited.add(currentKey)
+        region.push(current)
+        
+        // Check all 4 neighbors
+        const neighbors = [
+          {x: current.x + 1, y: current.y},
+          {x: current.x - 1, y: current.y},
+          {x: current.x, y: current.y + 1},
+          {x: current.x, y: current.y - 1}
+        ]
+        
+        neighbors.forEach(neighbor => {
+          const neighborKey = `${neighbor.x},${neighbor.y}`
+          if (cellSet.has(neighborKey) && !visited.has(neighborKey)) {
+            queue.push(neighbor)
+          }
+        })
+      }
       
-      this.lossGraphics.closePath()
-      this.lossGraphics.strokePath()
+      // Draw outline for this region
+      this.drawRegionOutline(region, startX, webBottom)
+    })
+  }
+  
+  private drawRegionOutline(region: {x: number, y: number}[], startX: number, webBottom: number) {
+    if (!this.lossGraphics || region.length === 0) return
+    
+    // Create a set for quick lookup
+    const regionSet = new Set(region.map(c => `${c.x},${c.y}`))
+    
+    // For each cell in the region, draw edges that border empty cells
+    region.forEach(cell => {
+      const x = startX + cell.x * this.gridSize
+      const y = webBottom - (cell.y + 1) * this.gridSize
+      
+      // Check each edge
+      // Top edge
+      if (!regionSet.has(`${cell.x},${cell.y + 1}`)) {
+        this.lossGraphics.beginPath()
+        this.lossGraphics.moveTo(x, y)
+        this.lossGraphics.lineTo(x + this.gridSize, y)
+        this.lossGraphics.strokePath()
+      }
+      
+      // Bottom edge
+      if (!regionSet.has(`${cell.x},${cell.y - 1}`)) {
+        this.lossGraphics.beginPath()
+        this.lossGraphics.moveTo(x, y + this.gridSize)
+        this.lossGraphics.lineTo(x + this.gridSize, y + this.gridSize)
+        this.lossGraphics.strokePath()
+      }
+      
+      // Left edge
+      if (!regionSet.has(`${cell.x - 1},${cell.y}`)) {
+        this.lossGraphics.beginPath()
+        this.lossGraphics.moveTo(x, y)
+        this.lossGraphics.lineTo(x, y + this.gridSize)
+        this.lossGraphics.strokePath()
+      }
+      
+      // Right edge
+      if (!regionSet.has(`${cell.x + 1},${cell.y}`)) {
+        this.lossGraphics.beginPath()
+        this.lossGraphics.moveTo(x + this.gridSize, y)
+        this.lossGraphics.lineTo(x + this.gridSize, y + this.gridSize)
+        this.lossGraphics.strokePath()
+      }
     })
   }
 
