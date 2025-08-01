@@ -38,19 +38,25 @@ export class BeamElevationScene extends Phaser.Scene {
     const endX = sceneWidth - padding
     const centerY = sceneHeight / 2
 
-    // Calculate scale to fit both beam length and height in available space
+    // Calculate scale to fit beam height comfortably in available space
     const availableWidth = endX - startX
-    const availableHeight = sceneHeight - (padding * 2)
+    const availableHeight = sceneHeight - 200 // Leave room for annotations (100px top, 100px bottom)
     
     // Calculate beam total height
     const beamTotalHeight = webHeight + 2 * flangeThickness
     
-    // Calculate scale based on both dimensions to ensure it fits
-    const widthScale = availableWidth / this.beamLength
+    // Calculate scale based on height to ensure comfortable fit
     const heightScale = availableHeight / beamTotalHeight
     
-    // Use the smaller scale to ensure the beam fits in both dimensions
-    this.gridSize = Math.min(widthScale, heightScale, 30) // Cap at 30 pixels per inch for readability
+    // Use a reasonable scale that fits height-wise, cap at 40 pixels per inch
+    this.gridSize = Math.min(heightScale, 40) // Fixed scale for consistent viewing
+    
+    // If beam is too long for viewport, allow horizontal scrolling
+    const requiredWidth = this.beamLength * this.gridSize + padding * 2
+    if (requiredWidth > sceneWidth) {
+      // Canvas will be wider than viewport, enabling horizontal scroll
+      this.cameras.main.setBounds(0, 0, requiredWidth, sceneHeight)
+    }
 
     // Calculate actual beam width based on gridSize
     const beamWidth = this.beamLength * this.gridSize
@@ -102,9 +108,9 @@ export class BeamElevationScene extends Phaser.Scene {
     const flangeTop = webTop - flangeThickness * this.gridSize
     const flangeBottom = webBottom + flangeThickness * this.gridSize
 
-    // Set beam color (light gray)
-    this.beamGraphics.fillStyle(0xE8E8E8)
-    this.beamGraphics.lineStyle(2, 0x333333)
+    // Set beam color (pastel green)
+    this.beamGraphics.fillStyle(0xB8E6B8)
+    this.beamGraphics.lineStyle(2, 0x4A7C4A)
 
     // Draw top flange
     this.beamGraphics.fillRect(startX, flangeTop, width, flangeThickness * this.gridSize)
@@ -151,7 +157,7 @@ export class BeamElevationScene extends Phaser.Scene {
       const x = startX + col * this.gridSize
       const y = gridTop + row * this.gridSize
       
-      this.lossGraphics.fillStyle(0xff6b6b, 0.6)
+      this.lossGraphics.fillStyle(0xFFB3BA, 0.8)
       this.lossGraphics.fillRect(x, y, this.gridSize, this.gridSize)
     })
   }
@@ -194,7 +200,7 @@ export class BeamElevationScene extends Phaser.Scene {
         
         // Restore selected state if cell was previously selected
         if (this.selectedCells.has(key)) {
-          cell.setFillStyle(0xff6b6b, 0.6)
+          cell.setFillStyle(0xFFB3BA, 0.6)
         }
         
         this.setupCellInteraction(cell)
@@ -213,7 +219,7 @@ export class BeamElevationScene extends Phaser.Scene {
         cell.setFillStyle(0xffffff, 0)
       } else {
         this.selectedCells.add(key)
-        cell.setFillStyle(0xff6b6b, 0.6)
+        cell.setFillStyle(0xFFB3BA, 0.6)
       }
       
       // Redraw loss graphics

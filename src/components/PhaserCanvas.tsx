@@ -25,7 +25,7 @@ export const PhaserCanvas: React.FC<PhaserCanvasProps> = ({
     const config: Phaser.Types.Core.GameConfig = {
       type: Phaser.AUTO,
       width: window.innerWidth,
-      height: window.innerHeight - 180, // Increased to account for header and footer properly
+      height: window.innerHeight - 100, // Account for header and footer
       parent: containerRef.current,
       backgroundColor: '#f0f0f0',
       scene: [BeamElevationScene],
@@ -46,7 +46,7 @@ export const PhaserCanvas: React.FC<PhaserCanvasProps> = ({
     // Handle window resize
     const handleResize = () => {
       if (gameRef.current) {
-        gameRef.current.scale.resize(window.innerWidth, window.innerHeight - 180)
+        gameRef.current.scale.resize(window.innerWidth, window.innerHeight - 100)
       }
     }
     window.addEventListener('resize', handleResize)

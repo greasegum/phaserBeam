@@ -1,19 +1,26 @@
 import { useState } from 'react'
-import { BeamSelector } from './components/BeamSelector'
-import { BeamViewer } from './components/BeamViewer'
+import { SetupPopup } from './components/SetupPopup'
 import { PhaserCanvas } from './components/PhaserCanvas'
 import { BeamProfile, GridCell } from './types/beam'
-import { beamCatalog } from './utils/beamCatalog'
 
 export default function App() {
   const [selectedBeam, setSelectedBeam] = useState<BeamProfile | null>(null)
+  const [beamLength, setBeamLength] = useState<number>(120)
   const [sectionLossCells, setSectionLossCells] = useState<GridCell[]>([])
-  const [editMode, setEditMode] = useState<boolean>(true)
-  const [beamLength, setBeamLength] = useState<number>(120) // 10 feet default
-  const [showCrossSection, setShowCrossSection] = useState<boolean>(true)
+  const [showSetup, setShowSetup] = useState<boolean>(true)
+
+  const handleSetupComplete = (beam: BeamProfile, length: number) => {
+    setSelectedBeam(beam)
+    setBeamLength(length)
+    setShowSetup(false)
+  }
 
   const handleCellChange = (cells: GridCell[]) => {
     setSectionLossCells(cells)
+  }
+
+  if (showSetup) {
+    return <SetupPopup onComplete={handleSetupComplete} />
   }
 
   return (
@@ -23,187 +30,86 @@ export default function App() {
       height: '100vh',
       backgroundColor: '#f5f5f5'
     }}>
-      {/* Top Control Band */}
+      {/* Minimal header */}
       <header style={{ 
         backgroundColor: 'white', 
-        padding: '15px 20px',
+        padding: '10px 20px',
         boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
-        zIndex: 10
+        display: 'flex',
+        justifyContent: 'space-between',
+        alignItems: 'center'
       }}>
-        <div style={{ 
-          display: 'flex', 
-          alignItems: 'center', 
-          justifyContent: 'space-between',
-          maxWidth: '1400px',
-          margin: '0 auto'
-        }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '30px' }}>
-            <h1 style={{ 
-              color: '#333', 
-              fontSize: '24px',
-              margin: 0
-            }}>PhaserBeam</h1>
-            
-            <div style={{ display: 'flex', alignItems: 'center', gap: '20px' }}>
-              <BeamSelector 
-                beams={beamCatalog}
-                selectedBeam={selectedBeam}
-                onBeamSelect={setSelectedBeam}
-              />
-
-              <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                <label style={{ color: '#666' }}>Length:</label>
-                <input
-                  type="number"
-                  value={beamLength}
-                  onChange={(e) => setBeamLength(Math.max(12, Math.min(240, parseInt(e.target.value) || 120)))}
-                  style={{
-                    width: '80px',
-                    padding: '6px 8px',
-                    border: '1px solid #ccc',
-                    borderRadius: '4px'
-                  }}
-                  min="12"
-                  max="240"
-                  step="12"
-                />
-                <span style={{ color: '#666' }}>inches</span>
-              </div>
-            </div>
-          </div>
-
-          <div style={{ display: 'flex', gap: '20px', alignItems: 'center' }}>
-            <button
-              onClick={() => setEditMode(!editMode)}
-              style={{
-                padding: '8px 16px',
-                backgroundColor: editMode ? '#4CAF50' : '#666',
-                color: 'white',
-                border: 'none',
-                borderRadius: '4px',
-                cursor: 'pointer',
-                fontSize: '16px',
-                fontWeight: 'bold'
-              }}
-            >
-              {editMode ? 'Edit Mode: ON' : 'Edit Mode: OFF'}
-            </button>
-
-            <button
-              onClick={() => setShowCrossSection(!showCrossSection)}
-              style={{
-                padding: '8px 16px',
-                backgroundColor: '#2196F3',
-                color: 'white',
-                border: 'none',
-                borderRadius: '4px',
-                cursor: 'pointer',
-                fontSize: '16px'
-              }}
-            >
-              {showCrossSection ? 'Hide' : 'Show'} Cross Section
-            </button>
-
-            <button
-              onClick={() => setSectionLossCells([])}
-              style={{
-                padding: '8px 16px',
-                backgroundColor: '#f44336',
-                color: 'white',
-                border: 'none',
-                borderRadius: '4px',
-                cursor: 'pointer',
-                fontSize: '16px'
-              }}
-            >
-              Clear All
-            </button>
-          </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '20px' }}>
+          <h1 style={{ 
+            color: '#333', 
+            fontSize: '20px',
+            margin: 0
+          }}>Beam Inspection</h1>
+          {selectedBeam && (
+            <span style={{ color: '#666', fontSize: '14px' }}>
+              {selectedBeam.name} • {beamLength}" ({(beamLength/12).toFixed(1)} ft)
+            </span>
+          )}
+        </div>
+        
+        <div style={{ display: 'flex', gap: '10px' }}>
+          <button
+            onClick={() => setSectionLossCells([])}
+            style={{
+              padding: '6px 12px',
+              backgroundColor: '#ff9999',
+              color: 'white',
+              border: 'none',
+              borderRadius: '4px',
+              cursor: 'pointer',
+              fontSize: '14px'
+            }}
+          >
+            Clear
+          </button>
+          <button
+            onClick={() => setShowSetup(true)}
+            style={{
+              padding: '6px 12px',
+              backgroundColor: '#666',
+              color: 'white',
+              border: 'none',
+              borderRadius: '4px',
+              cursor: 'pointer',
+              fontSize: '14px'
+            }}
+          >
+            New Inspection
+          </button>
         </div>
       </header>
 
-      {/* Main Canvas Area */}
+      {/* Main canvas area */}
       <main style={{ 
         flex: 1, 
         position: 'relative',
-        overflow: 'hidden'
+        overflow: 'auto'
       }}>
         <PhaserCanvas 
           beamProfile={selectedBeam} 
           onCellChange={handleCellChange}
-          editMode={editMode}
+          editMode={true}
           beamLength={beamLength}
         />
-
-        {/* Floating Cross Section View */}
-        {showCrossSection && selectedBeam && (
-          <div style={{
-            position: 'absolute',
-            top: '20px',
-            right: '20px',
-            backgroundColor: 'white',
-            borderRadius: '8px',
-            padding: '15px',
-            boxShadow: '0 4px 8px rgba(0,0,0,0.2)',
-            zIndex: 5
-          }}>
-            <h3 style={{ 
-              margin: '0 0 10px 0', 
-              fontSize: '16px',
-              color: '#333',
-              textAlign: 'center'
-            }}>Cross Section</h3>
-            <BeamViewer 
-              beamProfile={selectedBeam} 
-              sectionLossCells={sectionLossCells}
-              showDimensions={true}
-            />
-            <div style={{
-              marginTop: '10px',
-              fontSize: '12px',
-              color: '#666',
-              textAlign: 'center'
-            }}>
-              {selectedBeam.name}<br/>
-              Web: {selectedBeam.webHeight}" × {selectedBeam.webThickness}"<br/>
-              Flange: {selectedBeam.flangeWidth}" × {selectedBeam.flangeThickness}"
-            </div>
-          </div>
-        )}
       </main>
 
-      {/* Bottom Status Band */}
+      {/* Minimal footer */}
       <footer style={{ 
         backgroundColor: 'white', 
-        padding: '15px 20px',
+        padding: '8px 20px',
         boxShadow: '0 -2px 4px rgba(0,0,0,0.1)',
-        zIndex: 10
+        fontSize: '12px',
+        color: '#666',
+        display: 'flex',
+        justifyContent: 'space-between'
       }}>
-        <div style={{
-          display: 'flex',
-          justifyContent: 'space-between',
-          alignItems: 'center',
-          maxWidth: '1400px',
-          margin: '0 auto'
-        }}>
-          <div style={{ display: 'flex', gap: '30px' }}>
-            <span style={{ color: '#666' }}>
-              <strong>Mode:</strong> {editMode ? 'Editing' : 'Viewing'}
-            </span>
-            <span style={{ color: '#666' }}>
-              <strong>Cells Selected:</strong> {sectionLossCells.length}
-            </span>
-            {selectedBeam && (
-              <span style={{ color: '#666' }}>
-                <strong>Profile:</strong> {selectedBeam.name}
-              </span>
-            )}
-          </div>
-          
-          <div style={{ fontSize: '14px', color: '#999' }}>
-            Click grid cells to mark section loss • Grid shows 1" × 1" intervals
-          </div>
-        </div>
+        <span>Click cells to mark section loss</span>
+        <span>Cells marked: {sectionLossCells.length}</span>
       </footer>
     </div>
   )
