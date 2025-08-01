@@ -6,8 +6,7 @@ import { BeamProfile, GridCell } from './types/beam'
 export default function App() {
   const [selectedBeam, setSelectedBeam] = useState<BeamProfile | null>(null)
   const [beamLength, setBeamLength] = useState<number>(120)
-  const [leftGridCells, setLeftGridCells] = useState<GridCell[]>([])
-  const [rightGridCells, setRightGridCells] = useState<GridCell[]>([])
+  const [gridCells, setGridCells] = useState<GridCell[]>([])
   const [showSetup, setShowSetup] = useState<boolean>(true)
   const [showGrid, setShowGrid] = useState<boolean>(true)
   const [gridOrigin, setGridOrigin] = useState<'left' | 'right'>('left')
@@ -20,11 +19,7 @@ export default function App() {
   }
 
   const handleCellChange = (cells: GridCell[]) => {
-    if (gridOrigin === 'left') {
-      setLeftGridCells(cells)
-    } else {
-      setRightGridCells(cells)
-    }
+    setGridCells(cells)
   }
 
   if (showSetup) {
@@ -108,13 +103,7 @@ export default function App() {
             </>
           )}
           <button
-            onClick={() => {
-              if (gridOrigin === 'left') {
-                setLeftGridCells([])
-              } else {
-                setRightGridCells([])
-              }
-            }}
+            onClick={() => setGridCells([])}
             style={{
               padding: '6px 12px',
               backgroundColor: '#ff9999',
@@ -125,7 +114,7 @@ export default function App() {
               fontSize: '14px'
             }}
           >
-            Clear {gridOrigin === 'left' ? 'Left' : 'Right'}
+            Clear All
           </button>
           <button
             onClick={() => setShowSetup(true)}
@@ -159,8 +148,7 @@ export default function App() {
             showGrid={showGrid}
             gridOrigin={gridOrigin}
             showTopFlange={showTopFlange}
-            leftCells={leftGridCells}
-            rightCells={rightGridCells}
+            gridCells={gridCells}
           />
         </div>
       </main>
@@ -176,7 +164,7 @@ export default function App() {
         justifyContent: 'space-between'
       }}>
         <span>Click cells to mark section loss</span>
-        <span>Left: {leftGridCells.length} | Right: {rightGridCells.length}</span>
+        <span>Total cells: {gridCells.length}</span>
       </footer>
     </div>
   )
