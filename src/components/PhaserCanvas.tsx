@@ -8,13 +8,15 @@ interface PhaserCanvasProps {
   onCellChange: (cells: GridCell[]) => void
   editMode: boolean
   beamLength: number
+  showGrid?: boolean
 }
 
 export const PhaserCanvas: React.FC<PhaserCanvasProps> = ({ 
   beamProfile, 
   onCellChange, 
   editMode,
-  beamLength 
+  beamLength,
+  showGrid = true 
 }) => {
   const gameRef = useRef<Phaser.Game | null>(null)
   const containerRef = useRef<HTMLDivElement>(null)
@@ -36,23 +38,14 @@ export const PhaserCanvas: React.FC<PhaserCanvasProps> = ({
         }
       },
       scale: {
-        mode: Phaser.Scale.RESIZE,
-        autoCenter: Phaser.Scale.CENTER_BOTH
+        mode: Phaser.Scale.NONE,
+        autoCenter: Phaser.Scale.NO_CENTER
       }
     }
 
     gameRef.current = new Phaser.Game(config)
-    
-    // Handle window resize
-    const handleResize = () => {
-      if (gameRef.current) {
-        gameRef.current.scale.resize(window.innerWidth, window.innerHeight - 100)
-      }
-    }
-    window.addEventListener('resize', handleResize)
 
     return () => {
-      window.removeEventListener('resize', handleResize)
       gameRef.current?.destroy(true)
     }
   }, [])
@@ -60,17 +53,34 @@ export const PhaserCanvas: React.FC<PhaserCanvasProps> = ({
   useEffect(() => {
     if (!gameRef.current || !beamProfile) return
     
+    // Calculate required canvas width based on beam length
+    const padding = 100
+    const gridSize = 40 // Match the max grid size from BeamElevationScene
+    const requiredWidth = beamLength * gridSize + padding * 2
+    const canvasWidth = Math.max(window.innerWidth, requiredWidth)
+    
+    // Resize the game canvas if needed
+    if (gameRef.current.scale.width !== canvasWidth) {
+      gameRef.current.scale.resize(canvasWidth, window.innerHeight - 100)
+    }
+    
+    // Update container div width to enable scrolling
+    if (containerRef.current && containerRef.current.parentElement) {
+      containerRef.current.style.width = `${canvasWidth}px`
+    }
+    
     // Start or restart scene with new data
     const scene = gameRef.current.scene.getScene('BeamElevationScene') as BeamElevationScene
     if (scene) {
       if (scene.scene.isActive()) {
-        scene.updateBeamProfile(beamProfile, beamLength, editMode)
+        scene.updateBeamProfile(beamProfile, beamLength, editMode, showGrid)
       } else {
         scene.scene.start('BeamElevationScene', { 
           beamProfile, 
           beamLength,
           editMode,
-          onCellChange 
+          onCellChange,
+          showGrid 
         })
       }
     } else {
@@ -82,12 +92,13 @@ export const PhaserCanvas: React.FC<PhaserCanvasProps> = ({
             beamProfile, 
             beamLength,
             editMode,
-            onCellChange 
+            onCellChange,
+            showGrid 
           })
         }
       })
     }
-  }, [beamProfile, beamLength, editMode, onCellChange])
+  }, [beamProfile, beamLength, editMode, onCellChange, showGrid])
 
   if (!beamProfile) {
     return (
@@ -106,5 +117,9 @@ export const PhaserCanvas: React.FC<PhaserCanvasProps> = ({
     )
   }
 
-  return <div ref={containerRef} style={{ width: '100%', height: '100%' }} />
+  return (
+    <div style={{ width: '100%', height: '100%', overflow: 'auto' }}>
+      <div ref={containerRef} style={{ minWidth: '100%', height: '100%' }} />
+    </div>
+  )
 }

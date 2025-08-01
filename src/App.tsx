@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { SetupPopup } from './components/SetupPopup'
 import { PhaserCanvas } from './components/PhaserCanvas'
+import { SectionLossOverlay } from './components/SectionLossOverlay'
 import { BeamProfile, GridCell } from './types/beam'
 
 export default function App() {
@@ -8,6 +9,7 @@ export default function App() {
   const [beamLength, setBeamLength] = useState<number>(120)
   const [sectionLossCells, setSectionLossCells] = useState<GridCell[]>([])
   const [showSetup, setShowSetup] = useState<boolean>(true)
+  const [showGrid, setShowGrid] = useState<boolean>(true)
 
   const handleSetupComplete = (beam: BeamProfile, length: number) => {
     setSelectedBeam(beam)
@@ -54,6 +56,20 @@ export default function App() {
         
         <div style={{ display: 'flex', gap: '10px' }}>
           <button
+            onClick={() => setShowGrid(!showGrid)}
+            style={{
+              padding: '6px 12px',
+              backgroundColor: showGrid ? '#4CAF50' : '#999',
+              color: 'white',
+              border: 'none',
+              borderRadius: '4px',
+              cursor: 'pointer',
+              fontSize: '14px'
+            }}
+          >
+            Grid: {showGrid ? 'ON' : 'OFF'}
+          </button>
+          <button
             onClick={() => setSectionLossCells([])}
             style={{
               padding: '6px 12px',
@@ -95,6 +111,16 @@ export default function App() {
           onCellChange={handleCellChange}
           editMode={true}
           beamLength={beamLength}
+          showGrid={showGrid}
+        />
+        <SectionLossOverlay
+          cells={sectionLossCells}
+          beamProfile={selectedBeam}
+          beamLength={beamLength}
+          gridSize={40}
+          startX={100}
+          centerY={(window.innerHeight - 100) / 2}
+          showGrid={showGrid}
         />
       </main>
 

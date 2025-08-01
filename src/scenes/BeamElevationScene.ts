@@ -6,6 +6,7 @@ export class BeamElevationScene extends Phaser.Scene {
   private gridSize = 30 // pixels per inch
   private beamLength = 120 // inches (10 feet default)
   private editMode = true
+  private showGrid = true
   private selectedCells: Set<string> = new Set()
   private gridCells: Map<string, Phaser.GameObjects.Rectangle> = new Map()
   private onCellChange?: (cells: GridCell[]) => void
@@ -18,10 +19,11 @@ export class BeamElevationScene extends Phaser.Scene {
     super({ key: 'BeamElevationScene' })
   }
 
-  init(data: { beamProfile: BeamProfile; beamLength?: number; editMode?: boolean; onCellChange?: (cells: GridCell[]) => void }) {
+  init(data: { beamProfile: BeamProfile; beamLength?: number; editMode?: boolean; showGrid?: boolean; onCellChange?: (cells: GridCell[]) => void }) {
     this.beamProfile = data.beamProfile
     this.beamLength = data.beamLength || 120
     this.editMode = data.editMode !== undefined ? data.editMode : true
+    this.showGrid = data.showGrid !== undefined ? data.showGrid : true
     this.onCellChange = data.onCellChange
   }
 
@@ -71,7 +73,7 @@ export class BeamElevationScene extends Phaser.Scene {
 
     // Create grid overlay container
     this.gridContainer = this.add.container()
-    if (this.editMode) {
+    if (this.editMode && this.showGrid) {
       this.createGrid(startX, centerY, beamWidth)
     }
 
@@ -151,15 +153,15 @@ export class BeamElevationScene extends Phaser.Scene {
     const totalHeight = webHeight + 2 * flangeThickness
     const gridTop = centerY - (totalHeight * this.gridSize) / 2
     
-    // Draw loss areas
-    this.selectedCells.forEach(key => {
-      const [col, row] = key.split('_').map(Number)
-      const x = startX + col * this.gridSize
-      const y = gridTop + row * this.gridSize
-      
-      this.lossGraphics.fillStyle(0xFFB3BA, 0.8)
-      this.lossGraphics.fillRect(x, y, this.gridSize, this.gridSize)
-    })
+    // Don't draw individual cells anymore - the Paper.js overlay will handle organic shapes
+    // this.selectedCells.forEach(key => {
+    //   const [col, row] = key.split('_').map(Number)
+    //   const x = startX + col * this.gridSize
+    //   const y = gridTop + row * this.gridSize
+    //   
+    //   this.lossGraphics.fillStyle(0xFFB3BA, 0.8)
+    //   this.lossGraphics.fillRect(x, y, this.gridSize, this.gridSize)
+    // })
   }
 
   private createGrid(startX: number, centerY: number, width: number) {
@@ -167,59 +169,110 @@ export class BeamElevationScene extends Phaser.Scene {
 
     const { webHeight, flangeThickness } = this.beamProfile
     const totalHeight = webHeight + 2 * flangeThickness
-    const gridTop = centerY - (totalHeight * this.gridSize) / 2
+    const webTop = centerY - (webHeight * this.gridSize) / 2
+    const webBottom = centerY + (webHeight * this.gridSize) / 2
+    const flangeTop = webTop - flangeThickness * this.gridSize
+    const flangeBottom = webBottom + flangeThickness * this.gridSize
     
     // Calculate grid dimensions
     const cols = Math.ceil(this.beamLength)
-    const rows = Math.ceil(totalHeight)
-
-    // Create grid cells
-    for (let row = 0; row < rows; row++) {
-      for (let col = 0; col < cols; col++) {
+    const webRows = Math.ceil(webHeight)
+    const flangeRows = Math.ceil(flangeThickness)
+    
+    // Draw centerline
+    const centerlineGraphics = this.add.graphics()
+    centerlineGraphics.lineStyle(2, 0x0000FF, 0.5)
+    centerlineGraphics.beginPath()
+    centerlineGraphics.moveTo(startX + width / 2, flangeTop)
+    centerlineGraphics.lineTo(startX + width / 2, flangeBottom)
+    centerlineGraphics.strokePath()
+    this.gridContainer.add(centerlineGraphics)
+    
+    // Create web grid with dual origin
+    const midCol = Math.floor(cols / 2)
+    
+    // Left side of web (origin at bottom left)
+    for (let row = 0; row < webRows; row++) {
+      for (let col = 0; col <= midCol; col++) {
         const x = startX + col * this.gridSize
-        const y = gridTop + row * this.gridSize
+        const y = webBottom - (row + 1) * this.gridSize // Origin at bottom
         
-        // Create cell
-        const cell = this.add.rectangle(
-          x + this.gridSize / 2,
-          y + this.gridSize / 2,
-          this.gridSize - 1,
-          this.gridSize - 1,
-          0xffffff,
-          0
-        )
-        
-        cell.setStrokeStyle(1, 0x999999, 0.8)
-        cell.setInteractive()
-        cell.setData('col', col)
-        cell.setData('row', row)
-        
-        const key = `${col}_${row}`
-        this.gridCells.set(key, cell)
-        this.gridContainer.add(cell)
-        
-        // Restore selected state if cell was previously selected
-        if (this.selectedCells.has(key)) {
-          cell.setFillStyle(0xFFB3BA, 0.6)
-        }
-        
-        this.setupCellInteraction(cell)
+        this.createGridCell(x, y, col, row, 'web-left')
       }
     }
+    
+    // Right side of web (origin at bottom right)
+    for (let row = 0; row < webRows; row++) {
+      for (let col = midCol; col < cols; col++) {
+        const x = startX + width - (cols - col) * this.gridSize
+        const y = webBottom - (row + 1) * this.gridSize // Origin at bottom
+        
+        this.createGridCell(x, y, col, row, 'web-right')
+      }
+    }
+    
+    // Top flange grid (single origin)
+    for (let row = 0; row < flangeRows; row++) {
+      for (let col = 0; col < cols; col++) {
+        const x = startX + col * this.gridSize
+        const y = flangeTop + row * this.gridSize
+        
+        this.createGridCell(x, y, col, row + webRows, 'flange-top')
+      }
+    }
+    
+    // Bottom flange grid (single origin)
+    for (let row = 0; row < flangeRows; row++) {
+      for (let col = 0; col < cols; col++) {
+        const x = startX + col * this.gridSize
+        const y = webBottom + row * this.gridSize
+        
+        this.createGridCell(x, y, col, row, 'flange-bottom')
+      }
+    }
+  }
+  
+  private createGridCell(x: number, y: number, col: number, row: number, zone: string) {
+    const cell = this.add.rectangle(
+      x + this.gridSize / 2,
+      y + this.gridSize / 2,
+      this.gridSize - 1,
+      this.gridSize - 1,
+      0xffffff,
+      0
+    )
+    
+    cell.setStrokeStyle(1, 0x999999, 0.8)
+    cell.setInteractive()
+    cell.setData('col', col)
+    cell.setData('row', row)
+    cell.setData('zone', zone)
+    
+    const key = `${zone}_${col}_${row}`
+    this.gridCells.set(key, cell)
+    this.gridContainer!.add(cell)
+    
+    // Restore selected state if cell was previously selected
+    if (this.selectedCells.has(key)) {
+      cell.setFillStyle(0x888888, 0.3)
+    }
+    
+    this.setupCellInteraction(cell)
   }
 
   private setupCellInteraction(cell: Phaser.GameObjects.Rectangle) {
     cell.on('pointerdown', () => {
       if (!this.editMode) return
       
-      const key = `${cell.getData('col')}_${cell.getData('row')}`
+      const zone = cell.getData('zone') || 'default'
+      const key = `${zone}_${cell.getData('col')}_${cell.getData('row')}`
       
       if (this.selectedCells.has(key)) {
         this.selectedCells.delete(key)
         cell.setFillStyle(0xffffff, 0)
       } else {
         this.selectedCells.add(key)
-        cell.setFillStyle(0xFFB3BA, 0.6)
+        cell.setFillStyle(0x888888, 0.3) // Light gray to indicate selection
       }
       
       // Redraw loss graphics
@@ -241,7 +294,8 @@ export class BeamElevationScene extends Phaser.Scene {
 
     cell.on('pointerout', () => {
       if (!this.editMode) return
-      const key = `${cell.getData('col')}_${cell.getData('row')}`
+      const zone = cell.getData('zone') || 'default'
+      const key = `${zone}_${cell.getData('col')}_${cell.getData('row')}`
       if (!this.selectedCells.has(key)) {
         cell.setFillStyle(0xffffff, 0)
       }
@@ -305,19 +359,45 @@ export class BeamElevationScene extends Phaser.Scene {
     
     const cells: GridCell[] = []
     this.selectedCells.forEach(key => {
-      const [x, y] = key.split('_').map(Number)
-      cells.push({
-        x,
-        y,
-        selected: true,
-        severity: 1
-      })
+      const parts = key.split('_')
+      if (parts.length >= 3) {
+        const zone = parts[0]
+        const x = parseInt(parts[1])
+        const y = parseInt(parts[2])
+        
+        // Convert grid coordinates to absolute position for the overlay
+        // For now, we'll use the col/row directly, but this could be enhanced
+        // to account for the dual origin system
+        cells.push({
+          x,
+          y,
+          selected: true,
+          severity: 1
+        })
+      }
     })
     
     this.onCellChange(cells)
   }
 
-  updateBeamProfile(profile: BeamProfile, length?: number, editMode?: boolean) {
+  updateBeamProfile(profile: BeamProfile, length?: number, editMode?: boolean, showGrid?: boolean) {
+    // Check if we just need to toggle grid visibility
+    if (profile.id === this.beamProfile?.id && 
+        length === this.beamLength && 
+        editMode === this.editMode &&
+        showGrid !== undefined && 
+        showGrid !== this.showGrid) {
+      
+      this.showGrid = showGrid
+      
+      // Toggle grid visibility
+      if (this.gridContainer) {
+        this.gridContainer.setVisible(this.editMode && this.showGrid)
+      }
+      
+      return
+    }
+    
     // Check if we just need to toggle edit mode
     if (profile.id === this.beamProfile?.id && 
         length === this.beamLength && 
@@ -328,7 +408,7 @@ export class BeamElevationScene extends Phaser.Scene {
       
       // Toggle grid visibility
       if (this.gridContainer) {
-        this.gridContainer.setVisible(this.editMode)
+        this.gridContainer.setVisible(this.editMode && this.showGrid)
       }
       
       return
@@ -338,10 +418,12 @@ export class BeamElevationScene extends Phaser.Scene {
     this.beamProfile = profile
     this.beamLength = length || this.beamLength
     this.editMode = editMode !== undefined ? editMode : this.editMode
+    this.showGrid = showGrid !== undefined ? showGrid : this.showGrid
     this.scene.restart({ 
       beamProfile: profile, 
       beamLength: this.beamLength,
       editMode: this.editMode,
+      showGrid: this.showGrid,
       onCellChange: this.onCellChange 
     })
   }
