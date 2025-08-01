@@ -3,18 +3,19 @@ import { BeamProfile } from '../types/beam'
 import { beamCatalog } from '../utils/beamCatalog'
 
 interface SetupPopupProps {
-  onComplete: (beam: BeamProfile, length: number) => void
+  onComplete: (beam: BeamProfile, length: number, elevationView: 'N' | 'S' | 'E' | 'W') => void
 }
 
 export const SetupPopup: React.FC<SetupPopupProps> = ({ onComplete }) => {
   const [selectedBeam, setSelectedBeam] = useState<BeamProfile | null>(null)
   const [beamLengthFeet, setBeamLengthFeet] = useState<number>(10) // Default 10 feet
+  const [elevationView, setElevationView] = useState<'N' | 'S' | 'E' | 'W'>('N') // Default North
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
     if (selectedBeam) {
       const lengthInches = Math.round(beamLengthFeet * 12) // Convert feet to inches
-      onComplete(selectedBeam, lengthInches)
+      onComplete(selectedBeam, lengthInches, elevationView)
     }
   }
 
@@ -77,7 +78,7 @@ export const SetupPopup: React.FC<SetupPopupProps> = ({ onComplete }) => {
             </select>
           </div>
 
-          <div style={{ marginBottom: '25px' }}>
+          <div style={{ marginBottom: '20px' }}>
             <label style={{ 
               display: 'block', 
               marginBottom: '8px', 
@@ -109,6 +110,34 @@ export const SetupPopup: React.FC<SetupPopupProps> = ({ onComplete }) => {
             }}>
               {Math.round(beamLengthFeet * 12)} inches
             </div>
+          </div>
+
+          <div style={{ marginBottom: '25px' }}>
+            <label style={{ 
+              display: 'block', 
+              marginBottom: '8px', 
+              fontWeight: 'bold',
+              color: '#555'
+            }}>
+              Elevation View:
+            </label>
+            <select
+              value={elevationView}
+              onChange={(e) => setElevationView(e.target.value as 'N' | 'S' | 'E' | 'W')}
+              style={{
+                width: '100%',
+                padding: '10px',
+                fontSize: '16px',
+                border: '1px solid #ccc',
+                borderRadius: '4px'
+              }}
+              required
+            >
+              <option value="N">North Elevation</option>
+              <option value="S">South Elevation</option>
+              <option value="E">East Elevation</option>
+              <option value="W">West Elevation</option>
+            </select>
           </div>
 
           <button

@@ -12,7 +12,7 @@ interface PhaserCanvasProps {
   gridOrigin?: 'left' | 'right'
   showTopFlange?: boolean
   gridCells?: GridCell[]
-  beamDirection?: 'NS' | 'SN' | 'EW' | 'WE'
+  elevationView?: 'N' | 'S' | 'E' | 'W'
 }
 
 export const PhaserCanvas: React.FC<PhaserCanvasProps> = ({ 
@@ -24,7 +24,7 @@ export const PhaserCanvas: React.FC<PhaserCanvasProps> = ({
   gridOrigin = 'left',
   showTopFlange = true,
   gridCells = [],
-  beamDirection = 'NS'
+  elevationView = 'N'
 }) => {
   const gameRef = useRef<Phaser.Game | null>(null)
   const containerRef = useRef<HTMLDivElement>(null)
@@ -81,7 +81,7 @@ export const PhaserCanvas: React.FC<PhaserCanvasProps> = ({
     const scene = gameRef.current.scene.getScene('BeamElevationScene') as BeamElevationScene
     if (scene) {
       if (scene.scene.isActive()) {
-        scene.updateBeamProfile(beamProfile, beamLength, editMode, showGrid, gridOrigin, showTopFlange, gridCells, beamDirection)
+        scene.updateBeamProfile(beamProfile, beamLength, editMode, showGrid, gridOrigin, showTopFlange, gridCells, elevationView)
       } else {
         scene.scene.start('BeamElevationScene', { 
           beamProfile, 
@@ -92,7 +92,7 @@ export const PhaserCanvas: React.FC<PhaserCanvasProps> = ({
           gridOrigin,
           showTopFlange,
           gridCells,
-          beamDirection
+          elevationView
         })
       }
     } else {
@@ -109,7 +109,7 @@ export const PhaserCanvas: React.FC<PhaserCanvasProps> = ({
             gridOrigin,
             showTopFlange,
             gridCells,
-          beamDirection
+          elevationView
           })
         }
       })
