@@ -3,7 +3,7 @@ import { BeamProfile, GridCell } from '../types/beam'
 
 export class BeamElevationScene extends Phaser.Scene {
   private beamProfile: BeamProfile | null = null
-  private gridSize = 30 // pixels per inch (smaller for better fit)
+  private gridSize = 30 // pixels per inch
   private beamLength = 120 // inches (10 feet default)
   private editMode = true
   private selectedCells: Set<string> = new Set()
@@ -33,30 +33,44 @@ export class BeamElevationScene extends Phaser.Scene {
     // Calculate scene dimensions
     const sceneWidth = this.cameras.main.width
     const sceneHeight = this.cameras.main.height
-    const startX = 80 // Leave space for labels
-    const endX = sceneWidth - 80
+    const padding = 100 // Increased padding for labels and dimensions
+    const startX = padding
+    const endX = sceneWidth - padding
     const centerY = sceneHeight / 2
 
-    // Calculate scale to fit beam length in available space
+    // Calculate scale to fit both beam length and height in available space
     const availableWidth = endX - startX
-    this.gridSize = availableWidth / this.beamLength
+    const availableHeight = sceneHeight - (padding * 2)
+    
+    // Calculate beam total height
+    const beamTotalHeight = webHeight + 2 * flangeThickness
+    
+    // Calculate scale based on both dimensions to ensure it fits
+    const widthScale = availableWidth / this.beamLength
+    const heightScale = availableHeight / beamTotalHeight
+    
+    // Use the smaller scale to ensure the beam fits in both dimensions
+    this.gridSize = Math.min(widthScale, heightScale, 30) // Cap at 30 pixels per inch for readability
+
+    // Calculate actual beam width based on gridSize
+    const beamWidth = this.beamLength * this.gridSize
 
     // Draw beam profile background
     this.beamGraphics = this.add.graphics()
-    this.drawBeamProfile(startX, centerY, availableWidth)
+    this.drawBeamProfile(startX, centerY, beamWidth)
 
     // Create loss graphics layer
     this.lossGraphics = this.add.graphics()
-    this.drawSectionLoss(startX, centerY, availableWidth)
+    this.drawSectionLoss(startX, centerY, beamWidth)
 
     // Create grid overlay container
     this.gridContainer = this.add.container()
     if (this.editMode) {
-      this.createGrid(startX, centerY, availableWidth)
+      this.createGrid(startX, centerY, beamWidth)
     }
 
     // Add dimension lines and labels
-    this.addDimensions(startX, centerY, availableWidth)
+    this.addDimensions(startX, centerY, beamWidth)
 
     // Add title
     this.add.text(sceneWidth / 2, 30, 'Beam Elevation View', {
@@ -72,7 +86,7 @@ export class BeamElevationScene extends Phaser.Scene {
       align: 'center'
     }).setOrigin(0.5)
 
-    this.add.text(endX + 40, centerY, 'North\n' + this.beamLength + '"', {
+    this.add.text(startX + beamWidth + 40, centerY, 'North\n' + this.beamLength + '"', {
       fontSize: '14px', 
       color: '#333',
       align: 'center'
@@ -169,7 +183,7 @@ export class BeamElevationScene extends Phaser.Scene {
           0
         )
         
-        cell.setStrokeStyle(1, 0xcccccc, 0.5)
+        cell.setStrokeStyle(1, 0x999999, 0.8)
         cell.setInteractive()
         cell.setData('col', col)
         cell.setData('row', row)
@@ -204,10 +218,10 @@ export class BeamElevationScene extends Phaser.Scene {
       
       // Redraw loss graphics
       const sceneWidth = this.cameras.main.width
-      const startX = 80
-      const endX = sceneWidth - 80
-      const availableWidth = endX - startX
-      this.drawSectionLoss(startX, this.cameras.main.height / 2, availableWidth)
+      const padding = 100
+      const startX = padding
+      const beamWidth = this.beamLength * this.gridSize
+      this.drawSectionLoss(startX, this.cameras.main.height / 2, beamWidth)
       
       this.notifyCellChange()
     })
