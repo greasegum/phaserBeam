@@ -10,6 +10,7 @@ export class BeamElevationScene extends Phaser.Scene {
   private showGrid = true
   private gridOrigin: 'left' | 'right' = 'left'
   private showTopFlange = true
+  private beamDirection: 'NS' | 'SN' | 'EW' | 'WE' = 'NS'
   private storedCells: GridCell[] = []
   private selectedCells: Set<string> = new Set()
   private gridCells: Map<string, Phaser.GameObjects.Rectangle> = new Map()
@@ -32,6 +33,7 @@ export class BeamElevationScene extends Phaser.Scene {
     gridOrigin?: 'left' | 'right'; 
     showTopFlange?: boolean;
     gridCells?: GridCell[];
+    beamDirection?: 'NS' | 'SN' | 'EW' | 'WE';
     onCellChange?: (cells: GridCell[]) => void 
   }) {
     this.beamProfile = data.beamProfile
@@ -40,6 +42,7 @@ export class BeamElevationScene extends Phaser.Scene {
     this.showGrid = data.showGrid !== undefined ? data.showGrid : true
     this.gridOrigin = data.gridOrigin || 'left'
     this.showTopFlange = data.showTopFlange !== undefined ? data.showTopFlange : true
+    this.beamDirection = data.beamDirection || 'NS'
     this.storedCells = data.gridCells || []
     this.onCellChange = data.onCellChange
     
@@ -111,27 +114,36 @@ export class BeamElevationScene extends Phaser.Scene {
     // Add dimension lines and labels
     this.addDimensions(startX, centerY, beamWidth)
 
-    // Add title
-    this.add.text(sceneWidth / 2, 30, 'Beam Elevation View', {
+    // Add title with direction
+    const directionMap = {
+      'NS': 'North → South',
+      'SN': 'South → North', 
+      'EW': 'East → West',
+      'WE': 'West → East'
+    }
+    this.add.text(sceneWidth / 2, 30, `Beam Elevation View (${directionMap[this.beamDirection]})`, {
       fontSize: '20px',
       color: '#333',
       fontStyle: 'bold'
     }).setOrigin(0.5)
 
-    // Add end labels based on grid origin
-    const leftLabel = this.gridOrigin === 'left' ? 'South\n0"' : `North\n${this.beamLength}"`
-    const rightLabel = this.gridOrigin === 'left' ? `North\n${this.beamLength}"` : 'South\n0"'
+    // Add end labels based on beam direction (fixed positions above beam)
+    const [leftEnd, rightEnd] = this.beamDirection.split('') as [string, string]
+    const dirFullNames: Record<string, string> = { 'N': 'North', 'S': 'South', 'E': 'East', 'W': 'West' }
     
-    this.add.text(startX - 40, centerY, leftLabel, {
+    // Position labels above the beam ends
+    const labelY = centerY - ((this.beamProfile!.webHeight + 2 * this.beamProfile!.flangeThickness) * this.gridSize) / 2 - 30
+    
+    this.add.text(startX, labelY, dirFullNames[leftEnd], {
       fontSize: '14px',
       color: '#333',
-      align: 'center'
+      fontWeight: 'bold'
     }).setOrigin(0.5)
 
-    this.add.text(startX + beamWidth + 40, centerY, rightLabel, {
+    this.add.text(startX + beamWidth, labelY, dirFullNames[rightEnd], {
       fontSize: '14px', 
       color: '#333',
-      align: 'center'
+      fontWeight: 'bold'
     }).setOrigin(0.5)
   }
 
@@ -331,6 +343,11 @@ export class BeamElevationScene extends Phaser.Scene {
     
     // Draw flange section loss as rectangles
     allFlangeCells.forEach(cell => {
+      // Skip top flange cells if top flange is disabled
+      if (cell.zone === 'flange-top' && !this.showTopFlange) {
+        return
+      }
+      
       // Cells are stored with their absolute positions now
       const x = startX + cell.x * this.gridSize
       const y = cell.zone === 'flange-top' ? flangeTop : webBottom
@@ -364,7 +381,10 @@ export class BeamElevationScene extends Phaser.Scene {
       for (let col = 0; col < cols; col++) {
         const x = startX + col * this.gridSize
         const y = webBottom - (row + 1) * this.gridSize
-        this.createGridCell(x, y, col, row, 'web')
+        // Only create cell if it's within the web bounds
+        if (y >= webTop) {
+          this.createGridCell(x, y, col, row, 'web')
+        }
       }
     }
     
@@ -486,9 +506,52 @@ export class BeamElevationScene extends Phaser.Scene {
 
     // Height label
     const labelOffset = this.gridOrigin === 'left' ? -10 : 10
-    this.add.text(dimX + labelOffset, centerY, `${totalHeight}"`, {
+    this.add.text(dimX + labelOffset, centerY, `${totalHeight.toFixed(3)}"`, {
       fontSize: '14px',
-      color: '#333'
+      color: '#333',
+      fontWeight: 'bold'
+    }).setOrigin(this.gridOrigin === 'left' ? 1 : 0, 0.5)
+    
+    // Add detailed dimensions
+    const webTop = centerY - (webHeight * this.gridSize) / 2
+    const webBottom = centerY + (webHeight * this.gridSize) / 2
+    const flangeTop = topY
+    
+    // Top flange thickness
+    const detailOffset = this.gridOrigin === 'left' ? -50 : 50
+    graphics.lineStyle(1, 0x666666, 0.5)
+    
+    // Top flange dimension
+    graphics.beginPath()
+    graphics.moveTo(dimX + detailOffset, flangeTop)
+    graphics.lineTo(dimX + detailOffset, webTop)
+    graphics.strokePath()
+    
+    this.add.text(dimX + detailOffset + labelOffset/2, flangeTop + (webTop - flangeTop) / 2, `${flangeThickness.toFixed(3)}"`, {
+      fontSize: '12px',
+      color: '#666'
+    }).setOrigin(this.gridOrigin === 'left' ? 1 : 0, 0.5)
+    
+    // Web height dimension
+    graphics.beginPath()
+    graphics.moveTo(dimX + detailOffset, webTop)
+    graphics.lineTo(dimX + detailOffset, webBottom)
+    graphics.strokePath()
+    
+    this.add.text(dimX + detailOffset + labelOffset/2, centerY, `${webHeight.toFixed(3)}"`, {
+      fontSize: '12px',
+      color: '#666'
+    }).setOrigin(this.gridOrigin === 'left' ? 1 : 0, 0.5)
+    
+    // Bottom flange dimension
+    graphics.beginPath()
+    graphics.moveTo(dimX + detailOffset, webBottom)
+    graphics.lineTo(dimX + detailOffset, bottomY)
+    graphics.strokePath()
+    
+    this.add.text(dimX + detailOffset + labelOffset/2, webBottom + (bottomY - webBottom) / 2, `${flangeThickness.toFixed(3)}"`, {
+      fontSize: '12px',
+      color: '#666'
     }).setOrigin(this.gridOrigin === 'left' ? 1 : 0, 0.5)
 
     // Length dimension markers at bottom
@@ -540,7 +603,7 @@ export class BeamElevationScene extends Phaser.Scene {
     this.onCellChange(cells)
   }
 
-  updateBeamProfile(profile: BeamProfile, length?: number, editMode?: boolean, showGrid?: boolean, gridOrigin?: 'left' | 'right', showTopFlange?: boolean, gridCells?: GridCell[]) {
+  updateBeamProfile(profile: BeamProfile, length?: number, editMode?: boolean, showGrid?: boolean, gridOrigin?: 'left' | 'right', showTopFlange?: boolean, gridCells?: GridCell[], beamDirection?: 'NS' | 'SN' | 'EW' | 'WE') {
     // Check if we just need to toggle grid origin
     if (profile.id === this.beamProfile?.id && 
         length === this.beamLength && 
@@ -560,6 +623,7 @@ export class BeamElevationScene extends Phaser.Scene {
         gridOrigin: this.gridOrigin,
         showTopFlange: this.showTopFlange,
         gridCells: gridCells || this.storedCells,
+        beamDirection: beamDirection || this.beamDirection,
         onCellChange: this.onCellChange 
       })
       
@@ -585,6 +649,7 @@ export class BeamElevationScene extends Phaser.Scene {
         gridOrigin: this.gridOrigin,
         showTopFlange: this.showTopFlange,
         gridCells: gridCells || this.storedCells,
+        beamDirection: beamDirection || this.beamDirection,
         onCellChange: this.onCellChange 
       })
       
@@ -632,6 +697,7 @@ export class BeamElevationScene extends Phaser.Scene {
     this.gridOrigin = gridOrigin !== undefined ? gridOrigin : this.gridOrigin
     this.showTopFlange = showTopFlange !== undefined ? showTopFlange : this.showTopFlange
     this.storedCells = gridCells || this.storedCells
+    this.beamDirection = beamDirection || this.beamDirection
     this.scene.restart({ 
       beamProfile: profile, 
       beamLength: this.beamLength,
@@ -640,6 +706,7 @@ export class BeamElevationScene extends Phaser.Scene {
       gridOrigin: this.gridOrigin,
       showTopFlange: this.showTopFlange,
       gridCells: this.storedCells,
+      beamDirection: this.beamDirection,
       onCellChange: this.onCellChange 
     })
   }

@@ -11,6 +11,7 @@ export default function App() {
   const [showGrid, setShowGrid] = useState<boolean>(true)
   const [gridOrigin, setGridOrigin] = useState<'left' | 'right'>('left')
   const [showTopFlange, setShowTopFlange] = useState<boolean>(true)
+  const [beamDirection, setBeamDirection] = useState<'NS' | 'SN' | 'EW' | 'WE'>('NS')
 
   const handleSetupComplete = (beam: BeamProfile, length: number) => {
     setSelectedBeam(beam)
@@ -56,6 +57,23 @@ export default function App() {
         </div>
         
         <div style={{ display: 'flex', gap: '10px' }}>
+          <select
+            value={beamDirection}
+            onChange={(e) => setBeamDirection(e.target.value as 'NS' | 'SN' | 'EW' | 'WE')}
+            style={{
+              padding: '6px 12px',
+              backgroundColor: 'white',
+              border: '1px solid #ccc',
+              borderRadius: '4px',
+              fontSize: '14px',
+              cursor: 'pointer'
+            }}
+          >
+            <option value="NS">N→S</option>
+            <option value="SN">S→N</option>
+            <option value="EW">E→W</option>
+            <option value="WE">W→E</option>
+          </select>
           <button
             onClick={() => setShowGrid(!showGrid)}
             style={{
@@ -149,6 +167,7 @@ export default function App() {
             gridOrigin={gridOrigin}
             showTopFlange={showTopFlange}
             gridCells={gridCells}
+            beamDirection={beamDirection}
           />
         </div>
       </main>
