@@ -17,23 +17,24 @@ export function marchingSquaresInterpolated(grid: number[][], threshold: number 
   
   // Marching squares lookup table for all 16 cases
   // Each case defines which edges should have line segments
+  // Edge indices: 0=top, 1=right, 2=bottom, 3=left
   const edgeTable: number[][] = [
-    [],           // 0: 0000
-    [0, 3],       // 1: 0001
-    [1, 0],       // 2: 0010
-    [1, 3],       // 3: 0011
-    [2, 1],       // 4: 0100
-    [0, 3, 2, 1], // 5: 0101 (ambiguous case)
-    [2, 0],       // 6: 0110
-    [2, 3],       // 7: 0111
-    [3, 2],       // 8: 1000
-    [0, 2],       // 9: 1001
-    [1, 0, 3, 2], // 10: 1010 (ambiguous case)
-    [1, 2],       // 11: 1011
-    [3, 1],       // 12: 1100
-    [0, 1],       // 13: 1101
-    [3, 0],       // 14: 1110
-    []            // 15: 1111
+    [],           // 0: 0000 (all outside)
+    [3, 2],       // 1: 0001 (bottom-left inside)
+    [2, 1],       // 2: 0010 (bottom-right inside)
+    [3, 1],       // 3: 0011 (bottom inside)
+    [1, 0],       // 4: 0100 (top-right inside)
+    [3, 2, 1, 0], // 5: 0101 (diagonal - ambiguous)
+    [2, 0],       // 6: 0110 (right inside)
+    [3, 0],       // 7: 0111 (all except top-left)
+    [0, 3],       // 8: 1000 (top-left inside)
+    [0, 2],       // 9: 1001 (left inside)
+    [0, 3, 2, 1], // 10: 1010 (diagonal - ambiguous)
+    [0, 1],       // 11: 1011 (all except top-right)
+    [1, 3],       // 12: 1100 (top inside)
+    [1, 2],       // 13: 1101 (all except bottom-right)
+    [2, 3],       // 14: 1110 (all except bottom-left)
+    []            // 15: 1111 (all inside)
   ]
   
   const segments: Edge[] = []
@@ -47,7 +48,8 @@ export function marchingSquaresInterpolated(grid: number[][], threshold: number 
       const bl = grid[row + 1][col] >= threshold ? 1 : 0 // bottom-left
       
       // Calculate the index for the lookup table
-      const index = tl | (tr << 1) | (br << 2) | (bl << 3)
+      // Order: bottom-left, bottom-right, top-right, top-left
+      const index = bl | (br << 1) | (tr << 2) | (tl << 3)
       
       const edges = edgeTable[index]
       if (!edges || edges.length === 0) continue
@@ -58,6 +60,26 @@ export function marchingSquaresInterpolated(grid: number[][], threshold: number 
         
         const edge1 = edges[i]
         const edge2 = edges[i + 1]
+        
+        // For ambiguous cases, check the center value to determine connectivity
+        if (index === 5 || index === 10) {
+          const center = (grid[row][col] + grid[row][col + 1] + 
+                         grid[row + 1][col + 1] + grid[row + 1][col]) / 4
+          const centerAbove = center >= threshold
+          
+          // For case 5: if center is above threshold, connect 3-0 and 2-1
+          // For case 10: if center is below threshold, connect 0-1 and 3-2
+          if ((index === 5 && centerAbove) || (index === 10 && !centerAbove)) {
+            // Connect differently
+            const p1 = getInterpolatedEdgePoint(col, row, edges[0], grid, threshold)
+            const p2 = getInterpolatedEdgePoint(col, row, edges[3], grid, threshold)
+            const p3 = getInterpolatedEdgePoint(col, row, edges[1], grid, threshold)
+            const p4 = getInterpolatedEdgePoint(col, row, edges[2], grid, threshold)
+            segments.push({ p1, p2 })
+            segments.push({ p1: p3, p2: p4 })
+            break
+          }
+        }
         
         const p1 = getInterpolatedEdgePoint(col, row, edge1, grid, threshold)
         const p2 = getInterpolatedEdgePoint(col, row, edge2, grid, threshold)

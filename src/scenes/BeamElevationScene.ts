@@ -279,9 +279,10 @@ export class BeamElevationScene extends Phaser.Scene {
       const grid: number[][] = Array(paddedRows).fill(null).map(() => Array(paddedCols).fill(0))
       
       // Fill the grid based on web cells, with 1-cell padding
+      // Note: grid array has y=0 at top, but cell.y=0 is at bottom of web
       webCells.forEach(cell => {
         const gridX = cell.x + 1 // Add padding offset
-        const gridY = cell.y + 1 // Add padding offset
+        const gridY = paddedRows - 2 - cell.y // Invert y and add padding offset
         if (gridX >= 0 && gridX < paddedCols && gridY >= 0 && gridY < paddedRows) {
           grid[gridY][gridX] = 1
           
@@ -293,13 +294,18 @@ export class BeamElevationScene extends Phaser.Scene {
             grid[gridY][paddedCols - 1] = 1 // Extend to right boundary
           }
           if (cell.y === 0) {
-            grid[paddedRows - 1][gridX] = 1 // Extend to bottom boundary
+            grid[paddedRows - 1][gridX] = 1 // Extend to bottom boundary (y=0 is bottom)
           }
           if (cell.y === rows - 1) {
-            grid[0][gridX] = 1 // Extend to top boundary
+            grid[0][gridX] = 1 // Extend to top boundary (y=rows-1 is top)
           }
         }
       })
+      
+      // Debug: Log grid for verification (uncomment if needed)
+      // console.log('Grid dimensions:', paddedRows, 'x', paddedCols)
+      // console.log('Grid values:')
+      // grid.forEach((row, i) => console.log(i, row.join('')))
       
       // Apply interpolated marching squares
       const contours = marchingSquaresInterpolated(grid, 0.5)
@@ -316,7 +322,8 @@ export class BeamElevationScene extends Phaser.Scene {
           // Transform from grid coordinates to screen coordinates
           // Subtract 1 to account for padding, then scale and position
           const x = startX + (point.x - 1) * this.gridSize
-          const y = webBottom - (point.y - 1) * this.gridSize
+          // Grid y=0 is at top, so we need to invert: webTop + (point.y - 1) * gridSize
+          const y = webTop + (point.y - 1) * this.gridSize
           
           // Clamp to beam boundaries
           const clampedX = Math.max(startX, Math.min(startX + this.beamLength * this.gridSize, x))
