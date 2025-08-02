@@ -27,6 +27,14 @@ export interface MarchingSquaresOptions {
   // Buffer configuration
   bufferSize?: number   // Number of cells to pad around the grid (default: 0)
   bufferValue?: number  // Value to use for buffer cells (default: 0)
+  // Contour filtering and simplification
+  minContourLength?: number // Minimum points required to keep a contour (default: 3)
+  minContourArea?: number   // Minimum area to keep a contour (default: 0)
+  simplificationTolerance?: number // Douglas-Peucker simplification tolerance (default: 0)
+  // Interpolation options
+  interpolationMethod?: 'linear' | 'none' // Interpolation method (default: 'linear')
+  // Edge behavior
+  edgeMode?: 'clamp' | 'extend' // How to handle contours at edges (default: 'clamp')
 }
 
 export function marchingSquaresOptimized(
@@ -43,7 +51,12 @@ export function marchingSquaresOptimized(
     globalOffsetX = 0,
     globalOffsetY = 0,
     bufferSize = 0,
-    bufferValue = 0
+    bufferValue = 0,
+    minContourLength = 3,
+    minContourArea = 0,
+    simplificationTolerance = 0,
+    interpolationMethod = 'linear',
+    edgeMode = 'clamp'
   } = options
 
   let processGrid = grid
@@ -101,7 +114,7 @@ export function marchingSquaresOptimized(
   for (let row = 0; row < rows - 1; row++) {
     for (let col = 0; col < cols - 1; col++) {
       const cellSegments = processCellOptimized(
-        row, col, processGrid, threshold, EDGE_TABLE, edgeCache, offsetX, offsetY
+        row, col, processGrid, threshold, EDGE_TABLE, edgeCache, offsetX, offsetY, interpolationMethod
       )
       segments.push(...cellSegments)
     }
@@ -114,6 +127,21 @@ export function marchingSquaresOptimized(
   let finalContours = smoothing 
     ? contours.map(contour => smoothContour(contour))
     : contours
+  
+  // Filter contours by minimum length
+  if (minContourLength > 3) {
+    finalContours = finalContours.filter(contour => contour.length >= minContourLength)
+  }
+  
+  // Filter contours by minimum area
+  if (minContourArea > 0) {
+    finalContours = finalContours.filter(contour => calculateContourArea(contour) >= minContourArea)
+  }
+  
+  // Apply simplification if requested
+  if (simplificationTolerance > 0) {
+    finalContours = finalContours.map(contour => simplifyContour(contour, simplificationTolerance))
+  }
   
   // Apply buffer offset adjustment and global offsets
   const adjustX = globalOffsetX - (bufferSize > 0 ? bufferSize : 0)
@@ -139,7 +167,8 @@ function processCellOptimized(
   edgeTable: number[][],
   edgeCache: EdgeCache,
   offsetX: number,
-  offsetY: number
+  offsetY: number,
+  interpolationMethod: 'linear' | 'none'
 ): Edge[] {
   // Get corner values
   const tl = grid[row][col]
@@ -166,10 +195,10 @@ function processCellOptimized(
     
     if ((config === 5 && centerAbove) || (config === 10 && !centerAbove)) {
       // Connect differently for ambiguous cases
-      const p1 = getInterpolatedEdgePointCached(col, row, edges[0], grid, threshold, edgeCache, offsetX, offsetY)
-      const p2 = getInterpolatedEdgePointCached(col, row, edges[3], grid, threshold, edgeCache, offsetX, offsetY)
-      const p3 = getInterpolatedEdgePointCached(col, row, edges[1], grid, threshold, edgeCache, offsetX, offsetY)
-      const p4 = getInterpolatedEdgePointCached(col, row, edges[2], grid, threshold, edgeCache, offsetX, offsetY)
+      const p1 = getInterpolatedEdgePointCached(col, row, edges[0], grid, threshold, edgeCache, offsetX, offsetY, interpolationMethod)
+      const p2 = getInterpolatedEdgePointCached(col, row, edges[3], grid, threshold, edgeCache, offsetX, offsetY, interpolationMethod)
+      const p3 = getInterpolatedEdgePointCached(col, row, edges[1], grid, threshold, edgeCache, offsetX, offsetY, interpolationMethod)
+      const p4 = getInterpolatedEdgePointCached(col, row, edges[2], grid, threshold, edgeCache, offsetX, offsetY, interpolationMethod)
       
       segments.push({ p1, p2 })
       segments.push({ p1: p3, p2: p4 })
@@ -181,8 +210,8 @@ function processCellOptimized(
   for (let i = 0; i < edges.length; i += 2) {
     if (i + 1 >= edges.length) break
     
-    const p1 = getInterpolatedEdgePointCached(col, row, edges[i], grid, threshold, edgeCache, offsetX, offsetY)
-    const p2 = getInterpolatedEdgePointCached(col, row, edges[i + 1], grid, threshold, edgeCache, offsetX, offsetY)
+    const p1 = getInterpolatedEdgePointCached(col, row, edges[i], grid, threshold, edgeCache, offsetX, offsetY, interpolationMethod)
+    const p2 = getInterpolatedEdgePointCached(col, row, edges[i + 1], grid, threshold, edgeCache, offsetX, offsetY, interpolationMethod)
     
     segments.push({ p1, p2 })
   }
@@ -198,7 +227,8 @@ function getInterpolatedEdgePointCached(
   threshold: number,
   edgeCache: EdgeCache,
   offsetX: number,
-  offsetY: number
+  offsetY: number,
+  interpolationMethod: 'linear' | 'none'
 ): Point {
   let x: number, y: number
   
@@ -212,7 +242,7 @@ function getInterpolatedEdgePointCached(
         } else {
           const tl = grid[cellY][cellX]
           const tr = grid[cellY][cellX + 1]
-          const t = interpolate(tl, tr, threshold)
+          const t = interpolationMethod === 'none' ? 0.5 : interpolate(tl, tr, threshold)
           x = cellX + t
           y = cellY
           edgeCache.horizontal.set(cacheKey, x)
@@ -229,7 +259,7 @@ function getInterpolatedEdgePointCached(
         } else {
           const tr = grid[cellY][cellX + 1]
           const br = grid[cellY + 1][cellX + 1]
-          const t = interpolate(tr, br, threshold)
+          const t = interpolationMethod === 'none' ? 0.5 : interpolate(tr, br, threshold)
           x = cellX + 1
           y = cellY + t
           edgeCache.vertical.set(cacheKey, y)
@@ -246,7 +276,7 @@ function getInterpolatedEdgePointCached(
         } else {
           const bl = grid[cellY + 1][cellX]
           const br = grid[cellY + 1][cellX + 1]
-          const t = interpolate(bl, br, threshold)
+          const t = interpolationMethod === 'none' ? 0.5 : interpolate(bl, br, threshold)
           x = cellX + t
           y = cellY + 1
           edgeCache.horizontal.set(cacheKey, x)
@@ -263,7 +293,7 @@ function getInterpolatedEdgePointCached(
         } else {
           const tl = grid[cellY][cellX]
           const bl = grid[cellY + 1][cellX]
-          const t = interpolate(tl, bl, threshold)
+          const t = interpolationMethod === 'none' ? 0.5 : interpolate(tl, bl, threshold)
           x = cellX
           y = cellY + t
           edgeCache.vertical.set(cacheKey, y)
@@ -399,6 +429,70 @@ function smoothContour(contour: Point[]): Point[] {
   }
   
   return smoothed
+}
+
+// Douglas-Peucker simplification algorithm
+function simplifyContour(contour: Point[], tolerance: number): Point[] {
+  if (tolerance <= 0 || contour.length < 3) return contour
+  
+  function pointLineDistance(point: Point, lineStart: Point, lineEnd: Point): number {
+    const dx = lineEnd.x - lineStart.x
+    const dy = lineEnd.y - lineStart.y
+    const lengthSquared = dx * dx + dy * dy
+    
+    if (lengthSquared === 0) {
+      return Math.sqrt((point.x - lineStart.x) ** 2 + (point.y - lineStart.y) ** 2)
+    }
+    
+    const t = Math.max(0, Math.min(1, ((point.x - lineStart.x) * dx + (point.y - lineStart.y) * dy) / lengthSquared))
+    const projX = lineStart.x + t * dx
+    const projY = lineStart.y + t * dy
+    
+    return Math.sqrt((point.x - projX) ** 2 + (point.y - projY) ** 2)
+  }
+  
+  function simplifyRecursive(points: Point[], start: number, end: number, simplified: boolean[]): void {
+    if (end - start < 2) return
+    
+    let maxDist = 0
+    let maxIndex = 0
+    
+    for (let i = start + 1; i < end; i++) {
+      const dist = pointLineDistance(points[i], points[start], points[end])
+      if (dist > maxDist) {
+        maxDist = dist
+        maxIndex = i
+      }
+    }
+    
+    if (maxDist > tolerance) {
+      simplified[maxIndex] = true
+      simplifyRecursive(points, start, maxIndex, simplified)
+      simplifyRecursive(points, maxIndex, end, simplified)
+    }
+  }
+  
+  const simplified = new Array(contour.length).fill(false)
+  simplified[0] = true
+  simplified[contour.length - 1] = true
+  
+  simplifyRecursive(contour, 0, contour.length - 1, simplified)
+  
+  return contour.filter((_, i) => simplified[i])
+}
+
+// Calculate contour area using shoelace formula
+function calculateContourArea(contour: Point[]): number {
+  if (contour.length < 3) return 0
+  
+  let area = 0
+  for (let i = 0; i < contour.length; i++) {
+    const j = (i + 1) % contour.length
+    area += contour[i].x * contour[j].y
+    area -= contour[j].x * contour[i].y
+  }
+  
+  return Math.abs(area) / 2
 }
 
 // Utility functions
