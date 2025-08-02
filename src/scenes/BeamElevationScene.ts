@@ -329,19 +329,41 @@ export class BeamElevationScene extends Phaser.Scene {
         
         contour.forEach((point, index) => {
           // Transform from grid coordinates to screen coordinates
-          // Subtract 1 to account for padding, then scale and position
-          const x = startX + (point.x - 1) * this.gridSize
-          // Grid y=0 is at top, so: webTop + (point.y - 1) * gridSize
-          const y = webTop + (point.y - 1) * this.gridSize
+          // point.x and point.y are in padded grid coordinates
+          // We need to subtract 1 to get back to cell coordinates
+          const cellX = point.x - 1
+          const cellY = point.y - 1
           
-          // Clamp to beam boundaries
-          const clampedX = Math.max(startX, Math.min(startX + this.beamLength * this.gridSize, x))
-          const clampedY = Math.max(webTop, Math.min(webBottom, y))
+          // Transform cell coordinates to screen coordinates
+          // This should match the cell rendering: x = startX + cell.x * gridSize
+          const x = startX + cellX * this.gridSize
+          
+          // For Y, we need to invert from grid coordinates back to cell coordinates
+          // gridY = paddedRows - 2 - cell.y, so cell.y = paddedRows - 2 - gridY
+          const actualCellY = paddedRows - 2 - cellY
+          // Then transform to screen like cell rendering: y = webBottom - (cell.y + 1) * gridSize
+          const y = webBottom - (actualCellY + 1) * this.gridSize
+          
+          // Snap to beam edges if the contour point is at the padding boundary
+          let finalX = x
+          let finalY = y
+          
+          // If contour is at left padding (cellX = -1), snap to beam start
+          if (cellX < 0) {
+            finalX = startX
+          }
+          // If contour is at right padding, snap to beam end
+          else if (cellX >= cols) {
+            finalX = startX + this.beamLength * this.gridSize
+          }
+          
+          // Clamp Y to web boundaries
+          finalY = Math.max(webTop, Math.min(webBottom, finalY))
           
           if (index === 0) {
-            this.lossGraphics.moveTo(clampedX, clampedY)
+            this.lossGraphics.moveTo(finalX, finalY)
           } else {
-            this.lossGraphics.lineTo(clampedX, clampedY)
+            this.lossGraphics.lineTo(finalX, finalY)
           }
         })
         
