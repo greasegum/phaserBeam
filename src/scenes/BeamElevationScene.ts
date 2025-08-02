@@ -25,6 +25,14 @@ export class BeamElevationScene extends Phaser.Scene {
   private isPainting = false
   private paintMode: 'add' | 'remove' | null = null
   private useSmoothCurves = true // Enable smooth organic curves
+  // Marching squares alignment offsets
+  private contourOffsetX = 0.5 // Default 0.5 to center contours on cell edges
+  private contourOffsetY = 0.5 // Default 0.5 to center contours on cell edges
+  private contourGlobalOffsetX = 0
+  private contourGlobalOffsetY = 0
+  // Marching squares buffer configuration
+  private contourBufferSize = 0 // Default no buffer
+  private contourBufferValue = 0 // Default buffer value
 
   constructor() {
     super({ key: 'BeamElevationScene' })
@@ -302,7 +310,13 @@ export class BeamElevationScene extends Phaser.Scene {
         threshold: 0.5,
         smoothing: true,
         edgeSnapping: true,
-        snapDistance: 0.01
+        snapDistance: 0.01,
+        offsetX: this.contourOffsetX,
+        offsetY: this.contourOffsetY,
+        globalOffsetX: this.contourGlobalOffsetX,
+        globalOffsetY: this.contourGlobalOffsetY,
+        bufferSize: this.contourBufferSize,
+        bufferValue: this.contourBufferValue
       }
       const contours = marchingSquaresOptimized(grid, marchingOptions)
       // console.log('Generated contours:', contours.length, 'contours')
@@ -320,6 +334,12 @@ export class BeamElevationScene extends Phaser.Scene {
       contours.forEach(contour => {
         if (contour.length < 3) return
         
+        // Check if any web cells are at the edges for clamping
+        const hasLeftEdgeCells = webCells.some(cell => cell.x === 0)
+        const hasRightEdgeCells = webCells.some(cell => cell.x === Math.ceil(this.beamLength) - 1)
+        const hasTopEdgeCells = webCells.some(cell => cell.y === Math.ceil(webHeight) - 1)
+        const hasBottomEdgeCells = webCells.some(cell => cell.y === 0)
+        
         // Transform contour points to screen coordinates
         const screenContour = contour.map(point => {
           // X coordinate: map from grid space to screen space
@@ -330,28 +350,54 @@ export class BeamElevationScene extends Phaser.Scene {
           // So we need to flip: screenY = webTop + (rows - point.y) * gridSize
           let y = webTop + (rows - point.y) * this.gridSize
           
-          // Edge snapping for cleaner boundaries
-          const snapThreshold = 0.1
+          // Enhanced edge clamping based on actual cell presence
+          const edgeProximityThreshold = 1.5 // cells from edge to consider clamping
           
-          // Snap to left edge
-          if (point.x < snapThreshold) {
-            x = startX
-          }
-          // Snap to right edge
-          else if (point.x > cols - snapThreshold) {
-            x = startX + this.beamLength * this.gridSize
-          }
-          
-          // Snap to top edge
-          if (point.y < snapThreshold) {
-            y = webBottom
-          }
-          // Snap to bottom edge
-          else if (point.y > rows - snapThreshold) {
-            y = webTop
+          // Left edge clamping - only if we have cells at x=0
+          if (hasLeftEdgeCells && point.x < edgeProximityThreshold) {
+            // Calculate interpolation factor for smooth transition
+            const t = Math.max(0, Math.min(1, (edgeProximityThreshold - point.x) / edgeProximityThreshold))
+            x = startX * t + x * (1 - t)
+            
+            // Hard clamp if very close
+            if (point.x < 0.1) {
+              x = startX
+            }
           }
           
-          // Ensure we stay within beam boundaries
+          // Right edge clamping - only if we have cells at the right edge
+          if (hasRightEdgeCells && point.x > cols - edgeProximityThreshold) {
+            const rightEdge = startX + this.beamLength * this.gridSize
+            const t = Math.max(0, Math.min(1, (point.x - (cols - edgeProximityThreshold)) / edgeProximityThreshold))
+            x = x * (1 - t) + rightEdge * t
+            
+            // Hard clamp if very close
+            if (point.x > cols - 0.1) {
+              x = rightEdge
+            }
+          }
+          
+          // Top edge clamping (remember: grid y=0 is top, but screen has web bottom at higher y)
+          if (hasBottomEdgeCells && point.y > rows - edgeProximityThreshold) {
+            const t = Math.max(0, Math.min(1, (point.y - (rows - edgeProximityThreshold)) / edgeProximityThreshold))
+            y = y * (1 - t) + webBottom * t
+            
+            if (point.y > rows - 0.1) {
+              y = webBottom
+            }
+          }
+          
+          // Bottom edge clamping
+          if (hasTopEdgeCells && point.y < edgeProximityThreshold) {
+            const t = Math.max(0, Math.min(1, (edgeProximityThreshold - point.y) / edgeProximityThreshold))
+            y = webTop * t + y * (1 - t)
+            
+            if (point.y < 0.1) {
+              y = webTop
+            }
+          }
+          
+          // Final safety clamp to ensure we never exceed beam boundaries
           x = Math.max(startX, Math.min(startX + width, x))
           y = Math.max(webTop, Math.min(webBottom, y))
           
@@ -1143,5 +1189,52 @@ export class BeamElevationScene extends Phaser.Scene {
       elevationView: this.elevationView,
       onCellChange: this.onCellChange 
     })
+  }
+  
+  // Public methods to adjust contour alignment
+  public setContourOffsets(offsetX: number, offsetY: number): void {
+    this.contourOffsetX = offsetX
+    this.contourOffsetY = offsetY
+    this.drawSectionLoss(
+      this.gridOrigin === 'left' ? 100 : 100,
+      this.cameras.main.centerY,
+      this.beamLength * this.gridSize
+    )
+  }
+  
+  public setContourGlobalOffsets(globalOffsetX: number, globalOffsetY: number): void {
+    this.contourGlobalOffsetX = globalOffsetX
+    this.contourGlobalOffsetY = globalOffsetY
+    this.drawSectionLoss(
+      this.gridOrigin === 'left' ? 100 : 100,
+      this.cameras.main.centerY,
+      this.beamLength * this.gridSize
+    )
+  }
+  
+  public getContourOffsets(): { offsetX: number; offsetY: number; globalOffsetX: number; globalOffsetY: number } {
+    return {
+      offsetX: this.contourOffsetX,
+      offsetY: this.contourOffsetY,
+      globalOffsetX: this.contourGlobalOffsetX,
+      globalOffsetY: this.contourGlobalOffsetY
+    }
+  }
+  
+  public setContourBuffer(bufferSize: number, bufferValue: number): void {
+    this.contourBufferSize = bufferSize
+    this.contourBufferValue = bufferValue
+    this.drawSectionLoss(
+      this.gridOrigin === 'left' ? 100 : 100,
+      this.cameras.main.centerY,
+      this.beamLength * this.gridSize
+    )
+  }
+  
+  public getContourBuffer(): { bufferSize: number; bufferValue: number } {
+    return {
+      bufferSize: this.contourBufferSize,
+      bufferValue: this.contourBufferValue
+    }
   }
 }

@@ -1,0 +1,307 @@
+import React, { useState, useEffect } from 'react'
+import { BeamElevationScene } from '../scenes/BeamElevationScene'
+
+interface AdvancedSettingsProps {
+  scene?: BeamElevationScene
+}
+
+export const AdvancedSettings: React.FC<AdvancedSettingsProps> = ({ scene }) => {
+  const [isOpen, setIsOpen] = useState(false)
+  const [offsetX, setOffsetX] = useState(0.5)
+  const [offsetY, setOffsetY] = useState(0.5)
+  const [globalOffsetX, setGlobalOffsetX] = useState(0)
+  const [globalOffsetY, setGlobalOffsetY] = useState(0)
+  const [bufferSize, setBufferSize] = useState(0)
+  const [bufferValue, setBufferValue] = useState(0)
+
+  useEffect(() => {
+    if (scene) {
+      const offsets = scene.getContourOffsets()
+      setOffsetX(offsets.offsetX)
+      setOffsetY(offsets.offsetY)
+      setGlobalOffsetX(offsets.globalOffsetX)
+      setGlobalOffsetY(offsets.globalOffsetY)
+      
+      const buffer = scene.getContourBuffer()
+      setBufferSize(buffer.bufferSize)
+      setBufferValue(buffer.bufferValue)
+    }
+  }, [scene])
+
+  const handleOffsetChange = (type: 'cell' | 'global', axis: 'x' | 'y', value: number) => {
+    if (!scene) return
+
+    if (type === 'cell') {
+      if (axis === 'x') {
+        setOffsetX(value)
+        scene.setContourOffsets(value, offsetY)
+      } else {
+        setOffsetY(value)
+        scene.setContourOffsets(offsetX, value)
+      }
+    } else {
+      if (axis === 'x') {
+        setGlobalOffsetX(value)
+        scene.setContourGlobalOffsets(value, globalOffsetY)
+      } else {
+        setGlobalOffsetY(value)
+        scene.setContourGlobalOffsets(globalOffsetX, value)
+      }
+    }
+  }
+
+  const handleBufferChange = (size: number, value: number) => {
+    if (!scene) return
+    setBufferSize(size)
+    setBufferValue(value)
+    scene.setContourBuffer(size, value)
+  }
+
+  const resetToDefaults = () => {
+    setOffsetX(0.5)
+    setOffsetY(0.5)
+    setGlobalOffsetX(0)
+    setGlobalOffsetY(0)
+    setBufferSize(0)
+    setBufferValue(0)
+    scene?.setContourOffsets(0.5, 0.5)
+    scene?.setContourGlobalOffsets(0, 0)
+    scene?.setContourBuffer(0, 0)
+  }
+
+  if (!scene) return null
+
+  return (
+    <div style={{
+      position: 'fixed',
+      bottom: '20px',
+      right: '20px',
+      zIndex: 1000
+    }}>
+      {/* Toggle Button */}
+      <button
+        onClick={() => setIsOpen(!isOpen)}
+        style={{
+          position: 'absolute',
+          bottom: 0,
+          right: 0,
+          padding: '8px 12px',
+          background: '#333',
+          color: 'white',
+          border: 'none',
+          borderRadius: '4px',
+          cursor: 'pointer',
+          fontSize: '12px',
+          display: 'flex',
+          alignItems: 'center',
+          gap: '5px',
+          boxShadow: '0 2px 4px rgba(0,0,0,0.2)'
+        }}
+      >
+        <span style={{ 
+          transform: `rotate(${isOpen ? 180 : 0}deg)`,
+          transition: 'transform 0.3s ease'
+        }}>⚙️</span>
+        Advanced
+      </button>
+
+      {/* Settings Panel */}
+      <div style={{
+        position: 'absolute',
+        bottom: '40px',
+        right: 0,
+        width: '280px',
+        background: 'white',
+        border: '1px solid #ddd',
+        borderRadius: '8px',
+        boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
+        padding: '16px',
+        transform: `translateY(${isOpen ? 0 : 'calc(100% + 50px)'})`,
+        opacity: isOpen ? 1 : 0,
+        pointerEvents: isOpen ? 'auto' : 'none',
+        transition: 'transform 0.3s ease, opacity 0.3s ease'
+      }}>
+        <h4 style={{ margin: '0 0 12px 0', fontSize: '14px', fontWeight: 600 }}>
+          Contour Alignment
+        </h4>
+
+        <div style={{ marginBottom: '16px' }}>
+          <div style={{ marginBottom: '8px' }}>
+            <label style={{ 
+              display: 'flex', 
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              fontSize: '12px',
+              color: '#666'
+            }}>
+              Cell Offset X
+              <span style={{ fontWeight: 'bold', color: '#333' }}>{offsetX.toFixed(2)}</span>
+            </label>
+            <input
+              type="range"
+              min="-0.5"
+              max="1.5"
+              step="0.05"
+              value={offsetX}
+              onChange={(e) => handleOffsetChange('cell', 'x', parseFloat(e.target.value))}
+              style={{ width: '100%', cursor: 'pointer' }}
+            />
+          </div>
+
+          <div style={{ marginBottom: '8px' }}>
+            <label style={{ 
+              display: 'flex', 
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              fontSize: '12px',
+              color: '#666'
+            }}>
+              Cell Offset Y
+              <span style={{ fontWeight: 'bold', color: '#333' }}>{offsetY.toFixed(2)}</span>
+            </label>
+            <input
+              type="range"
+              min="-0.5"
+              max="1.5"
+              step="0.05"
+              value={offsetY}
+              onChange={(e) => handleOffsetChange('cell', 'y', parseFloat(e.target.value))}
+              style={{ width: '100%', cursor: 'pointer' }}
+            />
+          </div>
+        </div>
+
+        <div style={{ marginBottom: '16px' }}>
+          <div style={{ marginBottom: '8px' }}>
+            <label style={{ 
+              display: 'flex', 
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              fontSize: '12px',
+              color: '#666'
+            }}>
+              Global Offset X
+              <span style={{ fontWeight: 'bold', color: '#333' }}>{globalOffsetX.toFixed(1)}</span>
+            </label>
+            <input
+              type="range"
+              min="-5"
+              max="5"
+              step="0.25"
+              value={globalOffsetX}
+              onChange={(e) => handleOffsetChange('global', 'x', parseFloat(e.target.value))}
+              style={{ width: '100%', cursor: 'pointer' }}
+            />
+          </div>
+
+          <div style={{ marginBottom: '8px' }}>
+            <label style={{ 
+              display: 'flex', 
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              fontSize: '12px',
+              color: '#666'
+            }}>
+              Global Offset Y
+              <span style={{ fontWeight: 'bold', color: '#333' }}>{globalOffsetY.toFixed(1)}</span>
+            </label>
+            <input
+              type="range"
+              min="-5"
+              max="5"
+              step="0.25"
+              value={globalOffsetY}
+              onChange={(e) => handleOffsetChange('global', 'y', parseFloat(e.target.value))}
+              style={{ width: '100%', cursor: 'pointer' }}
+            />
+          </div>
+        </div>
+
+        <div style={{ marginBottom: '16px' }}>
+          <h5 style={{ margin: '0 0 8px 0', fontSize: '13px', fontWeight: 600, color: '#555' }}>
+            Grid Buffer
+          </h5>
+          
+          <div style={{ marginBottom: '8px' }}>
+            <label style={{ 
+              display: 'flex', 
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              fontSize: '12px',
+              color: '#666'
+            }}>
+              Buffer Size
+              <span style={{ fontWeight: 'bold', color: '#333' }}>{bufferSize}</span>
+            </label>
+            <input
+              type="range"
+              min="0"
+              max="5"
+              step="1"
+              value={bufferSize}
+              onChange={(e) => handleBufferChange(parseInt(e.target.value), bufferValue)}
+              style={{ width: '100%', cursor: 'pointer' }}
+            />
+          </div>
+
+          <div style={{ marginBottom: '8px' }}>
+            <label style={{ 
+              display: 'flex', 
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              fontSize: '12px',
+              color: '#666'
+            }}>
+              Buffer Value
+              <span style={{ fontWeight: 'bold', color: '#333' }}>{bufferValue.toFixed(1)}</span>
+            </label>
+            <input
+              type="range"
+              min="0"
+              max="1"
+              step="0.1"
+              value={bufferValue}
+              onChange={(e) => handleBufferChange(bufferSize, parseFloat(e.target.value))}
+              style={{ width: '100%', cursor: 'pointer' }}
+            />
+          </div>
+        </div>
+
+        <button
+          onClick={resetToDefaults}
+          style={{
+            width: '100%',
+            padding: '6px 12px',
+            background: '#f0f0f0',
+            border: '1px solid #ddd',
+            borderRadius: '4px',
+            cursor: 'pointer',
+            fontSize: '12px',
+            color: '#666',
+            transition: 'background 0.2s ease'
+          }}
+          onMouseEnter={(e) => e.currentTarget.style.background = '#e0e0e0'}
+          onMouseLeave={(e) => e.currentTarget.style.background = '#f0f0f0'}
+        >
+          Reset to Defaults
+        </button>
+
+        <div style={{
+          marginTop: '12px',
+          padding: '8px',
+          background: '#f9f9f9',
+          borderRadius: '4px',
+          fontSize: '11px',
+          color: '#666',
+          lineHeight: '1.4'
+        }}>
+          <strong>Cell offsets</strong> adjust contour position within grid cells.
+          <br />
+          <strong>Global offsets</strong> shift the entire contour in grid units.
+          <br />
+          <strong>Buffer</strong> adds padding cells around the grid edges.
+        </div>
+      </div>
+    </div>
+  )
+}

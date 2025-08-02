@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from 'react'
 import Phaser from 'phaser'
 import { BeamElevationScene } from '../scenes/BeamElevationScene'
 import { BeamProfile, GridCell } from '../types/beam'
+import { AdvancedSettings } from './AdvancedSettings'
 
 interface PhaserCanvasProps {
   beamProfile: BeamProfile | null
@@ -29,6 +30,7 @@ export const PhaserCanvas: React.FC<PhaserCanvasProps> = ({
   const gameRef = useRef<Phaser.Game | null>(null)
   const containerRef = useRef<HTMLDivElement>(null)
   const scrollContainerRef = useRef<HTMLDivElement>(null)
+  const [currentScene, setCurrentScene] = useState<BeamElevationScene | null>(null)
 
   useEffect(() => {
     if (!containerRef.current) return
@@ -81,6 +83,7 @@ export const PhaserCanvas: React.FC<PhaserCanvasProps> = ({
     // Start or restart scene with new data
     const scene = gameRef.current.scene.getScene('BeamElevationScene') as BeamElevationScene
     if (scene) {
+      setCurrentScene(scene)
       if (scene.scene.isActive()) {
         scene.updateBeamProfile(beamProfile, beamLength, editMode, showGrid, gridOrigin, showTopFlange, gridCells, elevationView)
       } else {
@@ -101,6 +104,7 @@ export const PhaserCanvas: React.FC<PhaserCanvasProps> = ({
       gameRef.current.events.once('ready', () => {
         const readyScene = gameRef.current?.scene.getScene('BeamElevationScene') as BeamElevationScene
         if (readyScene) {
+          setCurrentScene(readyScene)
           readyScene.scene.start('BeamElevationScene', { 
             beamProfile, 
             beamLength,
@@ -155,8 +159,11 @@ export const PhaserCanvas: React.FC<PhaserCanvasProps> = ({
   }, [])
 
   return (
-    <div ref={scrollContainerRef} style={{ width: '100%', height: '100%', overflow: 'auto' }}>
-      <div ref={containerRef} style={{ minWidth: '100%', height: '100%' }} />
-    </div>
+    <>
+      <div ref={scrollContainerRef} style={{ width: '100%', height: '100%', overflow: 'auto' }}>
+        <div ref={containerRef} style={{ minWidth: '100%', height: '100%' }} />
+      </div>
+      <AdvancedSettings scene={currentScene} />
+    </>
   )
 }

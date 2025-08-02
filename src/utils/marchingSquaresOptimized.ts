@@ -18,6 +18,15 @@ export interface MarchingSquaresOptions {
   smoothing?: boolean
   edgeSnapping?: boolean
   snapDistance?: number
+  // Grid alignment offsets
+  offsetX?: number      // Horizontal offset in grid units (0.5 = half cell)
+  offsetY?: number      // Vertical offset in grid units (0.5 = half cell)
+  // Global position offset
+  globalOffsetX?: number // Global X offset applied to all points
+  globalOffsetY?: number // Global Y offset applied to all points
+  // Buffer configuration
+  bufferSize?: number   // Number of cells to pad around the grid (default: 0)
+  bufferValue?: number  // Value to use for buffer cells (default: 0)
 }
 
 export function marchingSquaresOptimized(
@@ -28,13 +37,37 @@ export function marchingSquaresOptimized(
     threshold = 0.5,
     smoothing = false,
     edgeSnapping = true,
-    snapDistance = 0.01
+    snapDistance = 0.01,
+    offsetX = 0,
+    offsetY = 0,
+    globalOffsetX = 0,
+    globalOffsetY = 0,
+    bufferSize = 0,
+    bufferValue = 0
   } = options
 
-  const rows = grid.length
-  const cols = grid[0].length
+  let processGrid = grid
+  let rows = grid.length
+  let cols = grid[0].length
   
   if (rows < 2 || cols < 2) return []
+  
+  // Apply buffer if specified
+  if (bufferSize > 0) {
+    const bufferedRows = rows + 2 * bufferSize
+    const bufferedCols = cols + 2 * bufferSize
+    processGrid = Array(bufferedRows).fill(null).map(() => Array(bufferedCols).fill(bufferValue))
+    
+    // Copy original grid into center of buffered grid
+    for (let r = 0; r < rows; r++) {
+      for (let c = 0; c < cols; c++) {
+        processGrid[r + bufferSize][c + bufferSize] = grid[r][c]
+      }
+    }
+    
+    rows = bufferedRows
+    cols = bufferedCols
+  }
   
   // Edge lookup table - same as before but with clearer organization
   const EDGE_TABLE: number[][] = [
@@ -68,7 +101,7 @@ export function marchingSquaresOptimized(
   for (let row = 0; row < rows - 1; row++) {
     for (let col = 0; col < cols - 1; col++) {
       const cellSegments = processCellOptimized(
-        row, col, grid, threshold, EDGE_TABLE, edgeCache
+        row, col, processGrid, threshold, EDGE_TABLE, edgeCache, offsetX, offsetY
       )
       segments.push(...cellSegments)
     }
@@ -78,11 +111,24 @@ export function marchingSquaresOptimized(
   const contours = connectSegmentsOptimized(segments)
   
   // Apply smoothing if requested
-  if (smoothing) {
-    return contours.map(contour => smoothContour(contour))
+  let finalContours = smoothing 
+    ? contours.map(contour => smoothContour(contour))
+    : contours
+  
+  // Apply buffer offset adjustment and global offsets
+  const adjustX = globalOffsetX - (bufferSize > 0 ? bufferSize : 0)
+  const adjustY = globalOffsetY - (bufferSize > 0 ? bufferSize : 0)
+  
+  if (adjustX !== 0 || adjustY !== 0) {
+    finalContours = finalContours.map(contour => 
+      contour.map(point => ({
+        x: point.x + adjustX,
+        y: point.y + adjustY
+      }))
+    )
   }
   
-  return contours
+  return finalContours
 }
 
 function processCellOptimized(
@@ -91,7 +137,9 @@ function processCellOptimized(
   grid: number[][],
   threshold: number,
   edgeTable: number[][],
-  edgeCache: EdgeCache
+  edgeCache: EdgeCache,
+  offsetX: number,
+  offsetY: number
 ): Edge[] {
   // Get corner values
   const tl = grid[row][col]
@@ -118,10 +166,10 @@ function processCellOptimized(
     
     if ((config === 5 && centerAbove) || (config === 10 && !centerAbove)) {
       // Connect differently for ambiguous cases
-      const p1 = getInterpolatedEdgePointCached(col, row, edges[0], grid, threshold, edgeCache)
-      const p2 = getInterpolatedEdgePointCached(col, row, edges[3], grid, threshold, edgeCache)
-      const p3 = getInterpolatedEdgePointCached(col, row, edges[1], grid, threshold, edgeCache)
-      const p4 = getInterpolatedEdgePointCached(col, row, edges[2], grid, threshold, edgeCache)
+      const p1 = getInterpolatedEdgePointCached(col, row, edges[0], grid, threshold, edgeCache, offsetX, offsetY)
+      const p2 = getInterpolatedEdgePointCached(col, row, edges[3], grid, threshold, edgeCache, offsetX, offsetY)
+      const p3 = getInterpolatedEdgePointCached(col, row, edges[1], grid, threshold, edgeCache, offsetX, offsetY)
+      const p4 = getInterpolatedEdgePointCached(col, row, edges[2], grid, threshold, edgeCache, offsetX, offsetY)
       
       segments.push({ p1, p2 })
       segments.push({ p1: p3, p2: p4 })
@@ -133,8 +181,8 @@ function processCellOptimized(
   for (let i = 0; i < edges.length; i += 2) {
     if (i + 1 >= edges.length) break
     
-    const p1 = getInterpolatedEdgePointCached(col, row, edges[i], grid, threshold, edgeCache)
-    const p2 = getInterpolatedEdgePointCached(col, row, edges[i + 1], grid, threshold, edgeCache)
+    const p1 = getInterpolatedEdgePointCached(col, row, edges[i], grid, threshold, edgeCache, offsetX, offsetY)
+    const p2 = getInterpolatedEdgePointCached(col, row, edges[i + 1], grid, threshold, edgeCache, offsetX, offsetY)
     
     segments.push({ p1, p2 })
   }
@@ -148,7 +196,9 @@ function getInterpolatedEdgePointCached(
   edge: number,
   grid: number[][],
   threshold: number,
-  edgeCache: EdgeCache
+  edgeCache: EdgeCache,
+  offsetX: number,
+  offsetY: number
 ): Point {
   let x: number, y: number
   
@@ -226,7 +276,8 @@ function getInterpolatedEdgePointCached(
       y = cellY + 0.5
   }
   
-  return { x, y }
+  // Apply offsets
+  return { x: x + offsetX, y: y + offsetY }
 }
 
 function interpolate(v1: number, v2: number, threshold: number): number {
