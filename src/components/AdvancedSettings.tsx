@@ -16,6 +16,10 @@ export const AdvancedSettings: React.FC<AdvancedSettingsProps> = ({ scene }) => 
   const [smoothingMethod, setSmoothingMethod] = useState<'basic' | 'laplacian' | 'chaikin' | 'bilateral' | 'savitzky-golay' | 'catmull-rom'>('basic')
   const [smoothingIterations, setSmoothingIterations] = useState(2)
   const [smoothingStrength, setSmoothingStrength] = useState(0.5)
+  const [collisionAvoidance, setCollisionAvoidance] = useState(true)
+  const [collisionMinDistance, setCollisionMinDistance] = useState(0.5)
+  const [collisionMethod, setCollisionMethod] = useState<'push' | 'shrink' | 'hybrid'>('hybrid')
+  const [collisionIterations, setCollisionIterations] = useState(10)
 
   useEffect(() => {
     if (scene) {
@@ -33,6 +37,12 @@ export const AdvancedSettings: React.FC<AdvancedSettingsProps> = ({ scene }) => 
       setSmoothingMethod(smoothing.smoothingMethod || 'basic')
       setSmoothingIterations(smoothing.smoothingIterations || 2)
       setSmoothingStrength(smoothing.smoothingStrength || 0.5)
+      
+      const collision = scene.getCollisionAvoidance()
+      setCollisionAvoidance(collision.collisionAvoidance)
+      setCollisionMinDistance(collision.collisionMinDistance)
+      setCollisionMethod(collision.collisionMethod)
+      setCollisionIterations(collision.collisionIterations)
     }
   }, [scene])
 
@@ -73,6 +83,15 @@ export const AdvancedSettings: React.FC<AdvancedSettingsProps> = ({ scene }) => 
     scene.setSmoothingOptions(method, iterations, strength)
   }
 
+  const handleCollisionChange = (enabled: boolean, minDistance: number, method: typeof collisionMethod, iterations: number) => {
+    if (!scene) return
+    setCollisionAvoidance(enabled)
+    setCollisionMinDistance(minDistance)
+    setCollisionMethod(method)
+    setCollisionIterations(iterations)
+    scene.setCollisionAvoidance(enabled, minDistance, method, iterations)
+  }
+
   const resetToDefaults = () => {
     setOffsetX(0.5)
     setOffsetY(0.5)
@@ -87,6 +106,11 @@ export const AdvancedSettings: React.FC<AdvancedSettingsProps> = ({ scene }) => 
     setSmoothingIterations(2)
     setSmoothingStrength(0.5)
     scene?.setSmoothingOptions('basic', 2, 0.5)
+    setCollisionAvoidance(true)
+    setCollisionMinDistance(0.5)
+    setCollisionMethod('hybrid')
+    setCollisionIterations(10)
+    scene?.setCollisionAvoidance(true, 0.5, 'hybrid', 10)
   }
 
   if (!scene) return null
@@ -372,6 +396,106 @@ export const AdvancedSettings: React.FC<AdvancedSettingsProps> = ({ scene }) => 
           )}
         </div>
 
+        <div style={{ marginBottom: '16px' }}>
+          <h5 style={{ margin: '0 0 8px 0', fontSize: '13px', fontWeight: 600, color: '#555' }}>
+            Collision Avoidance
+          </h5>
+          
+          <div style={{ marginBottom: '8px' }}>
+            <label style={{ 
+              display: 'flex',
+              alignItems: 'center',
+              fontSize: '12px',
+              color: '#666',
+              cursor: 'pointer'
+            }}>
+              <input
+                type="checkbox"
+                checked={collisionAvoidance}
+                onChange={(e) => handleCollisionChange(e.target.checked, collisionMinDistance, collisionMethod, collisionIterations)}
+                style={{ marginRight: '8px' }}
+              />
+              Enable Collision Avoidance
+            </label>
+          </div>
+
+          {collisionAvoidance && (
+            <>
+              <div style={{ marginBottom: '8px' }}>
+                <label style={{ 
+                  display: 'flex', 
+                  justifyContent: 'space-between',
+                  alignItems: 'center',
+                  fontSize: '12px',
+                  color: '#666'
+                }}>
+                  Min Distance
+                  <span style={{ fontWeight: 'bold', color: '#333' }}>{collisionMinDistance.toFixed(2)}</span>
+                </label>
+                <input
+                  type="range"
+                  min="0.1"
+                  max="2.0"
+                  step="0.1"
+                  value={collisionMinDistance}
+                  onChange={(e) => handleCollisionChange(collisionAvoidance, parseFloat(e.target.value), collisionMethod, collisionIterations)}
+                  style={{ width: '100%', cursor: 'pointer' }}
+                />
+              </div>
+
+              <div style={{ marginBottom: '8px' }}>
+                <label style={{ 
+                  display: 'block',
+                  fontSize: '12px',
+                  color: '#666',
+                  marginBottom: '4px'
+                }}>
+                  Resolution Method
+                </label>
+                <select
+                  value={collisionMethod}
+                  onChange={(e) => handleCollisionChange(collisionAvoidance, collisionMinDistance, e.target.value as typeof collisionMethod, collisionIterations)}
+                  style={{
+                    width: '100%',
+                    padding: '4px 8px',
+                    fontSize: '12px',
+                    border: '1px solid #ddd',
+                    borderRadius: '4px',
+                    background: 'white',
+                    cursor: 'pointer'
+                  }}
+                >
+                  <option value="push">Push Apart</option>
+                  <option value="shrink">Shrink Contours</option>
+                  <option value="hybrid">Hybrid (Auto)</option>
+                </select>
+              </div>
+
+              <div style={{ marginBottom: '8px' }}>
+                <label style={{ 
+                  display: 'flex', 
+                  justifyContent: 'space-between',
+                  alignItems: 'center',
+                  fontSize: '12px',
+                  color: '#666'
+                }}>
+                  Max Iterations
+                  <span style={{ fontWeight: 'bold', color: '#333' }}>{collisionIterations}</span>
+                </label>
+                <input
+                  type="range"
+                  min="1"
+                  max="20"
+                  step="1"
+                  value={collisionIterations}
+                  onChange={(e) => handleCollisionChange(collisionAvoidance, collisionMinDistance, collisionMethod, parseInt(e.target.value))}
+                  style={{ width: '100%', cursor: 'pointer' }}
+                />
+              </div>
+            </>
+          )}
+        </div>
+
         <button
           onClick={resetToDefaults}
           style={{
@@ -407,6 +531,8 @@ export const AdvancedSettings: React.FC<AdvancedSettingsProps> = ({ scene }) => 
           <strong>Buffer</strong> adds padding cells around the grid edges.
           <br />
           <strong>Smoothing</strong> applies post-processing to create smoother contours while preserving edge clamping.
+          <br />
+          <strong>Collision Avoidance</strong> prevents neighboring regions from overlapping.
         </div>
       </div>
     </div>

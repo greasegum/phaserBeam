@@ -6,6 +6,10 @@ import {
   constrainedCatmullRomSmoothing,
   EdgeConstraints 
 } from './contourSmoothing'
+import { 
+  applyCollisionAvoidanceWithConstraints,
+  CollisionAvoidanceOptions 
+} from './contourCollisionAvoidance'
 
 export interface Point {
   x: number
@@ -50,6 +54,11 @@ export interface MarchingSquaresOptions {
   smoothingMethod?: 'basic' | 'laplacian' | 'chaikin' | 'bilateral' | 'savitzky-golay' | 'catmull-rom'
   smoothingIterations?: number // Number of smoothing iterations (default: 2)
   smoothingStrength?: number // Smoothing strength factor (default: 0.5)
+  // Collision avoidance options
+  collisionAvoidance?: boolean // Enable collision avoidance between regions (default: false)
+  collisionMinDistance?: number // Minimum distance between contours in grid units (default: 0.5)
+  collisionMethod?: 'push' | 'shrink' | 'hybrid' // Collision resolution method (default: 'hybrid')
+  collisionIterations?: number // Max iterations for collision resolution (default: 10)
 }
 
 // Validate and auto-correct conflicting parameters
@@ -125,7 +134,11 @@ export function marchingSquaresOptimized(
     alignmentMode = 'edges',
     smoothingMethod = 'basic',
     smoothingIterations = 2,
-    smoothingStrength = 0.5
+    smoothingStrength = 0.5,
+    collisionAvoidance = false,
+    collisionMinDistance = 0.5,
+    collisionMethod = 'hybrid',
+    collisionIterations = 10
   } = validatedOptions
 
   let processGrid = grid
@@ -295,6 +308,33 @@ export function marchingSquaresOptimized(
   
   if (simplificationTolerance > 0 && minContourArea > 0) {
     finalContours = finalContours.filter(contour => calculateContourArea(contour) >= minContourArea)
+  }
+  
+  // Apply collision avoidance if requested
+  if (collisionAvoidance && finalContours.length > 1) {
+    const gridLeft = 0 - bufferSize
+    const gridRight = cols - bufferSize
+    const gridTop = 0 - bufferSize
+    const gridBottom = rows - bufferSize
+    
+    const edgeConstraints = {
+      leftEdge: edgeMode === 'clamp' ? gridLeft : undefined,
+      rightEdge: edgeMode === 'clamp' ? gridRight : undefined,
+      topEdge: edgeMode === 'clamp' ? gridTop : undefined,
+      bottomEdge: edgeMode === 'clamp' ? gridBottom : undefined
+    }
+    
+    const collisionOptions: CollisionAvoidanceOptions = {
+      minDistance: collisionMinDistance,
+      method: collisionMethod,
+      iterations: collisionIterations
+    }
+    
+    finalContours = applyCollisionAvoidanceWithConstraints(
+      finalContours,
+      edgeConstraints,
+      collisionOptions
+    )
   }
   
   // Apply buffer offset adjustment and global offsets

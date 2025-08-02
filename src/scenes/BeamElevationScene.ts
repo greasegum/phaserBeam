@@ -37,6 +37,11 @@ export class BeamElevationScene extends Phaser.Scene {
   private smoothingMethod: 'basic' | 'laplacian' | 'chaikin' | 'bilateral' | 'savitzky-golay' | 'catmull-rom' = 'basic'
   private smoothingIterations = 2
   private smoothingStrength = 0.5
+  // Collision avoidance options
+  private collisionAvoidance = true // Default to enabled
+  private collisionMinDistance = 0.5
+  private collisionMethod: 'push' | 'shrink' | 'hybrid' = 'hybrid'
+  private collisionIterations = 10
 
   constructor() {
     super({ key: 'BeamElevationScene' })
@@ -323,7 +328,11 @@ export class BeamElevationScene extends Phaser.Scene {
         bufferValue: this.contourBufferValue,
         smoothingMethod: this.smoothingMethod,
         smoothingIterations: this.smoothingIterations,
-        smoothingStrength: this.smoothingStrength
+        smoothingStrength: this.smoothingStrength,
+        collisionAvoidance: this.collisionAvoidance,
+        collisionMinDistance: this.collisionMinDistance,
+        collisionMethod: this.collisionMethod,
+        collisionIterations: this.collisionIterations
       }
       const contours = marchingSquaresOptimized(grid, marchingOptions)
       // console.log('Generated contours:', contours.length, 'contours')
@@ -1261,6 +1270,27 @@ export class BeamElevationScene extends Phaser.Scene {
       smoothingMethod: this.smoothingMethod,
       smoothingIterations: this.smoothingIterations,
       smoothingStrength: this.smoothingStrength
+    }
+  }
+  
+  public setCollisionAvoidance(enabled: boolean, minDistance: number, method: 'push' | 'shrink' | 'hybrid', iterations: number): void {
+    this.collisionAvoidance = enabled
+    this.collisionMinDistance = minDistance
+    this.collisionMethod = method
+    this.collisionIterations = iterations
+    this.drawSectionLoss(
+      this.gridOrigin === 'left' ? 100 : 100,
+      this.cameras.main.centerY,
+      this.beamLength * this.gridSize
+    )
+  }
+  
+  public getCollisionAvoidance(): { collisionAvoidance: boolean; collisionMinDistance: number; collisionMethod: 'push' | 'shrink' | 'hybrid'; collisionIterations: number } {
+    return {
+      collisionAvoidance: this.collisionAvoidance,
+      collisionMinDistance: this.collisionMinDistance,
+      collisionMethod: this.collisionMethod,
+      collisionIterations: this.collisionIterations
     }
   }
 }
