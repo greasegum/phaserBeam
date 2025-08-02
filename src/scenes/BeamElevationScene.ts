@@ -1,6 +1,7 @@
 import Phaser from 'phaser'
 import { BeamProfile, GridCell } from '../types/beam'
-import { marchingSquaresInterpolated } from '../utils/marchingSquaresInterpolated'
+import { marchingSquaresOptimized, MarchingSquaresOptions } from '../utils/marchingSquaresOptimized'
+import { drawBezierContour } from '../utils/phaserBezierPath'
 
 export class BeamElevationScene extends Phaser.Scene {
   private beamProfile: BeamProfile | null = null
@@ -23,6 +24,7 @@ export class BeamElevationScene extends Phaser.Scene {
   private isMouseDown = false
   private isPainting = false
   private paintMode: 'add' | 'remove' | null = null
+  private useSmoothCurves = true // Enable smooth organic curves
 
   constructor() {
     super({ key: 'BeamElevationScene' })
@@ -273,47 +275,36 @@ export class BeamElevationScene extends Phaser.Scene {
       const cols = Math.ceil(this.beamLength)
       const rows = Math.ceil(webHeight)
       
-      // Create a larger grid with padding for proper boundary handling
-      const paddedCols = cols + 2
-      const paddedRows = rows + 2
-      const grid: number[][] = Array(paddedRows).fill(null).map(() => Array(paddedCols).fill(0))
+      // Create grid without padding - our optimized algorithm handles boundaries
+      const grid: number[][] = Array(rows).fill(null).map(() => Array(cols).fill(0))
       
-      // Fill the grid based on web cells, with 1-cell padding
-      // Note: grid array has y=0 at top, but cell.y=0 is at bottom of web
+      // Fill the grid based on web cells
+      // Grid coordinates: (0,0) is top-left, y increases downward
+      // Cell coordinates: (0,0) is bottom-left, y increases upward
       webCells.forEach(cell => {
-        const gridX = cell.x + 1 // Add padding offset
-        const gridY = paddedRows - 2 - cell.y // Invert y and add padding offset
-        if (gridX >= 0 && gridX < paddedCols && gridY >= 0 && gridY < paddedRows) {
+        // Convert cell coordinates to grid coordinates
+        const gridX = cell.x
+        const gridY = rows - 1 - cell.y // Invert y coordinate
+        
+        if (gridX >= 0 && gridX < cols && gridY >= 0 && gridY < rows) {
           grid[gridY][gridX] = 1
-          
-          // For edge cells, extend to boundary by filling adjacent padding cells
-          if (cell.x === 0) {
-            grid[gridY][0] = 1 // Extend to left boundary
-          }
-          if (cell.x === cols - 1) {
-            grid[gridY][paddedCols - 1] = 1 // Extend to right boundary
-          }
-          if (cell.y === 0) {
-            // y=0 is bottom row, gridY = paddedRows - 2
-            // Bottom padding is at paddedRows - 1
-            grid[paddedRows - 1][gridX] = 1 // Extend to bottom boundary
-          }
-          if (cell.y === rows - 1) {
-            // y=rows-1 is top row, gridY = paddedRows - 2 - (rows-1) = paddedRows - rows - 1 = 1
-            // Top padding is at 0
-            grid[0][gridX] = 1 // Extend to top boundary
-          }
         }
       })
       
       // Debug: Log grid for verification (uncomment if needed)
-      // console.log('Grid dimensions:', paddedRows, 'x', paddedCols)
+      // console.log('Grid dimensions:', rows, 'x', cols)
       // console.log('Sample web cells:', webCells.slice(0, 5))
       // console.log('Grid values:')
       // grid.forEach((row, i) => console.log(i, row.join('')))
       
-      // Apply interpolated marching squares
-      const contours = marchingSquaresInterpolated(grid, 0.5)
+      // Apply optimized marching squares with smoothing
+      const marchingOptions: MarchingSquaresOptions = {
+        threshold: 0.5,
+        smoothing: true,
+        edgeSnapping: true,
+        snapDistance: 0.01
+      }
+      const contours = marchingSquaresOptimized(grid, marchingOptions)
       // console.log('Generated contours:', contours.length, 'contours')
       // contours.forEach((contour, i) => {
       //   console.log(`Contour ${i}: ${contour.length} points`)
@@ -329,53 +320,61 @@ export class BeamElevationScene extends Phaser.Scene {
       contours.forEach(contour => {
         if (contour.length < 3) return
         
-        this.lossGraphics.beginPath()
-        
-        contour.forEach((point, index) => {
-          // Transform from grid coordinates to screen coordinates
-          // point.x and point.y are in padded grid coordinates
-          // We need to subtract 1 to get back to cell coordinates
-          const cellX = point.x - 1
-          const cellY = point.y - 1
+        // Transform contour points to screen coordinates
+        const screenContour = contour.map(point => {
+          // X coordinate: map from grid space to screen space
+          let x = startX + point.x * this.gridSize
           
-          // Transform cell coordinates to screen coordinates
-          // For cells at x=0, they are rendered starting from beam edge
-          // So we need to handle this special case
-          let x = startX + cellX * this.gridSize
+          // Y coordinate: invert and map to screen space
+          // Grid y=0 is at top, but screen rendering has y=0 at web top
+          // So we need to flip: screenY = webTop + (rows - point.y) * gridSize
+          let y = webTop + (rows - point.y) * this.gridSize
           
-          // If we're at or before the first cell, snap to beam start
-          if (cellX < 0.5) {
+          // Edge snapping for cleaner boundaries
+          const snapThreshold = 0.1
+          
+          // Snap to left edge
+          if (point.x < snapThreshold) {
             x = startX
           }
-          
-          // For Y, we need to invert from grid coordinates back to cell coordinates
-          // gridY = paddedRows - 2 - cell.y, so cell.y = paddedRows - 2 - gridY
-          const actualCellY = paddedRows - 2 - cellY
-          // Then transform to screen like cell rendering: y = webBottom - (cell.y + 1) * gridSize
-          const y = webBottom - (actualCellY + 1) * this.gridSize
-          
-          // Handle right edge snapping
-          let finalX = x
-          let finalY = y
-          
-          // If contour is at or beyond right edge
-          if (cellX >= cols - 0.5) {
-            finalX = startX + this.beamLength * this.gridSize
+          // Snap to right edge
+          else if (point.x > cols - snapThreshold) {
+            x = startX + this.beamLength * this.gridSize
           }
           
-          // Clamp Y to web boundaries
-          finalY = Math.max(webTop, Math.min(webBottom, finalY))
-          
-          if (index === 0) {
-            this.lossGraphics.moveTo(finalX, finalY)
-          } else {
-            this.lossGraphics.lineTo(finalX, finalY)
+          // Snap to top edge
+          if (point.y < snapThreshold) {
+            y = webBottom
           }
+          // Snap to bottom edge
+          else if (point.y > rows - snapThreshold) {
+            y = webTop
+          }
+          
+          // Ensure we stay within beam boundaries
+          x = Math.max(startX, Math.min(startX + width, x))
+          y = Math.max(webTop, Math.min(webBottom, y))
+          
+          return { x, y }
         })
         
-        this.lossGraphics.closePath()
-        this.lossGraphics.fillPath()
-        this.lossGraphics.strokePath()
+        // Draw using smooth curves or linear segments
+        if (this.useSmoothCurves && screenContour.length > 4) {
+          drawBezierContour(this.lossGraphics, screenContour, true)
+        } else {
+          // Standard linear drawing
+          this.lossGraphics.beginPath()
+          screenContour.forEach((point, index) => {
+            if (index === 0) {
+              this.lossGraphics.moveTo(point.x, point.y)
+            } else {
+              this.lossGraphics.lineTo(point.x, point.y)
+            }
+          })
+          this.lossGraphics.closePath()
+          this.lossGraphics.fillPath()
+          this.lossGraphics.strokePath()
+        }
       })
     }
   }
