@@ -33,6 +33,10 @@ export class BeamElevationScene extends Phaser.Scene {
   // Marching squares buffer configuration
   private contourBufferSize = 0 // Default no buffer
   private contourBufferValue = 0 // Default buffer value
+  // Smoothing options
+  private smoothingMethod: 'basic' | 'laplacian' | 'chaikin' | 'bilateral' | 'savitzky-golay' | 'catmull-rom' = 'basic'
+  private smoothingIterations = 2
+  private smoothingStrength = 0.5
 
   constructor() {
     super({ key: 'BeamElevationScene' })
@@ -316,7 +320,10 @@ export class BeamElevationScene extends Phaser.Scene {
         globalOffsetX: this.contourGlobalOffsetX,
         globalOffsetY: this.contourGlobalOffsetY,
         bufferSize: this.contourBufferSize,
-        bufferValue: this.contourBufferValue
+        bufferValue: this.contourBufferValue,
+        smoothingMethod: this.smoothingMethod,
+        smoothingIterations: this.smoothingIterations,
+        smoothingStrength: this.smoothingStrength
       }
       const contours = marchingSquaresOptimized(grid, marchingOptions)
       // console.log('Generated contours:', contours.length, 'contours')
@@ -1235,6 +1242,25 @@ export class BeamElevationScene extends Phaser.Scene {
     return {
       bufferSize: this.contourBufferSize,
       bufferValue: this.contourBufferValue
+    }
+  }
+  
+  public setSmoothingOptions(method: 'basic' | 'laplacian' | 'chaikin' | 'bilateral' | 'savitzky-golay' | 'catmull-rom', iterations: number, strength: number): void {
+    this.smoothingMethod = method
+    this.smoothingIterations = iterations
+    this.smoothingStrength = strength
+    this.drawSectionLoss(
+      this.gridOrigin === 'left' ? 100 : 100,
+      this.cameras.main.centerY,
+      this.beamLength * this.gridSize
+    )
+  }
+  
+  public getSmoothingOptions(): { smoothingMethod: 'basic' | 'laplacian' | 'chaikin' | 'bilateral' | 'savitzky-golay' | 'catmull-rom'; smoothingIterations: number; smoothingStrength: number } {
+    return {
+      smoothingMethod: this.smoothingMethod,
+      smoothingIterations: this.smoothingIterations,
+      smoothingStrength: this.smoothingStrength
     }
   }
 }

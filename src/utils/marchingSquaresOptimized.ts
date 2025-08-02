@@ -1,3 +1,12 @@
+import { 
+  laplacianSmoothing, 
+  chaikinSmoothing, 
+  bilateralSmoothing, 
+  savitzkyGolaySmoothing,
+  constrainedCatmullRomSmoothing,
+  EdgeConstraints 
+} from './contourSmoothing'
+
 export interface Point {
   x: number
   y: number
@@ -37,6 +46,10 @@ export interface MarchingSquaresOptions {
   edgeMode?: 'clamp' | 'extend' // How to handle contours at edges (default: 'clamp')
   // Grid alignment mode
   alignmentMode?: 'edges' | 'vertices' // Draw through cell edges or vertices (default: 'edges')
+  // Advanced smoothing options
+  smoothingMethod?: 'basic' | 'laplacian' | 'chaikin' | 'bilateral' | 'savitzky-golay' | 'catmull-rom'
+  smoothingIterations?: number // Number of smoothing iterations (default: 2)
+  smoothingStrength?: number // Smoothing strength factor (default: 0.5)
 }
 
 // Validate and auto-correct conflicting parameters
@@ -109,7 +122,10 @@ export function marchingSquaresOptimized(
     simplificationTolerance = 0,
     interpolationMethod = 'linear',
     edgeMode = 'clamp',
-    alignmentMode = 'edges'
+    alignmentMode = 'edges',
+    smoothingMethod = 'basic',
+    smoothingIterations = 2,
+    smoothingStrength = 0.5
   } = validatedOptions
 
   let processGrid = grid
@@ -183,9 +199,77 @@ export function marchingSquaresOptimized(
   const contours = connectSegmentsOptimized(segments)
   
   // Apply smoothing if requested
-  let finalContours = smoothing 
-    ? contours.map(contour => smoothContour(contour))
-    : contours
+  let finalContours = contours
+  
+  if (smoothing) {
+    // Define edge constraints based on grid dimensions and buffer
+    const gridLeft = 0 - bufferSize
+    const gridRight = cols - bufferSize
+    const gridTop = 0 - bufferSize
+    const gridBottom = rows - bufferSize
+    
+    const edgeConstraints: EdgeConstraints = {
+      leftEdge: edgeMode === 'clamp' ? gridLeft : undefined,
+      rightEdge: edgeMode === 'clamp' ? gridRight : undefined,
+      topEdge: edgeMode === 'clamp' ? gridTop : undefined,
+      bottomEdge: edgeMode === 'clamp' ? gridBottom : undefined,
+      tolerance: 0.1
+    }
+    
+    // Apply the selected smoothing method
+    switch (smoothingMethod) {
+      case 'laplacian':
+        finalContours = contours.map(contour => 
+          laplacianSmoothing(contour, edgeConstraints, {
+            iterations: smoothingIterations,
+            strength: smoothingStrength,
+            preserveEdges: true
+          })
+        )
+        break
+        
+      case 'chaikin':
+        finalContours = contours.map(contour => 
+          chaikinSmoothing(contour, edgeConstraints, {
+            iterations: smoothingIterations,
+            preserveEdges: true
+          })
+        )
+        break
+        
+      case 'bilateral':
+        finalContours = contours.map(contour => 
+          bilateralSmoothing(contour, edgeConstraints, {
+            iterations: smoothingIterations,
+            strength: smoothingStrength,
+            preserveEdges: true
+          })
+        )
+        break
+        
+      case 'savitzky-golay':
+        finalContours = contours.map(contour => 
+          savitzkyGolaySmoothing(contour, edgeConstraints, {
+            preserveEdges: true
+          })
+        )
+        break
+        
+      case 'catmull-rom':
+        finalContours = contours.map(contour => 
+          constrainedCatmullRomSmoothing(contour, edgeConstraints, {
+            strength: smoothingStrength,
+            preserveEdges: true
+          })
+        )
+        break
+        
+      case 'basic':
+      default:
+        finalContours = contours.map(contour => smoothContour(contour))
+        break
+    }
+  }
   
   // Filter contours by minimum length
   if (minContourLength > 3) {

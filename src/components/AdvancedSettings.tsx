@@ -13,6 +13,9 @@ export const AdvancedSettings: React.FC<AdvancedSettingsProps> = ({ scene }) => 
   const [globalOffsetY, setGlobalOffsetY] = useState(0)
   const [bufferSize, setBufferSize] = useState(0)
   const [bufferValue, setBufferValue] = useState(0)
+  const [smoothingMethod, setSmoothingMethod] = useState<'basic' | 'laplacian' | 'chaikin' | 'bilateral' | 'savitzky-golay' | 'catmull-rom'>('basic')
+  const [smoothingIterations, setSmoothingIterations] = useState(2)
+  const [smoothingStrength, setSmoothingStrength] = useState(0.5)
 
   useEffect(() => {
     if (scene) {
@@ -25,6 +28,11 @@ export const AdvancedSettings: React.FC<AdvancedSettingsProps> = ({ scene }) => 
       const buffer = scene.getContourBuffer()
       setBufferSize(buffer.bufferSize)
       setBufferValue(buffer.bufferValue)
+      
+      const smoothing = scene.getSmoothingOptions()
+      setSmoothingMethod(smoothing.smoothingMethod || 'basic')
+      setSmoothingIterations(smoothing.smoothingIterations || 2)
+      setSmoothingStrength(smoothing.smoothingStrength || 0.5)
     }
   }, [scene])
 
@@ -57,6 +65,14 @@ export const AdvancedSettings: React.FC<AdvancedSettingsProps> = ({ scene }) => 
     scene.setContourBuffer(size, value)
   }
 
+  const handleSmoothingChange = (method: typeof smoothingMethod, iterations: number, strength: number) => {
+    if (!scene) return
+    setSmoothingMethod(method)
+    setSmoothingIterations(iterations)
+    setSmoothingStrength(strength)
+    scene.setSmoothingOptions(method, iterations, strength)
+  }
+
   const resetToDefaults = () => {
     setOffsetX(0.5)
     setOffsetY(0.5)
@@ -67,6 +83,10 @@ export const AdvancedSettings: React.FC<AdvancedSettingsProps> = ({ scene }) => 
     scene?.setContourOffsets(0.5, 0.5)
     scene?.setContourGlobalOffsets(0, 0)
     scene?.setContourBuffer(0, 0)
+    setSmoothingMethod('basic')
+    setSmoothingIterations(2)
+    setSmoothingStrength(0.5)
+    scene?.setSmoothingOptions('basic', 2, 0.5)
   }
 
   if (!scene) return null
@@ -267,6 +287,91 @@ export const AdvancedSettings: React.FC<AdvancedSettingsProps> = ({ scene }) => 
           </div>
         </div>
 
+        <div style={{ marginBottom: '16px' }}>
+          <h5 style={{ margin: '0 0 8px 0', fontSize: '13px', fontWeight: 600, color: '#555' }}>
+            Smoothing Options
+          </h5>
+          
+          <div style={{ marginBottom: '8px' }}>
+            <label style={{ 
+              display: 'block',
+              fontSize: '12px',
+              color: '#666',
+              marginBottom: '4px'
+            }}>
+              Smoothing Method
+            </label>
+            <select
+              value={smoothingMethod}
+              onChange={(e) => handleSmoothingChange(e.target.value as typeof smoothingMethod, smoothingIterations, smoothingStrength)}
+              style={{
+                width: '100%',
+                padding: '4px 8px',
+                fontSize: '12px',
+                border: '1px solid #ddd',
+                borderRadius: '4px',
+                background: 'white',
+                cursor: 'pointer'
+              }}
+            >
+              <option value="basic">Basic (Original)</option>
+              <option value="laplacian">Laplacian (Organic)</option>
+              <option value="chaikin">Chaikin (Smooth Corners)</option>
+              <option value="bilateral">Bilateral (Edge-Preserving)</option>
+              <option value="savitzky-golay">Savitzky-Golay (Shape-Preserving)</option>
+              <option value="catmull-rom">Catmull-Rom (Spline)</option>
+            </select>
+          </div>
+
+          {(smoothingMethod === 'laplacian' || smoothingMethod === 'chaikin' || smoothingMethod === 'bilateral') && (
+            <div style={{ marginBottom: '8px' }}>
+              <label style={{ 
+                display: 'flex', 
+                justifyContent: 'space-between',
+                alignItems: 'center',
+                fontSize: '12px',
+                color: '#666'
+              }}>
+                Smoothing Iterations
+                <span style={{ fontWeight: 'bold', color: '#333' }}>{smoothingIterations}</span>
+              </label>
+              <input
+                type="range"
+                min="1"
+                max="5"
+                step="1"
+                value={smoothingIterations}
+                onChange={(e) => handleSmoothingChange(smoothingMethod, parseInt(e.target.value), smoothingStrength)}
+                style={{ width: '100%', cursor: 'pointer' }}
+              />
+            </div>
+          )}
+
+          {(smoothingMethod === 'laplacian' || smoothingMethod === 'bilateral' || smoothingMethod === 'catmull-rom') && (
+            <div style={{ marginBottom: '8px' }}>
+              <label style={{ 
+                display: 'flex', 
+                justifyContent: 'space-between',
+                alignItems: 'center',
+                fontSize: '12px',
+                color: '#666'
+              }}>
+                Smoothing Strength
+                <span style={{ fontWeight: 'bold', color: '#333' }}>{smoothingStrength.toFixed(2)}</span>
+              </label>
+              <input
+                type="range"
+                min="0.1"
+                max="1.0"
+                step="0.05"
+                value={smoothingStrength}
+                onChange={(e) => handleSmoothingChange(smoothingMethod, smoothingIterations, parseFloat(e.target.value))}
+                style={{ width: '100%', cursor: 'pointer' }}
+              />
+            </div>
+          )}
+        </div>
+
         <button
           onClick={resetToDefaults}
           style={{
@@ -300,6 +405,8 @@ export const AdvancedSettings: React.FC<AdvancedSettingsProps> = ({ scene }) => 
           <strong>Global offsets</strong> shift the entire contour in grid units.
           <br />
           <strong>Buffer</strong> adds padding cells around the grid edges.
+          <br />
+          <strong>Smoothing</strong> applies post-processing to create smoother contours while preserving edge clamping.
         </div>
       </div>
     </div>
