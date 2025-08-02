@@ -8,43 +8,58 @@ export function drawBezierContour(
 ): void {
   if (contour.length < 2) return
   
+  // For very smooth curves, we'll use a simple curve interpolation
+  // that works reliably with Phaser 3's graphics API
+  
   graphics.beginPath()
-  graphics.moveTo(contour[0].x, contour[0].y)
   
   if (contour.length === 2) {
     // Just draw a line for 2 points
+    graphics.moveTo(contour[0].x, contour[0].y)
     graphics.lineTo(contour[1].x, contour[1].y)
   } else {
-    // Draw smooth curve through points using quadratic Bézier curves
-    for (let i = 0; i < contour.length - 1; i++) {
-      const p0 = contour[i]
-      const p1 = contour[i + 1]
-      const p2 = contour[i + 2] || (closed ? contour[0] : p1)
+    // Create smooth curve by interpolating between points
+    const smoothness = 0.2 // How much to smooth (0 = straight lines, 1 = very smooth)
+    const points: Point[] = []
+    
+    // Generate smooth curve points
+    for (let i = 0; i < contour.length; i++) {
+      const p0 = contour[(i - 1 + contour.length) % contour.length]
+      const p1 = contour[i]
+      const p2 = contour[(i + 1) % contour.length]
+      const p3 = contour[(i + 2) % contour.length]
       
-      // Calculate control point for smooth curve
-      const cp1x = p0.x + (p1.x - p0.x) * 0.5
-      const cp1y = p0.y + (p1.y - p0.y) * 0.5
-      
-      const cp2x = p1.x - (p2.x - p0.x) * 0.125
-      const cp2y = p1.y - (p2.y - p0.y) * 0.125
-      
-      // Use Phaser's bezierTo method
-      graphics.bezierTo(cp1x, cp1y, cp2x, cp2y, p1.x, p1.y)
+      // Catmull-Rom spline interpolation
+      for (let t = 0; t < 1; t += 0.1) {
+        const t2 = t * t
+        const t3 = t2 * t
+        
+        const x = 0.5 * (
+          (2 * p1.x) +
+          (-p0.x + p2.x) * t +
+          (2 * p0.x - 5 * p1.x + 4 * p2.x - p3.x) * t2 +
+          (-p0.x + 3 * p1.x - 3 * p2.x + p3.x) * t3
+        )
+        
+        const y = 0.5 * (
+          (2 * p1.y) +
+          (-p0.y + p2.y) * t +
+          (2 * p0.y - 5 * p1.y + 4 * p2.y - p3.y) * t2 +
+          (-p0.y + 3 * p1.y - 3 * p2.y + p3.y) * t3
+        )
+        
+        points.push({ x, y })
+      }
     }
     
-    // Close the path if needed
-    if (closed && contour.length > 2) {
-      const last = contour[contour.length - 1]
-      const first = contour[0]
-      const second = contour[1]
-      
-      const cp1x = last.x + (first.x - last.x) * 0.5
-      const cp1y = last.y + (first.y - last.y) * 0.5
-      
-      const cp2x = first.x - (second.x - last.x) * 0.125
-      const cp2y = first.y - (second.y - last.y) * 0.125
-      
-      graphics.bezierTo(cp1x, cp1y, cp2x, cp2y, first.x, first.y)
+    // Draw the smooth curve
+    graphics.moveTo(points[0].x, points[0].y)
+    for (let i = 1; i < points.length; i++) {
+      graphics.lineTo(points[i].x, points[i].y)
+    }
+    
+    if (closed) {
+      graphics.lineTo(points[0].x, points[0].y)
     }
   }
   
