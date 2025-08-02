@@ -317,6 +317,10 @@ export class BeamElevationScene extends Phaser.Scene {
       // console.log('Generated contours:', contours.length, 'contours')
       // contours.forEach((contour, i) => {
       //   console.log(`Contour ${i}: ${contour.length} points`)
+      //   // Log first few points to see coordinates
+      //   contour.slice(0, 5).forEach((pt, j) => {
+      //     console.log(`  Point ${j}: x=${pt.x}, y=${pt.y}`)
+      //   })
       // })
       
       // Draw smooth contours with proper coordinate transformation
@@ -335,8 +339,14 @@ export class BeamElevationScene extends Phaser.Scene {
           const cellY = point.y - 1
           
           // Transform cell coordinates to screen coordinates
-          // This should match the cell rendering: x = startX + cell.x * gridSize
-          const x = startX + cellX * this.gridSize
+          // For cells at x=0, they are rendered starting from beam edge
+          // So we need to handle this special case
+          let x = startX + cellX * this.gridSize
+          
+          // If we're at or before the first cell, snap to beam start
+          if (cellX < 0.5) {
+            x = startX
+          }
           
           // For Y, we need to invert from grid coordinates back to cell coordinates
           // gridY = paddedRows - 2 - cell.y, so cell.y = paddedRows - 2 - gridY
@@ -344,16 +354,12 @@ export class BeamElevationScene extends Phaser.Scene {
           // Then transform to screen like cell rendering: y = webBottom - (cell.y + 1) * gridSize
           const y = webBottom - (actualCellY + 1) * this.gridSize
           
-          // Snap to beam edges if the contour point is at the padding boundary
+          // Handle right edge snapping
           let finalX = x
           let finalY = y
           
-          // If contour is at left padding (cellX = -1), snap to beam start
-          if (cellX < 0) {
-            finalX = startX
-          }
-          // If contour is at right padding, snap to beam end
-          else if (cellX >= cols) {
+          // If contour is at or beyond right edge
+          if (cellX >= cols - 0.5) {
             finalX = startX + this.beamLength * this.gridSize
           }
           
