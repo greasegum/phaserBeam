@@ -7,12 +7,25 @@ interface AdvancedSettingsProps {
 
 export const AdvancedSettings: React.FC<AdvancedSettingsProps> = ({ scene }) => {
   const [isOpen, setIsOpen] = useState(false)
+  // Marching Squares Algorithm
+  const [interpolationMethod, setInterpolationMethod] = useState<'linear' | 'cubic' | 'none'>('linear')
+  const [saddlePointResolution, setSaddlePointResolution] = useState<'center' | 'gradient' | 'majority'>('center')
+  const [threshold, setThreshold] = useState(0.5)
+  // Geometry
+  const [alignmentMode, setAlignmentMode] = useState<'edges' | 'vertices' | 'center'>('edges')
   const [offsetX, setOffsetX] = useState(0.5)
   const [offsetY, setOffsetY] = useState(0.5)
   const [globalOffsetX, setGlobalOffsetX] = useState(0)
   const [globalOffsetY, setGlobalOffsetY] = useState(0)
   const [bufferSize, setBufferSize] = useState(0)
   const [bufferValue, setBufferValue] = useState(0)
+  const [clampToGrid, setClampToGrid] = useState(true)
+  const [extendToBoundary, setExtendToBoundary] = useState(false)
+  const [snapDistance, setSnapDistance] = useState(0.1)
+  // View Mode
+  const [showRawMarchingSquares, setShowRawMarchingSquares] = useState(false)
+  const [showControlPoints, setShowControlPoints] = useState(false)
+  // Processing
   const [smoothingMethod, setSmoothingMethod] = useState<'basic' | 'laplacian' | 'chaikin' | 'bilateral' | 'savitzky-golay' | 'catmull-rom'>('basic')
   const [smoothingIterations, setSmoothingIterations] = useState(2)
   const [smoothingStrength, setSmoothingStrength] = useState(0.5)
@@ -23,6 +36,20 @@ export const AdvancedSettings: React.FC<AdvancedSettingsProps> = ({ scene }) => 
 
   useEffect(() => {
     if (scene) {
+      // Algorithm settings
+      setInterpolationMethod(scene.getInterpolationMethod?.() || 'linear')
+      setSaddlePointResolution(scene.getSaddlePointResolution?.() || 'center')
+      setThreshold(scene.getThreshold?.() || 0.5)
+      setAlignmentMode(scene.getAlignmentMode?.() || 'edges')
+      setClampToGrid(scene.getClampToGrid?.() ?? true)
+      setExtendToBoundary(scene.getExtendToBoundary?.() ?? false)
+      setSnapDistance(scene.getSnapDistance?.() || 0.1)
+      
+      // View settings
+      setShowRawMarchingSquares(scene.getShowRawMarchingSquares?.() || false)
+      setShowControlPoints(scene.getShowControlPoints?.() || false)
+      
+      // Offset settings
       const offsets = scene.getContourOffsets()
       setOffsetX(offsets.offsetX)
       setOffsetY(offsets.offsetY)
@@ -93,15 +120,37 @@ export const AdvancedSettings: React.FC<AdvancedSettingsProps> = ({ scene }) => 
   }
 
   const resetToDefaults = () => {
+    // Algorithm
+    setInterpolationMethod('linear')
+    setSaddlePointResolution('center')
+    setThreshold(0.5)
+    scene?.setInterpolationMethod?.('linear')
+    scene?.setSaddlePointResolution?.('center')
+    scene?.setThreshold?.(0.5)
+    // Geometry
+    setAlignmentMode('edges')
     setOffsetX(0.5)
     setOffsetY(0.5)
     setGlobalOffsetX(0)
     setGlobalOffsetY(0)
     setBufferSize(0)
     setBufferValue(0)
+    setClampToGrid(true)
+    setExtendToBoundary(false)
+    setSnapDistance(0.1)
+    scene?.setAlignmentMode?.('edges')
     scene?.setContourOffsets(0.5, 0.5)
     scene?.setContourGlobalOffsets(0, 0)
     scene?.setContourBuffer(0, 0)
+    scene?.setClampToGrid?.(true)
+    scene?.setExtendToBoundary?.(false)
+    scene?.setSnapDistance?.(0.1)
+    // View
+    setShowRawMarchingSquares(false)
+    setShowControlPoints(false)
+    scene?.setShowRawMarchingSquares?.(false)
+    scene?.setShowControlPoints?.(false)
+    // Processing
     setSmoothingMethod('basic')
     setSmoothingIterations(2)
     setSmoothingStrength(0.5)
@@ -166,8 +215,138 @@ export const AdvancedSettings: React.FC<AdvancedSettingsProps> = ({ scene }) => 
         transition: 'transform 0.3s ease, opacity 0.3s ease'
       }}>
         <h4 style={{ margin: '0 0 12px 0', fontSize: '14px', fontWeight: 600 }}>
+          Marching Squares Algorithm
+        </h4>
+
+        <div style={{ marginBottom: '16px' }}>
+          <div style={{ marginBottom: '8px' }}>
+            <label style={{ 
+              display: 'block',
+              fontSize: '12px',
+              color: '#666',
+              marginBottom: '4px'
+            }}>
+              Interpolation Method
+            </label>
+            <select
+              value={interpolationMethod}
+              onChange={(e) => {
+                const method = e.target.value as 'linear' | 'cubic' | 'none'
+                setInterpolationMethod(method)
+                scene?.setInterpolationMethod?.(method)
+              }}
+              style={{
+                width: '100%',
+                padding: '4px 8px',
+                fontSize: '12px',
+                border: '1px solid #ddd',
+                borderRadius: '4px',
+                background: 'white',
+                cursor: 'pointer'
+              }}
+            >
+              <option value="linear">Linear (Smooth)</option>
+              <option value="cubic">Cubic (Smoother)</option>
+              <option value="none">None (Pixelated)</option>
+            </select>
+          </div>
+
+          <div style={{ marginBottom: '8px' }}>
+            <label style={{ 
+              display: 'block',
+              fontSize: '12px',
+              color: '#666',
+              marginBottom: '4px'
+            }}>
+              Saddle Point Resolution
+            </label>
+            <select
+              value={saddlePointResolution}
+              onChange={(e) => {
+                const resolution = e.target.value as 'center' | 'gradient' | 'majority'
+                setSaddlePointResolution(resolution)
+                scene?.setSaddlePointResolution?.(resolution)
+              }}
+              style={{
+                width: '100%',
+                padding: '4px 8px',
+                fontSize: '12px',
+                border: '1px solid #ddd',
+                borderRadius: '4px',
+                background: 'white',
+                cursor: 'pointer'
+              }}
+            >
+              <option value="center">Center (Balanced)</option>
+              <option value="gradient">Gradient (Smooth)</option>
+              <option value="majority">Majority (Sharp)</option>
+            </select>
+          </div>
+
+          <div style={{ marginBottom: '8px' }}>
+            <label style={{ 
+              display: 'flex', 
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              fontSize: '12px',
+              color: '#666'
+            }}>
+              Threshold
+              <span style={{ fontWeight: 'bold', color: '#333' }}>{threshold.toFixed(2)}</span>
+            </label>
+            <input
+              type="range"
+              min="0"
+              max="1"
+              step="0.05"
+              value={threshold}
+              onChange={(e) => {
+                const value = parseFloat(e.target.value)
+                setThreshold(value)
+                scene?.setThreshold?.(value)
+              }}
+              style={{ width: '100%', cursor: 'pointer' }}
+            />
+          </div>
+        </div>
+
+        <h4 style={{ margin: '16px 0 12px 0', fontSize: '14px', fontWeight: 600 }}>
           Contour Alignment
         </h4>
+
+        <div style={{ marginBottom: '16px' }}>
+          <div style={{ marginBottom: '8px' }}>
+            <label style={{ 
+              display: 'block',
+              fontSize: '12px',
+              color: '#666',
+              marginBottom: '4px'
+            }}>
+              Alignment Mode
+            </label>
+            <select
+              value={alignmentMode}
+              onChange={(e) => {
+                const mode = e.target.value as 'edges' | 'vertices' | 'center'
+                setAlignmentMode(mode)
+                scene?.setAlignmentMode?.(mode)
+              }}
+              style={{
+                width: '100%',
+                padding: '4px 8px',
+                fontSize: '12px',
+                border: '1px solid #ddd',
+                borderRadius: '4px',
+                background: 'white',
+                cursor: 'pointer'
+              }}
+            >
+              <option value="edges">Edge Aligned</option>
+              <option value="vertices">Vertex Aligned</option>
+              <option value="center">Center Aligned</option>
+            </select>
+          </div>
+        </div>
 
         <div style={{ marginBottom: '16px' }}>
           <div style={{ marginBottom: '8px' }}>
@@ -263,6 +442,80 @@ export const AdvancedSettings: React.FC<AdvancedSettingsProps> = ({ scene }) => 
 
         <div style={{ marginBottom: '16px' }}>
           <h5 style={{ margin: '0 0 8px 0', fontSize: '13px', fontWeight: 600, color: '#555' }}>
+            Edge Behavior
+          </h5>
+          
+          <div style={{ marginBottom: '8px' }}>
+            <label style={{ 
+              display: 'flex',
+              alignItems: 'center',
+              fontSize: '12px',
+              color: '#666',
+              cursor: 'pointer'
+            }}>
+              <input
+                type="checkbox"
+                checked={clampToGrid}
+                onChange={(e) => {
+                  setClampToGrid(e.target.checked)
+                  scene?.setClampToGrid?.(e.target.checked)
+                }}
+                style={{ marginRight: '8px' }}
+              />
+              Clamp to Grid Edges
+            </label>
+          </div>
+
+          <div style={{ marginBottom: '8px' }}>
+            <label style={{ 
+              display: 'flex',
+              alignItems: 'center',
+              fontSize: '12px',
+              color: '#666',
+              cursor: 'pointer'
+            }}>
+              <input
+                type="checkbox"
+                checked={extendToBoundary}
+                onChange={(e) => {
+                  setExtendToBoundary(e.target.checked)
+                  scene?.setExtendToBoundary?.(e.target.checked)
+                }}
+                style={{ marginRight: '8px' }}
+              />
+              Extend to Boundary
+            </label>
+          </div>
+
+          <div style={{ marginBottom: '8px' }}>
+            <label style={{ 
+              display: 'flex', 
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              fontSize: '12px',
+              color: '#666'
+            }}>
+              Snap Distance
+              <span style={{ fontWeight: 'bold', color: '#333' }}>{snapDistance.toFixed(2)}</span>
+            </label>
+            <input
+              type="range"
+              min="0"
+              max="1"
+              step="0.05"
+              value={snapDistance}
+              onChange={(e) => {
+                const value = parseFloat(e.target.value)
+                setSnapDistance(value)
+                scene?.setSnapDistance?.(value)
+              }}
+              style={{ width: '100%', cursor: 'pointer' }}
+            />
+          </div>
+        </div>
+
+        <div style={{ marginBottom: '16px' }}>
+          <h5 style={{ margin: '0 0 8px 0', fontSize: '13px', fontWeight: 600, color: '#555' }}>
             Grid Buffer
           </h5>
           
@@ -308,6 +561,54 @@ export const AdvancedSettings: React.FC<AdvancedSettingsProps> = ({ scene }) => 
               onChange={(e) => handleBufferChange(bufferSize, parseFloat(e.target.value))}
               style={{ width: '100%', cursor: 'pointer' }}
             />
+          </div>
+        </div>
+
+        <div style={{ marginBottom: '16px' }}>
+          <h5 style={{ margin: '0 0 8px 0', fontSize: '13px', fontWeight: 600, color: '#555' }}>
+            View Mode
+          </h5>
+          
+          <div style={{ marginBottom: '8px' }}>
+            <label style={{ 
+              display: 'flex',
+              alignItems: 'center',
+              fontSize: '12px',
+              color: '#666',
+              cursor: 'pointer'
+            }}>
+              <input
+                type="checkbox"
+                checked={showRawMarchingSquares}
+                onChange={(e) => {
+                  setShowRawMarchingSquares(e.target.checked)
+                  scene?.setShowRawMarchingSquares?.(e.target.checked)
+                }}
+                style={{ marginRight: '8px' }}
+              />
+              Show Raw Marching Squares (No Smoothing)
+            </label>
+          </div>
+
+          <div style={{ marginBottom: '8px' }}>
+            <label style={{ 
+              display: 'flex',
+              alignItems: 'center',
+              fontSize: '12px',
+              color: '#666',
+              cursor: 'pointer'
+            }}>
+              <input
+                type="checkbox"
+                checked={showControlPoints}
+                onChange={(e) => {
+                  setShowControlPoints(e.target.checked)
+                  scene?.setShowControlPoints?.(e.target.checked)
+                }}
+                style={{ marginRight: '8px' }}
+              />
+              Show Control Points
+            </label>
           </div>
         </div>
 
@@ -524,15 +825,19 @@ export const AdvancedSettings: React.FC<AdvancedSettingsProps> = ({ scene }) => 
           color: '#666',
           lineHeight: '1.4'
         }}>
+          <strong>Algorithm</strong> controls how marching squares generates contours.
+          <br />
           <strong>Cell offsets</strong> adjust contour position within grid cells.
           <br />
           <strong>Global offsets</strong> shift the entire contour in grid units.
           <br />
-          <strong>Buffer</strong> adds padding cells around the grid edges.
+          <strong>Edge behavior</strong> controls boundary handling.
           <br />
-          <strong>Smoothing</strong> applies post-processing to create smoother contours while preserving edge clamping.
+          <strong>View mode</strong> toggles visual debugging options.
           <br />
-          <strong>Collision Avoidance</strong> prevents neighboring regions from overlapping.
+          <strong>Smoothing</strong> applies post-processing to create smoother contours.
+          <br />
+          <strong>Collision</strong> prevents neighboring regions from overlapping.
         </div>
       </div>
     </div>

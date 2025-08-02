@@ -20,6 +20,7 @@ export class BeamElevationScene extends Phaser.Scene {
   private topFlangeGraphics?: Phaser.GameObjects.Graphics
   private lossGraphics?: Phaser.GameObjects.Graphics
   private gridContainer?: Phaser.GameObjects.Container
+  private controlPointGraphics?: Phaser.GameObjects.Graphics
   private dimensionText: Phaser.GameObjects.Text[] = []
   private isMouseDown = false
   private isPainting = false
@@ -42,6 +43,17 @@ export class BeamElevationScene extends Phaser.Scene {
   private collisionMinDistance = 0.5
   private collisionMethod: 'push' | 'shrink' | 'hybrid' = 'hybrid'
   private collisionIterations = 10
+  // View mode options
+  private showRawMarchingSquares = false // Show raw marching squares without smoothing
+  private showControlPoints = true // Show marching squares control points in edit mode
+  // Marching Squares Algorithm Properties
+  private interpolationMethod: 'linear' | 'cubic' | 'none' = 'linear'
+  private saddlePointResolution: 'center' | 'gradient' | 'majority' = 'center'
+  private threshold = 0.5
+  private alignmentMode: 'edges' | 'vertices' | 'center' = 'edges'
+  private clampToGrid = true
+  private extendToBoundary = false
+  private snapDistance = 0.1
 
   constructor() {
     super({ key: 'BeamElevationScene' })
@@ -132,6 +144,9 @@ export class BeamElevationScene extends Phaser.Scene {
 
     // Create loss graphics layer
     this.lossGraphics = this.add.graphics()
+    
+    // Create control point graphics layer
+    this.controlPointGraphics = this.add.graphics()
     this.drawSectionLoss(startX, centerY, beamWidth)
 
     // Create grid overlay container
@@ -261,9 +276,10 @@ export class BeamElevationScene extends Phaser.Scene {
     // Set fill style
     this.lossGraphics.fillStyle(0xFFB3BA, 0.8)
     
-    // If grid is visible, use rectangular rendering
-    if (this.editMode && this.showGrid) {
-      // Fill individual cells
+    // In edit mode, show both grid cells and marching squares preview
+    if (this.editMode) {
+      // Fill individual cells with transparency for better visibility
+      this.lossGraphics.fillStyle(0xFFB3BA, 0.3)
       webCells.forEach(cell => {
         let x = startX + cell.x * this.gridSize
         const y = webBottom - (cell.y + 1) * this.gridSize
@@ -284,9 +300,11 @@ export class BeamElevationScene extends Phaser.Scene {
         this.lossGraphics.fillRect(x, y, cellWidth, this.gridSize)
       })
       
-      // Draw rectangular outlines
-      this.lossGraphics.lineStyle(2, 0xFF6B6B)
-      this.drawRectangularOutlines(webCells, startX, webBottom)
+      
+      // Now draw marching squares preview on top
+      const cols = Math.ceil(this.beamLength)
+      const rows = Math.ceil(webHeight)
+      this.drawMarchingSquaresContours(webCells, startX, webTop, webBottom, cols, rows, true)
     } else {
       // Grid is off, use interpolated marching squares for smooth boundaries
       const cols = Math.ceil(this.beamLength)
@@ -314,10 +332,10 @@ export class BeamElevationScene extends Phaser.Scene {
       // console.log('Grid values:')
       // grid.forEach((row, i) => console.log(i, row.join('')))
       
-      // Apply optimized marching squares with smoothing
+      // Apply optimized marching squares
       const marchingOptions: MarchingSquaresOptions = {
         threshold: 0.5,
-        smoothing: true,
+        smoothing: !this.showRawMarchingSquares,
         edgeSnapping: true,
         snapDistance: 0.01,
         offsetX: this.contourOffsetX,
@@ -421,7 +439,7 @@ export class BeamElevationScene extends Phaser.Scene {
         })
         
         // Draw using smooth curves or linear segments
-        if (this.useSmoothCurves && screenContour.length > 4) {
+        if (this.useSmoothCurves && !this.showRawMarchingSquares && screenContour.length > 4) {
           drawBezierContour(this.lossGraphics, screenContour, true)
         } else {
           // Standard linear drawing
@@ -439,6 +457,114 @@ export class BeamElevationScene extends Phaser.Scene {
         }
       })
     }
+  }
+  
+  private drawMarchingSquaresContours(
+    webCells: {x: number, y: number}[], 
+    startX: number, 
+    webTop: number, 
+    webBottom: number,
+    cols: number,
+    rows: number,
+    showControlPoints: boolean = false
+  ) {
+    if (!this.lossGraphics || !this.controlPointGraphics) return
+    
+    // Create grid
+    const grid: number[][] = Array(rows).fill(null).map(() => Array(cols).fill(0))
+    
+    // Fill the grid based on web cells
+    webCells.forEach(cell => {
+      const gridX = cell.x
+      const gridY = rows - 1 - cell.y
+      if (gridX >= 0 && gridX < cols && gridY >= 0 && gridY < rows) {
+        grid[gridY][gridX] = 1
+      }
+    })
+    
+    // Apply marching squares
+    const marchingOptions: MarchingSquaresOptions = {
+      threshold: this.threshold,
+      interpolationMethod: this.interpolationMethod,
+      saddlePointResolution: this.saddlePointResolution,
+      alignmentMode: this.alignmentMode,
+      smoothing: !this.showRawMarchingSquares && !this.editMode,
+      edgeSnapping: this.clampToGrid,
+      extendToBoundary: this.extendToBoundary,
+      snapDistance: this.snapDistance,
+      offsetX: this.contourOffsetX,
+      offsetY: this.contourOffsetY,
+      globalOffsetX: this.contourGlobalOffsetX,
+      globalOffsetY: this.contourGlobalOffsetY,
+      bufferSize: this.contourBufferSize,
+      bufferValue: this.contourBufferValue,
+      smoothingMethod: this.smoothingMethod,
+      smoothingIterations: this.smoothingIterations,
+      smoothingStrength: this.smoothingStrength,
+      collisionAvoidance: this.collisionAvoidance,
+      collisionMinDistance: this.collisionMinDistance,
+      collisionMethod: this.collisionMethod,
+      collisionIterations: this.collisionIterations
+    }
+    
+    const contours = marchingSquaresOptimized(grid, marchingOptions)
+    
+    // Clear control points
+    this.controlPointGraphics.clear()
+    
+    // Draw contours
+    this.lossGraphics.lineStyle(2, 0xFF6B6B)
+    
+    contours.forEach(contour => {
+      if (contour.length < 3) return
+      
+      // Transform contour points to screen coordinates
+      const screenContour = contour.map(point => {
+        const x = startX + point.x * this.gridSize
+        const y = webTop + (rows - point.y) * this.gridSize
+        return { x, y }
+      })
+      
+      // Draw the contour
+      if (this.editMode || this.showRawMarchingSquares) {
+        // In edit mode or raw mode, always use linear segments
+        this.lossGraphics.beginPath()
+        screenContour.forEach((point, index) => {
+          if (index === 0) {
+            this.lossGraphics.moveTo(point.x, point.y)
+          } else {
+            this.lossGraphics.lineTo(point.x, point.y)
+          }
+        })
+        this.lossGraphics.closePath()
+        this.lossGraphics.strokePath()
+        
+        // Draw control points if requested
+        if (showControlPoints && this.showControlPoints && this.editMode) {
+          this.controlPointGraphics.fillStyle(0x00FF00, 0.8) // Green control points
+          screenContour.forEach(point => {
+            this.controlPointGraphics.fillCircle(point.x, point.y, 3)
+          })
+        }
+      } else {
+        // View mode with smoothing
+        if (this.useSmoothCurves && screenContour.length > 4) {
+          drawBezierContour(this.lossGraphics, screenContour, true)
+        } else {
+          this.lossGraphics.beginPath()
+          screenContour.forEach((point, index) => {
+            if (index === 0) {
+              this.lossGraphics.moveTo(point.x, point.y)
+            } else {
+              this.lossGraphics.lineTo(point.x, point.y)
+            }
+          })
+          this.lossGraphics.closePath()
+          this.lossGraphics.fillPath()
+          this.lossGraphics.strokePath()
+        }
+      }
+    })
   }
   
   private drawRectangularOutlines(webCells: {x: number, y: number}[], startX: number, webBottom: number) {
@@ -1292,5 +1418,124 @@ export class BeamElevationScene extends Phaser.Scene {
       collisionMethod: this.collisionMethod,
       collisionIterations: this.collisionIterations
     }
+  }
+  
+  public setShowRawMarchingSquares(show: boolean): void {
+    this.showRawMarchingSquares = show
+    this.drawSectionLoss(
+      this.gridOrigin === 'left' ? 100 : 100,
+      this.cameras.main.centerY,
+      this.beamLength * this.gridSize
+    )
+  }
+  
+  public getShowRawMarchingSquares(): boolean {
+    return this.showRawMarchingSquares
+  }
+  
+  public setShowControlPoints(show: boolean): void {
+    this.showControlPoints = show
+    this.drawSectionLoss(
+      this.gridOrigin === 'left' ? 100 : 100,
+      this.cameras.main.centerY,
+      this.beamLength * this.gridSize
+    )
+  }
+  
+  public getShowControlPoints(): boolean {
+    return this.showControlPoints
+  }
+  
+  // Getters for algorithm controls
+  public getInterpolationMethod(): 'linear' | 'cubic' | 'none' {
+    return this.interpolationMethod
+  }
+  
+  public getSaddlePointResolution(): 'center' | 'gradient' | 'majority' {
+    return this.saddlePointResolution
+  }
+  
+  public getThreshold(): number {
+    return this.threshold
+  }
+  
+  public getAlignmentMode(): 'edges' | 'vertices' | 'center' {
+    return this.alignmentMode
+  }
+  
+  public getClampToGrid(): boolean {
+    return this.clampToGrid
+  }
+  
+  public getExtendToBoundary(): boolean {
+    return this.extendToBoundary
+  }
+  
+  public getSnapDistance(): number {
+    return this.snapDistance
+  }
+  
+  // Marching Squares Algorithm Controls
+  public setInterpolationMethod(method: 'linear' | 'cubic' | 'none'): void {
+    this.interpolationMethod = method
+    this.drawSectionLoss(
+      this.gridOrigin === 'left' ? 100 : 100,
+      this.cameras.main.centerY,
+      this.beamLength * this.gridSize
+    )
+  }
+  
+  public setSaddlePointResolution(resolution: 'center' | 'gradient' | 'majority'): void {
+    this.saddlePointResolution = resolution
+    this.drawSectionLoss(
+      this.gridOrigin === 'left' ? 100 : 100,
+      this.cameras.main.centerY,
+      this.beamLength * this.gridSize
+    )
+  }
+  
+  public setThreshold(threshold: number): void {
+    this.threshold = threshold
+    this.drawSectionLoss(
+      this.gridOrigin === 'left' ? 100 : 100,
+      this.cameras.main.centerY,
+      this.beamLength * this.gridSize
+    )
+  }
+  
+  public setAlignmentMode(mode: 'edges' | 'vertices' | 'center'): void {
+    this.alignmentMode = mode
+    this.drawSectionLoss(
+      this.gridOrigin === 'left' ? 100 : 100,
+      this.cameras.main.centerY,
+      this.beamLength * this.gridSize
+    )
+  }
+  
+  public setClampToGrid(clamp: boolean): void {
+    this.clampToGrid = clamp
+    this.drawSectionLoss(
+      this.gridOrigin === 'left' ? 100 : 100,
+      this.cameras.main.centerY,
+      this.beamLength * this.gridSize
+    )
+  }
+  
+  public setExtendToBoundary(extend: boolean): void {
+    this.extendToBoundary = extend
+    this.drawSectionLoss(
+      this.gridOrigin === 'left' ? 100 : 100,
+      this.cameras.main.centerY,
+      this.beamLength * this.gridSize
+    )
+  }
+  
+  public setSnapDistance(distance: number): void {
+    this.snapDistance = distance
+    this.drawSectionLoss(
+      this.gridOrigin === 'left' ? 100 : 100,
+      this.cameras.main.centerY,
+      this.beamLength * this.gridSize
+    )
   }
 }

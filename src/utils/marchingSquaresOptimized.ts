@@ -45,11 +45,14 @@ export interface MarchingSquaresOptions {
   minContourArea?: number   // Minimum area to keep a contour (default: 0)
   simplificationTolerance?: number // Douglas-Peucker simplification tolerance (default: 0)
   // Interpolation options
-  interpolationMethod?: 'linear' | 'none' // Interpolation method (default: 'linear')
+  interpolationMethod?: 'linear' | 'cubic' | 'none' // Interpolation method (default: 'linear')
+  // Saddle point resolution
+  saddlePointResolution?: 'center' | 'gradient' | 'majority' // How to resolve saddle points (default: 'center')
   // Edge behavior
   edgeMode?: 'clamp' | 'extend' // How to handle contours at edges (default: 'clamp')
+  extendToBoundary?: boolean // Extend contours to grid boundary (default: false)
   // Grid alignment mode
-  alignmentMode?: 'edges' | 'vertices' // Draw through cell edges or vertices (default: 'edges')
+  alignmentMode?: 'edges' | 'vertices' | 'center' // Draw through cell edges, vertices or centers (default: 'edges')
   // Advanced smoothing options
   smoothingMethod?: 'basic' | 'laplacian' | 'chaikin' | 'bilateral' | 'savitzky-golay' | 'catmull-rom'
   smoothingIterations?: number // Number of smoothing iterations (default: 2)
@@ -130,7 +133,9 @@ export function marchingSquaresOptimized(
     minContourArea = 0,
     simplificationTolerance = 0,
     interpolationMethod = 'linear',
+    saddlePointResolution = 'center',
     edgeMode = 'clamp',
+    extendToBoundary = false,
     alignmentMode = 'edges',
     smoothingMethod = 'basic',
     smoothingIterations = 2,
@@ -202,7 +207,7 @@ export function marchingSquaresOptimized(
   for (let row = 0; row < rows - 1; row++) {
     for (let col = 0; col < cols - 1; col++) {
       const cellSegments = processCellOptimized(
-        row, col, processGrid, threshold, EDGE_TABLE, edgeCache, offsetX, offsetY, interpolationMethod, alignmentMode
+        row, col, processGrid, threshold, EDGE_TABLE, edgeCache, offsetX, offsetY, interpolationMethod, saddlePointResolution, alignmentMode
       )
       segments.push(...cellSegments)
     }
@@ -362,8 +367,9 @@ function processCellOptimized(
   edgeCache: EdgeCache,
   offsetX: number,
   offsetY: number,
-  interpolationMethod: 'linear' | 'none',
-  alignmentMode: 'edges' | 'vertices'
+  interpolationMethod: 'linear' | 'cubic' | 'none',
+  saddlePointResolution: 'center' | 'gradient' | 'majority',
+  alignmentMode: 'edges' | 'vertices' | 'center'
 ): Edge[] {
   // Get corner values
   const tl = grid[row][col]
@@ -468,12 +474,37 @@ function processCellOptimized(
     return segments
   }
   
-  // Handle ambiguous cases
+  // Handle ambiguous cases (saddle points)
   if (config === 5 || config === 10) {
-    const center = (tl + tr + br + bl) / 4
-    const centerAbove = center >= threshold
+    let connectDiagonally = false
     
-    if ((config === 5 && centerAbove) || (config === 10 && !centerAbove)) {
+    if (saddlePointResolution === 'center') {
+      // Use center value to decide
+      const center = (tl + tr + br + bl) / 4
+      const centerAbove = center >= threshold
+      connectDiagonally = (config === 5 && centerAbove) || (config === 10 && !centerAbove)
+    } else if (saddlePointResolution === 'gradient') {
+      // Use gradient to decide - connect along the steepest gradient
+      const gradX = (tr + br) - (tl + bl)
+      const gradY = (bl + br) - (tl + tr)
+      const gradMagnitude = Math.sqrt(gradX * gradX + gradY * gradY)
+      
+      if (gradMagnitude > 0.001) {
+        // Connect perpendicular to gradient for smoother results
+        connectDiagonally = Math.abs(gradX) > Math.abs(gradY)
+      } else {
+        // Fallback to center method if gradient is too small
+        const center = (tl + tr + br + bl) / 4
+        connectDiagonally = (config === 5 && center >= threshold) || (config === 10 && center < threshold)
+      }
+    } else if (saddlePointResolution === 'majority') {
+      // Use majority vote - connect based on which diagonal has more similar values
+      const diag1Diff = Math.abs(tl - br) // Top-left to bottom-right
+      const diag2Diff = Math.abs(tr - bl) // Top-right to bottom-left
+      connectDiagonally = diag1Diff > diag2Diff
+    }
+    
+    if (connectDiagonally) {
       // Connect differently for ambiguous cases
       const p1 = getInterpolatedEdgePointCached(col, row, edges[0], grid, threshold, edgeCache, offsetX, offsetY, interpolationMethod, alignmentMode)
       const p2 = getInterpolatedEdgePointCached(col, row, edges[3], grid, threshold, edgeCache, offsetX, offsetY, interpolationMethod, alignmentMode)
@@ -508,8 +539,8 @@ function getInterpolatedEdgePointCached(
   edgeCache: EdgeCache,
   offsetX: number,
   offsetY: number,
-  interpolationMethod: 'linear' | 'none',
-  alignmentMode: 'edges' | 'vertices'
+  interpolationMethod: 'linear' | 'cubic' | 'none',
+  alignmentMode: 'edges' | 'vertices' | 'center'
 ): Point {
   let x: number, y: number
   
@@ -523,7 +554,7 @@ function getInterpolatedEdgePointCached(
         } else {
           const tl = grid[cellY][cellX]
           const tr = grid[cellY][cellX + 1]
-          const t = interpolationMethod === 'none' ? 0.5 : interpolate(tl, tr, threshold)
+          const t = interpolate(tl, tr, threshold, interpolationMethod)
           x = cellX + t
           y = cellY
           edgeCache.horizontal.set(cacheKey, x)
@@ -540,7 +571,7 @@ function getInterpolatedEdgePointCached(
         } else {
           const tr = grid[cellY][cellX + 1]
           const br = grid[cellY + 1][cellX + 1]
-          const t = interpolationMethod === 'none' ? 0.5 : interpolate(tr, br, threshold)
+          const t = interpolate(tr, br, threshold, interpolationMethod)
           x = cellX + 1
           y = cellY + t
           edgeCache.vertical.set(cacheKey, y)
@@ -557,7 +588,7 @@ function getInterpolatedEdgePointCached(
         } else {
           const bl = grid[cellY + 1][cellX]
           const br = grid[cellY + 1][cellX + 1]
-          const t = interpolationMethod === 'none' ? 0.5 : interpolate(bl, br, threshold)
+          const t = interpolate(bl, br, threshold, interpolationMethod)
           x = cellX + t
           y = cellY + 1
           edgeCache.horizontal.set(cacheKey, x)
@@ -574,7 +605,7 @@ function getInterpolatedEdgePointCached(
         } else {
           const tl = grid[cellY][cellX]
           const bl = grid[cellY + 1][cellX]
-          const t = interpolationMethod === 'none' ? 0.5 : interpolate(tl, bl, threshold)
+          const t = interpolate(tl, bl, threshold, interpolationMethod)
           x = cellX
           y = cellY + t
           edgeCache.vertical.set(cacheKey, y)
@@ -587,19 +618,53 @@ function getInterpolatedEdgePointCached(
       y = cellY + 0.5
   }
   
+  // Apply alignment mode adjustments
+  if (alignmentMode === 'center') {
+    // In center mode, shift all points to cell centers
+    const centerOffsetX = 0.5
+    const centerOffsetY = 0.5
+    
+    // Find which cell this edge belongs to and adjust to its center
+    switch (edge) {
+      case 0: // top edge - shift down to center
+        y += centerOffsetY
+        break
+      case 1: // right edge - shift left to center
+        x -= centerOffsetX
+        break
+      case 2: // bottom edge - shift up to center
+        y -= centerOffsetY
+        break
+      case 3: // left edge - shift right to center
+        x += centerOffsetX
+        break
+    }
+  }
+  
   // Apply offsets
   return { x: x + offsetX, y: y + offsetY }
 }
 
-function interpolate(v1: number, v2: number, threshold: number): number {
+function interpolate(v1: number, v2: number, threshold: number, method: 'linear' | 'cubic' | 'none' = 'linear'): number {
   // Avoid division by zero
   if (Math.abs(v1 - v2) < 1e-10) return 0.5
   
+  if (method === 'none') return 0.5
+  
   // Linear interpolation
   const t = (threshold - v1) / (v2 - v1)
+  const tClamped = Math.max(0, Math.min(1, t))
   
-  // Clamp to [0, 1] to handle numerical errors
-  return Math.max(0, Math.min(1, t))
+  if (method === 'linear') {
+    return tClamped
+  } else if (method === 'cubic') {
+    // Cubic hermite interpolation for smoother curves
+    const t2 = tClamped * tClamped
+    const t3 = t2 * tClamped
+    return 3 * t2 - 2 * t3
+  }
+  
+  return tClamped
 }
 
 function connectSegmentsOptimized(segments: Edge[]): Point[][] {
