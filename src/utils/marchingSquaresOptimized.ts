@@ -35,12 +35,64 @@ export interface MarchingSquaresOptions {
   interpolationMethod?: 'linear' | 'none' // Interpolation method (default: 'linear')
   // Edge behavior
   edgeMode?: 'clamp' | 'extend' // How to handle contours at edges (default: 'clamp')
+  // Grid alignment mode
+  alignmentMode?: 'edges' | 'vertices' // Draw through cell edges or vertices (default: 'edges')
+}
+
+// Validate and auto-correct conflicting parameters
+function validateAndCorrectOptions(options: MarchingSquaresOptions): MarchingSquaresOptions {
+  const corrected = { ...options }
+  
+  // Auto-corrections for logical conflicts
+  if (corrected.alignmentMode === 'vertices' && corrected.interpolationMethod === 'linear') {
+    // Interpolation is meaningless in vertex mode
+    corrected.interpolationMethod = 'none'
+    console.warn('Marching Squares: Setting interpolationMethod to "none" for vertex alignment mode')
+  }
+  
+  // Reduce smoothing intensity for vertex mode
+  if (corrected.alignmentMode === 'vertices' && corrected.smoothing) {
+    console.warn('Marching Squares: Smoothing may reduce the angular appearance of vertex mode')
+  }
+  
+  // Warn about contradictory combinations
+  if (corrected.interpolationMethod === 'none' && corrected.smoothing) {
+    console.warn('Marching Squares: Smoothing with no interpolation may produce unexpected results')
+  }
+  
+  // Clamp buffer size to reasonable range
+  if (corrected.bufferSize !== undefined) {
+    corrected.bufferSize = Math.max(0, Math.min(10, corrected.bufferSize))
+    if (options.bufferSize !== corrected.bufferSize) {
+      console.warn(`Marching Squares: Buffer size clamped to ${corrected.bufferSize}`)
+    }
+  }
+  
+  // Ensure buffer value is valid
+  if (corrected.bufferValue !== undefined) {
+    corrected.bufferValue = Math.max(0, Math.min(1, corrected.bufferValue))
+  }
+  
+  // Warn about performance issues
+  if (corrected.smoothing && corrected.simplificationTolerance === 0) {
+    console.warn('Marching Squares: Consider using simplification with smoothing for better performance')
+  }
+  
+  // Ensure minimum contour length is valid
+  if (corrected.minContourLength !== undefined) {
+    corrected.minContourLength = Math.max(3, corrected.minContourLength)
+  }
+  
+  return corrected
 }
 
 export function marchingSquaresOptimized(
   grid: number[][], 
   options: MarchingSquaresOptions = {}
 ): Point[][] {
+  // Validate and correct parameters
+  const validatedOptions = validateAndCorrectOptions(options)
+  
   const {
     threshold = 0.5,
     smoothing = false,
@@ -56,8 +108,9 @@ export function marchingSquaresOptimized(
     minContourArea = 0,
     simplificationTolerance = 0,
     interpolationMethod = 'linear',
-    edgeMode = 'clamp'
-  } = options
+    edgeMode = 'clamp',
+    alignmentMode = 'edges'
+  } = validatedOptions
 
   let processGrid = grid
   let rows = grid.length
@@ -80,6 +133,12 @@ export function marchingSquaresOptimized(
     
     rows = bufferedRows
     cols = bufferedCols
+    
+    // Ensure grid is still processable after buffering
+    if (rows < 2 || cols < 2) {
+      console.warn('Marching Squares: Grid too small after buffering')
+      return []
+    }
   }
   
   // Edge lookup table - same as before but with clearer organization
@@ -114,7 +173,7 @@ export function marchingSquaresOptimized(
   for (let row = 0; row < rows - 1; row++) {
     for (let col = 0; col < cols - 1; col++) {
       const cellSegments = processCellOptimized(
-        row, col, processGrid, threshold, EDGE_TABLE, edgeCache, offsetX, offsetY, interpolationMethod
+        row, col, processGrid, threshold, EDGE_TABLE, edgeCache, offsetX, offsetY, interpolationMethod, alignmentMode
       )
       segments.push(...cellSegments)
     }
@@ -140,7 +199,18 @@ export function marchingSquaresOptimized(
   
   // Apply simplification if requested
   if (simplificationTolerance > 0) {
-    finalContours = finalContours.map(contour => simplifyContour(contour, simplificationTolerance))
+    finalContours = finalContours
+      .map(contour => simplifyContour(contour, simplificationTolerance))
+      .filter(contour => contour.length >= 3) // Ensure valid contours after simplification
+  }
+  
+  // Re-apply filters after simplification to ensure constraints are met
+  if (simplificationTolerance > 0 && minContourLength > 3) {
+    finalContours = finalContours.filter(contour => contour.length >= minContourLength)
+  }
+  
+  if (simplificationTolerance > 0 && minContourArea > 0) {
+    finalContours = finalContours.filter(contour => calculateContourArea(contour) >= minContourArea)
   }
   
   // Apply buffer offset adjustment and global offsets
@@ -168,7 +238,8 @@ function processCellOptimized(
   edgeCache: EdgeCache,
   offsetX: number,
   offsetY: number,
-  interpolationMethod: 'linear' | 'none'
+  interpolationMethod: 'linear' | 'none',
+  alignmentMode: 'edges' | 'vertices'
 ): Edge[] {
   // Get corner values
   const tl = grid[row][col]
@@ -188,6 +259,91 @@ function processCellOptimized(
   
   const segments: Edge[] = []
   
+  // In vertices mode, use a different approach
+  if (alignmentMode === 'vertices') {
+    // Vertex-based contours connect grid vertices directly
+    const points: Point[] = []
+    
+    // Define vertex positions relative to cell
+    const vertices: Point[] = [
+      { x: col, y: row },         // top-left
+      { x: col + 1, y: row },     // top-right
+      { x: col + 1, y: row + 1 }, // bottom-right
+      { x: col, y: row + 1 }      // bottom-left
+    ]
+    
+    // For each configuration, determine which vertices to connect
+    // This creates contours that pass through grid intersections
+    switch (config) {
+      case 1: // bottom-left inside
+        points.push(vertices[3], vertices[0])
+        break
+      case 2: // bottom-right inside
+        points.push(vertices[2], vertices[3])
+        break
+      case 3: // bottom inside
+        points.push(vertices[2], vertices[0])
+        break
+      case 4: // top-right inside
+        points.push(vertices[1], vertices[2])
+        break
+      case 5: // diagonal - connect based on center
+        {
+          const center = (tl + tr + br + bl) / 4
+          if (center >= threshold) {
+            points.push(vertices[0], vertices[2]) // connect tl to br
+          } else {
+            points.push(vertices[1], vertices[3]) // connect tr to bl
+          }
+        }
+        break
+      case 6: // right inside
+        points.push(vertices[1], vertices[3])
+        break
+      case 7: // all except top-left
+        points.push(vertices[1], vertices[0])
+        break
+      case 8: // top-left inside
+        points.push(vertices[0], vertices[1])
+        break
+      case 9: // left inside
+        points.push(vertices[3], vertices[1])
+        break
+      case 10: // diagonal - opposite of case 5
+        {
+          const center = (tl + tr + br + bl) / 4
+          if (center >= threshold) {
+            points.push(vertices[1], vertices[3]) // connect tr to bl
+          } else {
+            points.push(vertices[0], vertices[2]) // connect tl to br
+          }
+        }
+        break
+      case 11: // all except top-right
+        points.push(vertices[0], vertices[2])
+        break
+      case 12: // top inside
+        points.push(vertices[0], vertices[3])
+        break
+      case 13: // all except bottom-right
+        points.push(vertices[3], vertices[1])
+        break
+      case 14: // all except bottom-left
+        points.push(vertices[2], vertices[0])
+        break
+    }
+    
+    // Apply offsets to vertex positions
+    if (points.length === 2) {
+      segments.push({
+        p1: { x: points[0].x + offsetX, y: points[0].y + offsetY },
+        p2: { x: points[1].x + offsetX, y: points[1].y + offsetY }
+      })
+    }
+    
+    return segments
+  }
+  
   // Handle ambiguous cases
   if (config === 5 || config === 10) {
     const center = (tl + tr + br + bl) / 4
@@ -195,10 +351,10 @@ function processCellOptimized(
     
     if ((config === 5 && centerAbove) || (config === 10 && !centerAbove)) {
       // Connect differently for ambiguous cases
-      const p1 = getInterpolatedEdgePointCached(col, row, edges[0], grid, threshold, edgeCache, offsetX, offsetY, interpolationMethod)
-      const p2 = getInterpolatedEdgePointCached(col, row, edges[3], grid, threshold, edgeCache, offsetX, offsetY, interpolationMethod)
-      const p3 = getInterpolatedEdgePointCached(col, row, edges[1], grid, threshold, edgeCache, offsetX, offsetY, interpolationMethod)
-      const p4 = getInterpolatedEdgePointCached(col, row, edges[2], grid, threshold, edgeCache, offsetX, offsetY, interpolationMethod)
+      const p1 = getInterpolatedEdgePointCached(col, row, edges[0], grid, threshold, edgeCache, offsetX, offsetY, interpolationMethod, alignmentMode)
+      const p2 = getInterpolatedEdgePointCached(col, row, edges[3], grid, threshold, edgeCache, offsetX, offsetY, interpolationMethod, alignmentMode)
+      const p3 = getInterpolatedEdgePointCached(col, row, edges[1], grid, threshold, edgeCache, offsetX, offsetY, interpolationMethod, alignmentMode)
+      const p4 = getInterpolatedEdgePointCached(col, row, edges[2], grid, threshold, edgeCache, offsetX, offsetY, interpolationMethod, alignmentMode)
       
       segments.push({ p1, p2 })
       segments.push({ p1: p3, p2: p4 })
@@ -210,8 +366,8 @@ function processCellOptimized(
   for (let i = 0; i < edges.length; i += 2) {
     if (i + 1 >= edges.length) break
     
-    const p1 = getInterpolatedEdgePointCached(col, row, edges[i], grid, threshold, edgeCache, offsetX, offsetY, interpolationMethod)
-    const p2 = getInterpolatedEdgePointCached(col, row, edges[i + 1], grid, threshold, edgeCache, offsetX, offsetY, interpolationMethod)
+    const p1 = getInterpolatedEdgePointCached(col, row, edges[i], grid, threshold, edgeCache, offsetX, offsetY, interpolationMethod, alignmentMode)
+    const p2 = getInterpolatedEdgePointCached(col, row, edges[i + 1], grid, threshold, edgeCache, offsetX, offsetY, interpolationMethod, alignmentMode)
     
     segments.push({ p1, p2 })
   }
@@ -228,7 +384,8 @@ function getInterpolatedEdgePointCached(
   edgeCache: EdgeCache,
   offsetX: number,
   offsetY: number,
-  interpolationMethod: 'linear' | 'none'
+  interpolationMethod: 'linear' | 'none',
+  alignmentMode: 'edges' | 'vertices'
 ): Point {
   let x: number, y: number
   
