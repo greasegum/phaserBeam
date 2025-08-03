@@ -27,12 +27,12 @@ export class BeamElevationScene extends Phaser.Scene {
   private paintMode: 'add' | 'remove' | null = null
   private useSmoothCurves = true // Enable smooth organic curves
   // Marching squares alignment offsets
-  private contourOffsetX = 0.5 // Default 0.5 to center contours on cell edges
-  private contourOffsetY = 0.5 // Default 0.5 to center contours on cell edges
-  private contourGlobalOffsetX = 0
-  private contourGlobalOffsetY = 0
+  private contourOffsetX = 0 // Cell offset removed - use global offset
+  private contourOffsetY = 0 // Cell offset removed - use global offset
+  private contourGlobalOffsetX = -0.5 // Default -0.5 to center contours on cells
+  private contourGlobalOffsetY = -0.5 // Default -0.5 to center contours on cells
   // Marching squares buffer configuration
-  private contourBufferSize = 0 // Default no buffer
+  private contourBufferSize = 1 // Default buffer of 1 for proper edge handling
   private contourBufferValue = 0 // Default buffer value
   // Smoothing options
   private smoothingMethod: 'basic' | 'laplacian' | 'chaikin' | 'bilateral' | 'savitzky-golay' | 'catmull-rom' = 'basic'
@@ -390,32 +390,26 @@ export class BeamElevationScene extends Phaser.Scene {
           // Direct mapping: screenY = webTop + point.y * gridSize
           let y = webTop + point.y * this.gridSize
           
-          // Enhanced edge clamping - always engaged with proper square corners
-          // Use a small default buffer even when bufferSize is 0
-          const minBuffer = 0.05 // Minimum buffer to prevent rendering artifacts
-          // Scale buffer based on bufferSize setting (0-5 maps to 0-0.5 grid units)
-          const edgeBuffer = Math.max(minBuffer, this.contourBufferSize * 0.1)
-          
-          // Apply edge clamping to create square corners
+          // Edge clamping - clamp exactly to web edges
           // Left edge
           if (hasLeftEdgeCells) {
-            x = Math.max(startX + edgeBuffer * this.gridSize, x)
+            x = Math.max(startX, x)
           }
           
           // Right edge
           if (hasRightEdgeCells) {
             const rightEdge = startX + this.beamLength * this.gridSize
-            x = Math.min(rightEdge - edgeBuffer * this.gridSize, x)
+            x = Math.min(rightEdge, x)
           }
           
-          // Top edge
+          // Top edge (web top)
           if (hasTopEdgeCells) {
-            y = Math.max(webTop + edgeBuffer * this.gridSize, y)
+            y = Math.max(webTop, y)
           }
           
-          // Bottom edge
+          // Bottom edge (web bottom)
           if (hasBottomEdgeCells) {
-            y = Math.min(webBottom - edgeBuffer * this.gridSize, y)
+            y = Math.min(webBottom, y)
           }
           
           // Final safety clamp to ensure we never exceed beam boundaries
@@ -506,18 +500,15 @@ export class BeamElevationScene extends Phaser.Scene {
       if (contour.length < 3) return
       
       // Transform contour points to screen coordinates with edge clamping
-      const minBuffer = 0.05
-      const edgeBuffer = Math.max(minBuffer, this.contourBufferSize * 0.1)
-      
       const screenContour = contour.map(point => {
         let x = startX + point.x * this.gridSize
         let y = webTop + point.y * this.gridSize
         
-        // Apply edge clamping for square corners
-        x = Math.max(startX + edgeBuffer * this.gridSize, x)
-        x = Math.min(startX + cols * this.gridSize - edgeBuffer * this.gridSize, x)
-        y = Math.max(webTop + edgeBuffer * this.gridSize, y)
-        y = Math.min(webBottom - edgeBuffer * this.gridSize, y)
+        // Clamp exactly to web edges
+        x = Math.max(startX, x)
+        x = Math.min(startX + this.beamLength * this.gridSize, x)
+        y = Math.max(webTop, y)
+        y = Math.min(webBottom, y)
         
         return { x, y }
       })

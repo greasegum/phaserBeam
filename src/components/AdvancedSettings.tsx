@@ -13,11 +13,9 @@ export const AdvancedSettings: React.FC<AdvancedSettingsProps> = ({ scene }) => 
   const [threshold, setThreshold] = useState(0.5)
   // Geometry
   const [alignmentMode, setAlignmentMode] = useState<'edges' | 'vertices' | 'center'>('edges')
-  const [offsetX, setOffsetX] = useState(0.5)
-  const [offsetY, setOffsetY] = useState(0.5)
-  const [globalOffsetX, setGlobalOffsetX] = useState(0)
-  const [globalOffsetY, setGlobalOffsetY] = useState(0)
-  const [bufferSize, setBufferSize] = useState(0)
+  const [globalOffsetX, setGlobalOffsetX] = useState(-0.5)
+  const [globalOffsetY, setGlobalOffsetY] = useState(-0.5)
+  const [bufferSize, setBufferSize] = useState(1)
   const [bufferValue, setBufferValue] = useState(0)
   const [clampToGrid, setClampToGrid] = useState(true)
   const [extendToBoundary, setExtendToBoundary] = useState(false)
@@ -52,8 +50,6 @@ export const AdvancedSettings: React.FC<AdvancedSettingsProps> = ({ scene }) => 
       // Get offsets
       const offsets = scene.getContourOffsets?.()
       if (offsets) {
-        setOffsetX(offsets.cellX)
-        setOffsetY(offsets.cellY)
         setGlobalOffsetX(offsets.globalX)
         setGlobalOffsetY(offsets.globalY)
       }
@@ -84,25 +80,15 @@ export const AdvancedSettings: React.FC<AdvancedSettingsProps> = ({ scene }) => 
     }
   }, [scene])
 
-  const handleOffsetChange = (type: 'cell' | 'global', axis: 'x' | 'y', value: number) => {
+  const handleGlobalOffsetChange = (axis: 'x' | 'y', value: number) => {
     if (!scene) return
     
-    if (type === 'cell') {
-      if (axis === 'x') {
-        setOffsetX(value)
-        scene.setContourOffsets(value, offsetY)
-      } else {
-        setOffsetY(value)
-        scene.setContourOffsets(offsetX, value)
-      }
+    if (axis === 'x') {
+      setGlobalOffsetX(value)
+      scene.setContourGlobalOffsets(value, globalOffsetY)
     } else {
-      if (axis === 'x') {
-        setGlobalOffsetX(value)
-        scene.setContourGlobalOffsets(value, globalOffsetY)
-      } else {
-        setGlobalOffsetY(value)
-        scene.setContourGlobalOffsets(globalOffsetX, value)
-      }
+      setGlobalOffsetY(value)
+      scene.setContourGlobalOffsets(globalOffsetX, value)
     }
   }
 
@@ -138,10 +124,8 @@ export const AdvancedSettings: React.FC<AdvancedSettingsProps> = ({ scene }) => 
         setSaddlePointResolution('center')
         setThreshold(0.5)
         setAlignmentMode('edges')
-        setOffsetX(0.5)
-        setOffsetY(0.5)
-        setGlobalOffsetX(-1) // Account for natural padding
-        setGlobalOffsetY(-1) // Account for natural padding
+        setGlobalOffsetX(-0.5) // Center on cells
+        setGlobalOffsetY(-0.5) // Center on cells
         setBufferSize(1) // Natural 1-cell buffer
         setBufferValue(0)
         setClampToGrid(true)
@@ -158,8 +142,8 @@ export const AdvancedSettings: React.FC<AdvancedSettingsProps> = ({ scene }) => 
         scene?.setSaddlePointResolution?.('center')
         scene?.setThreshold?.(0.5)
         scene?.setAlignmentMode?.('edges')
-        scene?.setContourOffsets(0.5, 0.5)
-        scene?.setContourGlobalOffsets(-1, -1)
+        // Cell offsets removed - using global offsets only
+        scene?.setContourGlobalOffsets(-0.5, -0.5)
         scene?.setContourBuffer(1, 0)
         scene?.setClampToGrid?.(true)
         scene?.setExtendToBoundary?.(false)
@@ -176,10 +160,8 @@ export const AdvancedSettings: React.FC<AdvancedSettingsProps> = ({ scene }) => 
         setSaddlePointResolution('gradient')
         setThreshold(0.5)
         setAlignmentMode('center')
-        setOffsetX(0.5)
-        setOffsetY(0.5)
-        setGlobalOffsetX(0)
-        setGlobalOffsetY(0)
+        setGlobalOffsetX(-0.5)
+        setGlobalOffsetY(-0.5)
         setBufferSize(2)
         setBufferValue(0)
         setClampToGrid(true)
@@ -199,8 +181,8 @@ export const AdvancedSettings: React.FC<AdvancedSettingsProps> = ({ scene }) => 
         scene?.setSaddlePointResolution?.('gradient')
         scene?.setThreshold?.(0.5)
         scene?.setAlignmentMode?.('center')
-        scene?.setContourOffsets(0.5, 0.5)
-        scene?.setContourGlobalOffsets(0, 0)
+        // Cell offsets removed - using global offsets only
+        scene?.setContourGlobalOffsets(-0.5, -0.5)
         scene?.setContourBuffer(2, 0)
         scene?.setClampToGrid?.(true)
         scene?.setExtendToBoundary?.(false)
@@ -217,11 +199,9 @@ export const AdvancedSettings: React.FC<AdvancedSettingsProps> = ({ scene }) => 
         setSaddlePointResolution('majority')
         setThreshold(0.5)
         setAlignmentMode('vertices')
-        setOffsetX(0)
-        setOffsetY(0)
-        setGlobalOffsetX(0)
-        setGlobalOffsetY(0)
-        setBufferSize(0)
+        setGlobalOffsetX(-0.5)
+        setGlobalOffsetY(-0.5)
+        setBufferSize(1)
         setBufferValue(0)
         setClampToGrid(true)
         setExtendToBoundary(true)
@@ -240,9 +220,9 @@ export const AdvancedSettings: React.FC<AdvancedSettingsProps> = ({ scene }) => 
         scene?.setSaddlePointResolution?.('majority')
         scene?.setThreshold?.(0.5)
         scene?.setAlignmentMode?.('vertices')
-        scene?.setContourOffsets(0, 0)
-        scene?.setContourGlobalOffsets(0, 0)
-        scene?.setContourBuffer(0, 0)
+        // Cell offsets removed - using global offsets only
+        scene?.setContourGlobalOffsets(-0.5, -0.5)
+        scene?.setContourBuffer(1, 0)
         scene?.setClampToGrid?.(true)
         scene?.setExtendToBoundary?.(true)
         scene?.setSnapDistance?.(0.5)
@@ -268,19 +248,17 @@ export const AdvancedSettings: React.FC<AdvancedSettingsProps> = ({ scene }) => 
     scene?.setThreshold?.(0.5)
     // Geometry
     setAlignmentMode('edges')
-    setOffsetX(0.5)
-    setOffsetY(0.5)
-    setGlobalOffsetX(0)
-    setGlobalOffsetY(0)
-    setBufferSize(0)
+    setGlobalOffsetX(-0.5)
+    setGlobalOffsetY(-0.5)
+    setBufferSize(1)
     setBufferValue(0)
     setClampToGrid(true)
     setExtendToBoundary(false)
     setSnapDistance(0.1)
     scene?.setAlignmentMode?.('edges')
-    scene?.setContourOffsets(0.5, 0.5)
-    scene?.setContourGlobalOffsets(0, 0)
-    scene?.setContourBuffer(0, 0)
+    // Cell offsets removed - using global offsets only
+    scene?.setContourGlobalOffsets(-0.5, -0.5)
+    scene?.setContourBuffer(1, 0)
     scene?.setClampToGrid?.(true)
     scene?.setExtendToBoundary?.(false)
     scene?.setSnapDistance?.(0.1)
@@ -581,51 +559,6 @@ export const AdvancedSettings: React.FC<AdvancedSettingsProps> = ({ scene }) => 
               </div>
             </div>
 
-            <div style={{ marginBottom: '16px' }}>
-              <div style={{ marginBottom: '8px' }}>
-                <label style={{ 
-                  display: 'flex', 
-                  justifyContent: 'space-between',
-                  alignItems: 'center',
-                  fontSize: '12px',
-                  color: '#666'
-                }}>
-                  Cell Offset X
-                  <span style={{ fontWeight: 'bold', color: '#333' }}>{offsetX.toFixed(2)}</span>
-                </label>
-                <input
-                  type="range"
-                  min="-0.5"
-                  max="1.5"
-                  step="0.05"
-                  value={offsetX}
-                  onChange={(e) => handleOffsetChange('cell', 'x', parseFloat(e.target.value))}
-                  style={{ width: '100%', cursor: 'pointer' }}
-                />
-              </div>
-
-              <div style={{ marginBottom: '8px' }}>
-                <label style={{ 
-                  display: 'flex', 
-                  justifyContent: 'space-between',
-                  alignItems: 'center',
-                  fontSize: '12px',
-                  color: '#666'
-                }}>
-                  Cell Offset Y
-                  <span style={{ fontWeight: 'bold', color: '#333' }}>{offsetY.toFixed(2)}</span>
-                </label>
-                <input
-                  type="range"
-                  min="-0.5"
-                  max="1.5"
-                  step="0.05"
-                  value={offsetY}
-                  onChange={(e) => handleOffsetChange('cell', 'y', parseFloat(e.target.value))}
-                  style={{ width: '100%', cursor: 'pointer' }}
-                />
-              </div>
-            </div>
 
             <div style={{ marginBottom: '16px' }}>
               <div style={{ marginBottom: '8px' }}>
@@ -645,7 +578,7 @@ export const AdvancedSettings: React.FC<AdvancedSettingsProps> = ({ scene }) => 
                   max="2"
                   step="0.1"
                   value={globalOffsetX}
-                  onChange={(e) => handleOffsetChange('global', 'x', parseFloat(e.target.value))}
+                  onChange={(e) => handleGlobalOffsetChange('x', parseFloat(e.target.value))}
                   style={{ width: '100%', cursor: 'pointer' }}
                 />
               </div>
@@ -667,7 +600,7 @@ export const AdvancedSettings: React.FC<AdvancedSettingsProps> = ({ scene }) => 
                   max="2"
                   step="0.1"
                   value={globalOffsetY}
-                  onChange={(e) => handleOffsetChange('global', 'y', parseFloat(e.target.value))}
+                  onChange={(e) => handleGlobalOffsetChange('y', parseFloat(e.target.value))}
                   style={{ width: '100%', cursor: 'pointer' }}
                 />
               </div>
@@ -739,6 +672,7 @@ export const AdvancedSettings: React.FC<AdvancedSettingsProps> = ({ scene }) => 
               )}
             </div>
 
+            {/* These settings are not implemented in the algorithm
             <div style={{ marginBottom: '16px' }}>
               <label style={{ 
                 display: 'flex',
@@ -807,6 +741,7 @@ export const AdvancedSettings: React.FC<AdvancedSettingsProps> = ({ scene }) => 
                 style={{ width: '100%', cursor: 'pointer' }}
               />
             </div>
+            */}
           </div>
 
           {/* Right Column */}
