@@ -2,6 +2,7 @@ import Phaser from 'phaser'
 import { BeamProfile, GridCell } from '../types/beam'
 import { marchingSquaresOptimized, MarchingSquaresOptions } from '../utils/marchingSquaresOptimized'
 import { drawBezierContour } from '../utils/phaserBezierPath'
+import { binaryToScalarField, ScalarFieldMethod } from '../utils/scalarField'
 
 export class BeamElevationScene extends Phaser.Scene {
   private beamProfile: BeamProfile | null = null
@@ -48,6 +49,8 @@ export class BeamElevationScene extends Phaser.Scene {
   private showControlPoints = true // Show marching squares control points in edit mode
   // Marching Squares Algorithm Properties
   private interpolationMethod: 'linear' | 'cubic' | 'none' = 'linear'
+  private scalarFieldMethod: ScalarFieldMethod = 'gaussian'
+  private scalarFieldRadius = 2
   private saddlePointResolution: 'center' | 'gradient' | 'majority' = 'center'
   private threshold = 0.5
   private alignmentMode: 'edges' | 'vertices' | 'center' = 'edges'
@@ -326,11 +329,8 @@ export class BeamElevationScene extends Phaser.Scene {
         }
       })
       
-      // Debug: Log grid for verification (uncomment if needed)
-      // console.log('Grid dimensions:', rows, 'x', cols)
-      // console.log('Sample web cells:', webCells.slice(0, 5))
-      // console.log('Grid values:')
-      // grid.forEach((row, i) => console.log(i, row.join('')))
+      // Convert binary grid to scalar field for interpolation
+      const scalarGrid = binaryToScalarField(grid, this.scalarFieldMethod, this.scalarFieldRadius)
       
       // Apply optimized marching squares
       const marchingOptions: MarchingSquaresOptions = {
@@ -357,7 +357,7 @@ export class BeamElevationScene extends Phaser.Scene {
         clampToGrid: this.clampToGrid,
         extendToBoundary: this.extendToBoundary
       }
-      const contours = marchingSquaresOptimized(grid, marchingOptions)
+      const contours = marchingSquaresOptimized(scalarGrid, marchingOptions)
       // console.log('Generated contours:', contours.length, 'contours')
       // contours.forEach((contour, i) => {
       //   console.log(`Contour ${i}: ${contour.length} points`)
@@ -463,6 +463,9 @@ export class BeamElevationScene extends Phaser.Scene {
       }
     })
     
+    // Convert binary grid to scalar field for interpolation
+    const scalarGrid = binaryToScalarField(grid, this.scalarFieldMethod, this.scalarFieldRadius)
+    
     // Apply marching squares
     const marchingOptions: MarchingSquaresOptions = {
       threshold: this.threshold,
@@ -488,7 +491,7 @@ export class BeamElevationScene extends Phaser.Scene {
       collisionIterations: this.collisionIterations
     }
     
-    const contours = marchingSquaresOptimized(grid, marchingOptions)
+    const contours = marchingSquaresOptimized(scalarGrid, marchingOptions)
     
     // Clear control points
     this.controlPointGraphics.clear()
@@ -1520,6 +1523,33 @@ export class BeamElevationScene extends Phaser.Scene {
   
   public setSnapDistance(distance: number): void {
     this.snapDistance = distance
+    this.drawSectionLoss(
+      100,
+      this.cameras.main.centerY,
+      this.beamLength * this.gridSize
+    )
+  }
+  
+  // Scalar Field Controls
+  public getScalarFieldMethod(): ScalarFieldMethod {
+    return this.scalarFieldMethod
+  }
+  
+  public setScalarFieldMethod(method: ScalarFieldMethod): void {
+    this.scalarFieldMethod = method
+    this.drawSectionLoss(
+      100,
+      this.cameras.main.centerY,
+      this.beamLength * this.gridSize
+    )
+  }
+  
+  public getScalarFieldRadius(): number {
+    return this.scalarFieldRadius
+  }
+  
+  public setScalarFieldRadius(radius: number): void {
+    this.scalarFieldRadius = radius
     this.drawSectionLoss(
       100,
       this.cameras.main.centerY,

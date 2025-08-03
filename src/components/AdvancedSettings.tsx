@@ -31,6 +31,9 @@ export const AdvancedSettings: React.FC<AdvancedSettingsProps> = ({ scene }) => 
   const [collisionMinDistance, setCollisionMinDistance] = useState(0.5)
   const [collisionMethod, setCollisionMethod] = useState<'push' | 'shrink' | 'hybrid'>('hybrid')
   const [collisionIterations, setCollisionIterations] = useState(10)
+  // Scalar Field settings
+  const [scalarFieldMethod, setScalarFieldMethod] = useState<'gaussian' | 'distance' | 'box' | 'none'>('gaussian')
+  const [scalarFieldRadius, setScalarFieldRadius] = useState(2)
 
   useEffect(() => {
     if (scene) {
@@ -78,6 +81,10 @@ export const AdvancedSettings: React.FC<AdvancedSettingsProps> = ({ scene }) => 
         setCollisionMethod(collision.collisionMethod)
         setCollisionIterations(collision.collisionIterations)
       }
+      
+      // Get scalar field settings
+      setScalarFieldMethod(scene.getScalarFieldMethod?.() || 'gaussian')
+      setScalarFieldRadius(scene.getScalarFieldRadius?.() || 2)
     }
   }, [scene])
 
@@ -159,6 +166,11 @@ export const AdvancedSettings: React.FC<AdvancedSettingsProps> = ({ scene }) => 
     setCollisionMethod('hybrid')
     setCollisionIterations(10)
     scene?.setCollisionAvoidance(false, 0.5, 'hybrid', 10)
+    // Scalar Field
+    setScalarFieldMethod('gaussian')
+    setScalarFieldRadius(2)
+    scene?.setScalarFieldMethod?.('gaussian')
+    scene?.setScalarFieldRadius?.(2)
   }
 
   if (!scene) return null
@@ -261,6 +273,72 @@ export const AdvancedSettings: React.FC<AdvancedSettingsProps> = ({ scene }) => 
                   <option value="none">None (Pixelated)</option>
                 </select>
               </div>
+
+              <div style={{ marginBottom: '8px' }}>
+                <label style={{ 
+                  display: 'block',
+                  fontSize: '12px',
+                  color: '#666',
+                  marginBottom: '4px'
+                }}>
+                  Scalar Field Method
+                </label>
+                <select
+                  value={scalarFieldMethod}
+                  onChange={(e) => {
+                    const method = e.target.value as 'gaussian' | 'distance' | 'box' | 'none'
+                    setScalarFieldMethod(method)
+                    scene?.setScalarFieldMethod?.(method)
+                  }}
+                  onInput={(e) => {
+                    const method = (e.target as HTMLSelectElement).value as 'gaussian' | 'distance' | 'box' | 'none'
+                    setScalarFieldMethod(method)
+                    scene?.setScalarFieldMethod?.(method)
+                  }}
+                  style={{
+                    width: '100%',
+                    padding: '4px 8px',
+                    fontSize: '12px',
+                    border: '1px solid #ddd',
+                    borderRadius: '4px',
+                    background: 'white',
+                    cursor: 'pointer'
+                  }}
+                >
+                  <option value="gaussian">Gaussian Blur</option>
+                  <option value="distance">Distance Field</option>
+                  <option value="box">Box Blur</option>
+                  <option value="none">None (Binary)</option>
+                </select>
+              </div>
+
+              {scalarFieldMethod !== 'none' && (
+                <div style={{ marginBottom: '8px' }}>
+                  <label style={{ 
+                    display: 'flex', 
+                    justifyContent: 'space-between',
+                    alignItems: 'center',
+                    fontSize: '12px',
+                    color: '#666'
+                  }}>
+                    Blur Radius
+                    <span style={{ fontWeight: 'bold', color: '#333' }}>{scalarFieldRadius}</span>
+                  </label>
+                  <input
+                    type="range"
+                    min="1"
+                    max="5"
+                    step="1"
+                    value={scalarFieldRadius}
+                    onChange={(e) => {
+                      const radius = parseInt(e.target.value)
+                      setScalarFieldRadius(radius)
+                      scene?.setScalarFieldRadius?.(radius)
+                    }}
+                    style={{ width: '100%', cursor: 'pointer' }}
+                  />
+                </div>
+              )}
 
               <div style={{ marginBottom: '8px' }}>
                 <label style={{ 
@@ -826,7 +904,7 @@ export const AdvancedSettings: React.FC<AdvancedSettingsProps> = ({ scene }) => 
         }}>
           <strong>Algorithm</strong> controls how marching squares generates contours.
           <br />
-          <strong>Cell offsets</strong> adjust contour position within grid cells.
+          <strong>Scalar field</strong> converts binary data to gradients, enabling interpolation methods to show differences.
           <br />
           <strong>Global offsets</strong> shift the entire contour in grid units.
           <br />
