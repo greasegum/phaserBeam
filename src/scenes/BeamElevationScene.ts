@@ -29,13 +29,13 @@ export class BeamElevationScene extends Phaser.Scene {
   // Marching squares alignment offsets
   private contourOffsetX = 0 // Cell offset removed - use global offset
   private contourOffsetY = 0 // Cell offset removed - use global offset
-  private contourGlobalOffsetX = -0.5 // Default -0.5 to center contours on cells
-  private contourGlobalOffsetY = -0.5 // Default -0.5 to center contours on cells
+  private contourGlobalOffsetX = 0.5 // Default 0.5 to center contours on cells
+  private contourGlobalOffsetY = 0.5 // Default 0.5 to center contours on cells
   // Marching squares buffer configuration
   private contourBufferSize = 1 // Default buffer of 1 for proper edge handling
   private contourBufferValue = 0 // Default buffer value
   // Smoothing options
-  private smoothingMethod: 'basic' | 'laplacian' | 'chaikin' | 'bilateral' | 'savitzky-golay' | 'catmull-rom' = 'basic'
+  private smoothingMethod: 'basic' | 'laplacian' | 'chaikin' | 'bilateral' | 'savitzky-golay' | 'catmull-rom' | 'edge-aware' | 'intelligent' = 'edge-aware'
   private smoothingIterations = 2
   private smoothingStrength = 0.5
   // Collision avoidance options
@@ -1368,7 +1368,7 @@ export class BeamElevationScene extends Phaser.Scene {
     }
   }
   
-  public setSmoothingOptions(method: 'basic' | 'laplacian' | 'chaikin' | 'bilateral' | 'savitzky-golay' | 'catmull-rom', iterations: number, strength: number): void {
+  public setSmoothingOptions(method: 'basic' | 'laplacian' | 'chaikin' | 'bilateral' | 'savitzky-golay' | 'catmull-rom' | 'edge-aware' | 'intelligent', iterations: number, strength: number): void {
     this.smoothingMethod = method
     this.smoothingIterations = iterations
     this.smoothingStrength = strength
@@ -1379,7 +1379,7 @@ export class BeamElevationScene extends Phaser.Scene {
     )
   }
   
-  public getSmoothingOptions(): { smoothingMethod: 'basic' | 'laplacian' | 'chaikin' | 'bilateral' | 'savitzky-golay' | 'catmull-rom'; smoothingIterations: number; smoothingStrength: number } {
+  public getSmoothingOptions(): { smoothingMethod: 'basic' | 'laplacian' | 'chaikin' | 'bilateral' | 'savitzky-golay' | 'catmull-rom' | 'edge-aware' | 'intelligent'; smoothingIterations: number; smoothingStrength: number } {
     return {
       smoothingMethod: this.smoothingMethod,
       smoothingIterations: this.smoothingIterations,

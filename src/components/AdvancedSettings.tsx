@@ -13,8 +13,8 @@ export const AdvancedSettings: React.FC<AdvancedSettingsProps> = ({ scene }) => 
   const [threshold, setThreshold] = useState(0.5)
   // Geometry
   const [alignmentMode, setAlignmentMode] = useState<'edges' | 'vertices' | 'center'>('edges')
-  const [globalOffsetX, setGlobalOffsetX] = useState(-0.5)
-  const [globalOffsetY, setGlobalOffsetY] = useState(-0.5)
+  const [globalOffsetX, setGlobalOffsetX] = useState(0.5)
+  const [globalOffsetY, setGlobalOffsetY] = useState(0.5)
   const [bufferSize, setBufferSize] = useState(1)
   const [bufferValue, setBufferValue] = useState(0)
   const [clampToGrid, setClampToGrid] = useState(true)
@@ -124,8 +124,8 @@ export const AdvancedSettings: React.FC<AdvancedSettingsProps> = ({ scene }) => 
         setSaddlePointResolution('center')
         setThreshold(0.5)
         setAlignmentMode('edges')
-        setGlobalOffsetX(-0.5) // Center on cells
-        setGlobalOffsetY(-0.5) // Center on cells
+        setGlobalOffsetX(0.5) // Center on cells
+        setGlobalOffsetY(0.5) // Center on cells
         setBufferSize(1) // Natural 1-cell buffer
         setBufferValue(0)
         setClampToGrid(true)
@@ -143,7 +143,7 @@ export const AdvancedSettings: React.FC<AdvancedSettingsProps> = ({ scene }) => 
         scene?.setThreshold?.(0.5)
         scene?.setAlignmentMode?.('edges')
         // Cell offsets removed - using global offsets only
-        scene?.setContourGlobalOffsets(-0.5, -0.5)
+        scene?.setContourGlobalOffsets(0.5, 0.5)
         scene?.setContourBuffer(1, 0)
         scene?.setClampToGrid?.(true)
         scene?.setExtendToBoundary?.(false)
@@ -160,8 +160,8 @@ export const AdvancedSettings: React.FC<AdvancedSettingsProps> = ({ scene }) => 
         setSaddlePointResolution('gradient')
         setThreshold(0.5)
         setAlignmentMode('center')
-        setGlobalOffsetX(-0.5)
-        setGlobalOffsetY(-0.5)
+        setGlobalOffsetX(0.5)
+        setGlobalOffsetY(0.5)
         setBufferSize(2)
         setBufferValue(0)
         setClampToGrid(true)
@@ -182,7 +182,7 @@ export const AdvancedSettings: React.FC<AdvancedSettingsProps> = ({ scene }) => 
         scene?.setThreshold?.(0.5)
         scene?.setAlignmentMode?.('center')
         // Cell offsets removed - using global offsets only
-        scene?.setContourGlobalOffsets(-0.5, -0.5)
+        scene?.setContourGlobalOffsets(0.5, 0.5)
         scene?.setContourBuffer(2, 0)
         scene?.setClampToGrid?.(true)
         scene?.setExtendToBoundary?.(false)
@@ -199,8 +199,8 @@ export const AdvancedSettings: React.FC<AdvancedSettingsProps> = ({ scene }) => 
         setSaddlePointResolution('majority')
         setThreshold(0.5)
         setAlignmentMode('vertices')
-        setGlobalOffsetX(-0.5)
-        setGlobalOffsetY(-0.5)
+        setGlobalOffsetX(0.5)
+        setGlobalOffsetY(0.5)
         setBufferSize(1)
         setBufferValue(0)
         setClampToGrid(true)
@@ -221,7 +221,7 @@ export const AdvancedSettings: React.FC<AdvancedSettingsProps> = ({ scene }) => 
         scene?.setThreshold?.(0.5)
         scene?.setAlignmentMode?.('vertices')
         // Cell offsets removed - using global offsets only
-        scene?.setContourGlobalOffsets(-0.5, -0.5)
+        scene?.setContourGlobalOffsets(0.5, 0.5)
         scene?.setContourBuffer(1, 0)
         scene?.setClampToGrid?.(true)
         scene?.setExtendToBoundary?.(true)
@@ -248,8 +248,8 @@ export const AdvancedSettings: React.FC<AdvancedSettingsProps> = ({ scene }) => 
     scene?.setThreshold?.(0.5)
     // Geometry
     setAlignmentMode('edges')
-    setGlobalOffsetX(-0.5)
-    setGlobalOffsetY(-0.5)
+    setGlobalOffsetX(0.5)
+    setGlobalOffsetY(0.5)
     setBufferSize(1)
     setBufferValue(0)
     setClampToGrid(true)
@@ -761,14 +761,14 @@ export const AdvancedSettings: React.FC<AdvancedSettingsProps> = ({ scene }) => 
               }}>
                 <input
                   type="checkbox"
-                  checked={showRawMarchingSquares}
+                  checked={!showRawMarchingSquares}
                   onChange={(e) => {
-                    setShowRawMarchingSquares(e.target.checked)
-                    scene?.setShowRawMarchingSquares?.(e.target.checked)
+                    setShowRawMarchingSquares(!e.target.checked)
+                    scene?.setShowRawMarchingSquares?.(!e.target.checked)
                   }}
                   style={{ cursor: 'pointer' }}
                 />
-                Show Raw Marching Squares (No Smoothing)
+                Smoothing
               </label>
 
               <label style={{ 
