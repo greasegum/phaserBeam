@@ -625,11 +625,14 @@ function getInterpolatedEdgePointCached(
 ): Point {
   let x: number, y: number
   
+  // For center mode, we need to bypass the cache since we're modifying the points
+  const useCache = alignmentMode !== 'center'
+  
   switch (edge) {
     case 0: // top edge
       {
         const cacheKey = `${cellY},${cellX}`
-        if (edgeCache.horizontal.has(cacheKey)) {
+        if (useCache && edgeCache.horizontal.has(cacheKey)) {
           x = edgeCache.horizontal.get(cacheKey)!
           y = cellY
         } else {
@@ -638,7 +641,9 @@ function getInterpolatedEdgePointCached(
           const t = interpolate(tl, tr, threshold, interpolationMethod)
           x = cellX + t
           y = cellY
-          edgeCache.horizontal.set(cacheKey, x)
+          if (useCache) {
+            edgeCache.horizontal.set(cacheKey, x)
+          }
         }
       }
       break
@@ -646,7 +651,7 @@ function getInterpolatedEdgePointCached(
     case 1: // right edge
       {
         const cacheKey = `${cellY},${cellX + 1}`
-        if (edgeCache.vertical.has(cacheKey)) {
+        if (useCache && edgeCache.vertical.has(cacheKey)) {
           x = cellX + 1
           y = edgeCache.vertical.get(cacheKey)!
         } else {
@@ -655,7 +660,9 @@ function getInterpolatedEdgePointCached(
           const t = interpolate(tr, br, threshold, interpolationMethod)
           x = cellX + 1
           y = cellY + t
-          edgeCache.vertical.set(cacheKey, y)
+          if (useCache) {
+            edgeCache.vertical.set(cacheKey, y)
+          }
         }
       }
       break
@@ -663,7 +670,7 @@ function getInterpolatedEdgePointCached(
     case 2: // bottom edge
       {
         const cacheKey = `${cellY + 1},${cellX}`
-        if (edgeCache.horizontal.has(cacheKey)) {
+        if (useCache && edgeCache.horizontal.has(cacheKey)) {
           x = edgeCache.horizontal.get(cacheKey)!
           y = cellY + 1
         } else {
@@ -672,7 +679,9 @@ function getInterpolatedEdgePointCached(
           const t = interpolate(bl, br, threshold, interpolationMethod)
           x = cellX + t
           y = cellY + 1
-          edgeCache.horizontal.set(cacheKey, x)
+          if (useCache) {
+            edgeCache.horizontal.set(cacheKey, x)
+          }
         }
       }
       break
@@ -680,7 +689,7 @@ function getInterpolatedEdgePointCached(
     case 3: // left edge
       {
         const cacheKey = `${cellY},${cellX}`
-        if (edgeCache.vertical.has(cacheKey)) {
+        if (useCache && edgeCache.vertical.has(cacheKey)) {
           x = cellX
           y = edgeCache.vertical.get(cacheKey)!
         } else {
@@ -689,7 +698,9 @@ function getInterpolatedEdgePointCached(
           const t = interpolate(tl, bl, threshold, interpolationMethod)
           x = cellX
           y = cellY + t
-          edgeCache.vertical.set(cacheKey, y)
+          if (useCache) {
+            edgeCache.vertical.set(cacheKey, y)
+          }
         }
       }
       break
@@ -798,9 +809,11 @@ function buildContour(
       const seg = segments[segIndex]
       let nextPoint: Point | null = null
       
-      if (pointsEqual(seg.p1, currentPoint)) {
+      // Use a larger epsilon for center mode since points may be slightly offset
+      const epsilon = 0.001
+      if (pointsEqual(seg.p1, currentPoint, epsilon)) {
         nextPoint = seg.p2
-      } else if (pointsEqual(seg.p2, currentPoint)) {
+      } else if (pointsEqual(seg.p2, currentPoint, epsilon)) {
         nextPoint = seg.p1
       }
       
@@ -916,7 +929,8 @@ function calculateContourArea(contour: Point[]): number {
 // Utility functions
 function pointKey(p: Point): string {
   // Round to avoid floating point comparison issues
-  return `${Math.round(p.x * 10000)},${Math.round(p.y * 10000)}`
+  // Use coarser rounding (1000 instead of 10000) for better matching with center mode
+  return `${Math.round(p.x * 1000)},${Math.round(p.y * 1000)}`
 }
 
 function pointsEqual(p1: Point, p2: Point, epsilon: number = 1e-10): boolean {
