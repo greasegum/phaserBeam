@@ -263,7 +263,7 @@ export class ProfessionalBeamScene extends Phaser.Scene {
         // Transform points to screen space
         contour.points.forEach((point, index) => {
           const screenX = centerX + point.x * this.GRID_SIZE
-          const screenY = webTop + (beamProfile.webHeight - point.y) * this.GRID_SIZE
+          const screenY = webTop + point.y * this.GRID_SIZE
           
           if (index === 0) {
             this.layers.contours.moveTo(screenX, screenY)
