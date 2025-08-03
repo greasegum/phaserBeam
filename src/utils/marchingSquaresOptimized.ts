@@ -10,6 +10,10 @@ import {
   applyCollisionAvoidanceWithConstraints,
   CollisionAvoidanceOptions 
 } from './contourCollisionAvoidance'
+import {
+  validateAndRepairContours,
+  ValidationOptions
+} from './contourValidation'
 
 export interface Point {
   x: number
@@ -62,6 +66,12 @@ export interface MarchingSquaresOptions {
   collisionMinDistance?: number // Minimum distance between contours in grid units (default: 0.5)
   collisionMethod?: 'push' | 'shrink' | 'hybrid' // Collision resolution method (default: 'hybrid')
   collisionIterations?: number // Max iterations for collision resolution (default: 10)
+  // Validation options
+  validateContours?: boolean // Enable contour validation and repair (default: true)
+  removeSelfIntersections?: boolean // Remove self-intersections (default: true)
+  ensureClockwise?: boolean // Ensure clockwise orientation (default: true)
+  mergeClosePoints?: boolean // Merge points that are too close (default: true)
+  mergeDistance?: number // Distance threshold for merging points (default: 0.01)
 }
 
 // Validate and auto-correct conflicting parameters
@@ -143,7 +153,12 @@ export function marchingSquaresOptimized(
     collisionAvoidance = false,
     collisionMinDistance = 0.5,
     collisionMethod = 'hybrid',
-    collisionIterations = 10
+    collisionIterations = 10,
+    validateContours = true,
+    removeSelfIntersections = true,
+    ensureClockwise = true,
+    mergeClosePoints = true,
+    mergeDistance = 0.01
   } = validatedOptions
 
   let processGrid = grid
@@ -355,6 +370,19 @@ export function marchingSquaresOptimized(
     )
   }
   
+  // Validate and repair contours if requested
+  if (validateContours) {
+    const validationOptions: ValidationOptions = {
+      removeSelfIntersections,
+      ensureClockwise,
+      minSegmentLength: mergeDistance,
+      mergeClosePoints,
+      mergeDistance
+    }
+    
+    finalContours = validateAndRepairContours(finalContours, validationOptions)
+  }
+  
   return finalContours
 }
 
@@ -501,7 +529,13 @@ function processCellOptimized(
       // Use majority vote - connect based on which diagonal has more similar values
       const diag1Diff = Math.abs(tl - br) // Top-left to bottom-right
       const diag2Diff = Math.abs(tr - bl) // Top-right to bottom-left
-      connectDiagonally = diag1Diff > diag2Diff
+      // For case 5: smaller diff means connect tl-br
+      // For case 10: smaller diff means connect tr-bl
+      if (config === 5) {
+        connectDiagonally = diag1Diff < diag2Diff
+      } else {
+        connectDiagonally = diag2Diff < diag1Diff
+      }
     }
     
     if (connectDiagonally) {
