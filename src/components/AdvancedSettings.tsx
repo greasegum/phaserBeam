@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react'
 import { BeamElevationScene } from '../scenes/BeamElevationScene'
+import { HelpTooltip } from './HelpTooltip'
 
 interface AdvancedSettingsProps {
   scene?: BeamElevationScene
@@ -245,6 +246,7 @@ export const AdvancedSettings: React.FC<AdvancedSettingsProps> = ({ scene }) => 
                   marginBottom: '4px'
                 }}>
                   Interpolation Method
+                  <HelpTooltip text="Controls how contour points are positioned along cell edges. Linear gives smooth curves, Cubic provides smoother S-curves, None creates pixelated edges." />
                 </label>
                 <select
                   value={interpolationMethod}
@@ -282,6 +284,7 @@ export const AdvancedSettings: React.FC<AdvancedSettingsProps> = ({ scene }) => 
                   marginBottom: '4px'
                 }}>
                   Scalar Field Method
+                  <HelpTooltip text="Converts binary grid data to continuous gradients. Gaussian blur creates smooth transitions, Distance field generates gradients based on distance to edges, Box blur provides simple averaging." />
                 </label>
                 <select
                   value={scalarFieldMethod}
@@ -321,7 +324,10 @@ export const AdvancedSettings: React.FC<AdvancedSettingsProps> = ({ scene }) => 
                     fontSize: '12px',
                     color: '#666'
                   }}>
-                    Blur Radius
+                    <span style={{ display: 'flex', alignItems: 'center' }}>
+                      Blur Radius
+                      <HelpTooltip text="The size of the blur kernel in grid cells. Larger values create smoother gradients but may round corners more." />
+                    </span>
                     <span style={{ fontWeight: 'bold', color: '#333' }}>{scalarFieldRadius}</span>
                   </label>
                   <input
@@ -348,6 +354,7 @@ export const AdvancedSettings: React.FC<AdvancedSettingsProps> = ({ scene }) => 
                   marginBottom: '4px'
                 }}>
                   Saddle Point Resolution
+                  <HelpTooltip text="Determines how ambiguous marching squares cases are resolved. Center uses the cell center value, Gradient follows the steepest gradient, Majority uses the most common corner value." />
                 </label>
                 <select
                   value={saddlePointResolution}
@@ -385,7 +392,10 @@ export const AdvancedSettings: React.FC<AdvancedSettingsProps> = ({ scene }) => 
                   fontSize: '12px',
                   color: '#666'
                 }}>
-                  Threshold
+                  <span style={{ display: 'flex', alignItems: 'center' }}>
+                    Threshold
+                    <HelpTooltip text="The value that determines the contour boundary. Values above this threshold are considered inside the shape." />
+                  </span>
                   <span style={{ fontWeight: 'bold', color: '#333' }}>{threshold.toFixed(2)}</span>
                 </label>
                 <input
@@ -417,6 +427,7 @@ export const AdvancedSettings: React.FC<AdvancedSettingsProps> = ({ scene }) => 
                   marginBottom: '4px'
                 }}>
                   Alignment Mode
+                  <HelpTooltip text="Controls where contours are drawn relative to grid cells. Edge aligned follows cell edges, Vertex aligned connects cell corners, Center aligned passes through cell centers." />
                 </label>
                 <select
                   value={alignmentMode}
@@ -457,7 +468,10 @@ export const AdvancedSettings: React.FC<AdvancedSettingsProps> = ({ scene }) => 
                   fontSize: '12px',
                   color: '#666'
                 }}>
-                  Global Offset X
+                  <span style={{ display: 'flex', alignItems: 'center' }}>
+                    Global Offset X
+                    <HelpTooltip text="Shifts the entire contour horizontally in grid units. 0 is centered on grid cells." />
+                  </span>
                   <span style={{ fontWeight: 'bold', color: '#333' }}>{globalOffsetX.toFixed(2)}</span>
                 </label>
                 <input
@@ -479,7 +493,10 @@ export const AdvancedSettings: React.FC<AdvancedSettingsProps> = ({ scene }) => 
                   fontSize: '12px',
                   color: '#666'
                 }}>
-                  Global Offset Y
+                  <span style={{ display: 'flex', alignItems: 'center' }}>
+                    Global Offset Y
+                    <HelpTooltip text="Shifts the entire contour vertically in grid units. 0 is centered on grid cells." />
+                  </span>
                   <span style={{ fontWeight: 'bold', color: '#333' }}>{globalOffsetY.toFixed(2)}</span>
                 </label>
                 <input
@@ -503,7 +520,10 @@ export const AdvancedSettings: React.FC<AdvancedSettingsProps> = ({ scene }) => 
                   fontSize: '12px',
                   color: '#666'
                 }}>
-                  Buffer Size
+                  <span style={{ display: 'flex', alignItems: 'center' }}>
+                    Buffer Size
+                    <HelpTooltip text="Extends the grid beyond visible edges by this many cells. Ensures proper edge detection and prevents contour clipping." />
+                  </span>
                   <span style={{ fontWeight: 'bold', color: '#333' }}>{bufferSize}</span>
                 </label>
                 <input
@@ -529,7 +549,10 @@ export const AdvancedSettings: React.FC<AdvancedSettingsProps> = ({ scene }) => 
                     fontSize: '12px',
                     color: '#666'
                   }}>
-                    Buffer Value
+                    <span style={{ display: 'flex', alignItems: 'center' }}>
+                      Buffer Value
+                      <HelpTooltip text="The value to fill buffer cells with. Set below threshold for empty buffer, above threshold to extend the shape." />
+                    </span>
                     <span style={{ fontWeight: 'bold', color: bufferValue > threshold ? '#ff6b6b' : '#333' }}>
                       {bufferValue.toFixed(2)}
                     </span>
@@ -657,6 +680,7 @@ export const AdvancedSettings: React.FC<AdvancedSettingsProps> = ({ scene }) => 
                   style={{ cursor: 'pointer' }}
                 />
                 Smoothing
+                <HelpTooltip text="Enables post-processing smoothing algorithms on the contours. Turn off to see raw marching squares output." />
               </label>
 
               <label style={{ 
@@ -678,6 +702,7 @@ export const AdvancedSettings: React.FC<AdvancedSettingsProps> = ({ scene }) => 
                   style={{ cursor: 'pointer' }}
                 />
                 Show Control Points
+                <HelpTooltip text="Displays the actual points generated by marching squares. Useful for debugging and understanding the algorithm." />
               </label>
             </div>
 
@@ -696,6 +721,7 @@ export const AdvancedSettings: React.FC<AdvancedSettingsProps> = ({ scene }) => 
                       marginBottom: '4px'
                     }}>
                       Smoothing Method
+                      <HelpTooltip text="Post-processing to smooth contours. Basic averages points, Laplacian preserves edges, Chaikin subdivides curves, Bilateral preserves features, Edge-aware handles transitions intelligently." />
                     </label>
                     <select
                       value={smoothingMethod}
@@ -730,7 +756,10 @@ export const AdvancedSettings: React.FC<AdvancedSettingsProps> = ({ scene }) => 
                       fontSize: '12px',
                       color: '#666'
                     }}>
-                      Smoothing Iterations
+                      <span style={{ display: 'flex', alignItems: 'center' }}>
+                        Smoothing Iterations
+                        <HelpTooltip text="Number of times to apply the smoothing algorithm. More iterations create smoother curves but may lose detail." />
+                      </span>
                       <span style={{ fontWeight: 'bold', color: '#333' }}>{smoothingIterations}</span>
                     </label>
                     <input
@@ -752,7 +781,10 @@ export const AdvancedSettings: React.FC<AdvancedSettingsProps> = ({ scene }) => 
                       fontSize: '12px',
                       color: '#666'
                     }}>
-                      Smoothing Strength
+                      <span style={{ display: 'flex', alignItems: 'center' }}>
+                        Smoothing Strength
+                        <HelpTooltip text="How much to smooth each iteration. 0 is no smoothing, 1 is maximum smoothing." />
+                      </span>
                       <span style={{ fontWeight: 'bold', color: '#333' }}>{smoothingStrength.toFixed(2)}</span>
                     </label>
                     <input
@@ -789,6 +821,7 @@ export const AdvancedSettings: React.FC<AdvancedSettingsProps> = ({ scene }) => 
                   style={{ cursor: 'pointer' }}
                 />
                 Enable Collision Avoidance
+                <HelpTooltip text="Prevents contours from overlapping by pushing them apart or shrinking them. Useful when multiple regions are close together." />
               </label>
 
               {collisionAvoidance && (
@@ -801,7 +834,10 @@ export const AdvancedSettings: React.FC<AdvancedSettingsProps> = ({ scene }) => 
                       fontSize: '12px',
                       color: '#666'
                     }}>
-                      Min Distance
+                      <span style={{ display: 'flex', alignItems: 'center' }}>
+                        Min Distance
+                        <HelpTooltip text="Minimum allowed distance between contours in grid units. Contours closer than this will be pushed apart." />
+                      </span>
                       <span style={{ fontWeight: 'bold', color: '#333' }}>{collisionMinDistance.toFixed(2)}</span>
                     </label>
                     <input
@@ -823,6 +859,7 @@ export const AdvancedSettings: React.FC<AdvancedSettingsProps> = ({ scene }) => 
                       marginBottom: '4px'
                     }}>
                       Method
+                      <HelpTooltip text="How to resolve collisions. Push moves contours apart, Shrink reduces their size, Hybrid combines both approaches." />
                     </label>
                     <select
                       value={collisionMethod}
@@ -852,7 +889,10 @@ export const AdvancedSettings: React.FC<AdvancedSettingsProps> = ({ scene }) => 
                       fontSize: '12px',
                       color: '#666'
                     }}>
-                      Iterations
+                      <span style={{ display: 'flex', alignItems: 'center' }}>
+                        Iterations
+                        <HelpTooltip text="Maximum number of iterations to resolve collisions. More iterations ensure better separation but take longer." />
+                      </span>
                       <span style={{ fontWeight: 'bold', color: '#333' }}>{collisionIterations}</span>
                     </label>
                     <input
@@ -892,30 +932,6 @@ export const AdvancedSettings: React.FC<AdvancedSettingsProps> = ({ scene }) => 
           Reset to Defaults
         </button>
 
-        {/* Help Text - Full Width */}
-        <div style={{
-          marginTop: '12px',
-          padding: '8px',
-          background: '#f9f9f9',
-          borderRadius: '4px',
-          fontSize: '11px',
-          color: '#666',
-          lineHeight: '1.4'
-        }}>
-          <strong>Algorithm</strong> controls how marching squares generates contours.
-          <br />
-          <strong>Scalar field</strong> converts binary data to gradients, enabling interpolation methods to show differences.
-          <br />
-          <strong>Global offsets</strong> shift the entire contour in grid units.
-          <br />
-          <strong>Edge behavior</strong> controls boundary handling.
-          <br />
-          <strong>View mode</strong> toggles visual debugging options.
-          <br />
-          <strong>Smoothing</strong> applies post-processing to create smoother contours.
-          <br />
-          <strong>Collision</strong> prevents neighboring regions from overlapping.
-        </div>
       </div>
     </div>
   )
