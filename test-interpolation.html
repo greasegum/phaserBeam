@@ -1,0 +1,182 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Interpolation Method Comparison</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        .container { display: flex; gap: 20px; flex-wrap: wrap; }
+        .method { border: 1px solid #ccc; padding: 10px; }
+        canvas { border: 1px solid #ddd; display: block; margin: 10px 0; }
+        h3 { margin-top: 0; }
+        .controls { margin-bottom: 20px; }
+    </style>
+</head>
+<body>
+    <h1>Marching Squares Interpolation Method Comparison</h1>
+    <div class="controls">
+        <label>Threshold: <input type="range" id="threshold" min="0" max="1" step="0.05" value="0.5">
+        <span id="thresholdValue">0.5</span></label>
+    </div>
+    <div class="container">
+        <div class="method">
+            <h3>Linear Interpolation</h3>
+            <canvas id="linear" width="300" height="300"></canvas>
+            <p>Smooth transitions between cells</p>
+        </div>
+        <div class="method">
+            <h3>Cubic Interpolation</h3>
+            <canvas id="cubic" width="300" height="300"></canvas>
+            <p>Smoother S-curve transitions</p>
+        </div>
+        <div class="method">
+            <h3>No Interpolation</h3>
+            <canvas id="none" width="300" height="300"></canvas>
+            <p>Pixelated/stepped appearance</p>
+        </div>
+    </div>
+
+    <script>
+        // Simple grid data with gradient
+        const gridSize = 10;
+        const cellSize = 30;
+        
+        function createGrid() {
+            const grid = [];
+            for (let y = 0; y < gridSize; y++) {
+                const row = [];
+                for (let x = 0; x < gridSize; x++) {
+                    // Create a circular gradient
+                    const dx = x - gridSize/2;
+                    const dy = y - gridSize/2;
+                    const dist = Math.sqrt(dx*dx + dy*dy);
+                    const value = 1 - (dist / (gridSize/2));
+                    row.push(Math.max(0, Math.min(1, value)));
+                }
+                grid.push(row);
+            }
+            return grid;
+        }
+
+        function interpolate(v1, v2, threshold, method) {
+            if (Math.abs(v1 - v2) < 1e-10) return 0.5;
+            if (method === 'none') return 0.5;
+            
+            const t = (threshold - v1) / (v2 - v1);
+            const tClamped = Math.max(0, Math.min(1, t));
+            
+            if (method === 'linear') {
+                return tClamped;
+            } else if (method === 'cubic') {
+                const t2 = tClamped * tClamped;
+                const t3 = t2 * tClamped;
+                return 3 * t2 - 2 * t3;
+            }
+            return tClamped;
+        }
+
+        function drawMarchingSquares(canvas, grid, threshold, method) {
+            const ctx = canvas.getContext('2d');
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            
+            // Draw grid cells
+            ctx.strokeStyle = '#eee';
+            for (let y = 0; y <= gridSize; y++) {
+                ctx.beginPath();
+                ctx.moveTo(0, y * cellSize);
+                ctx.lineTo(gridSize * cellSize, y * cellSize);
+                ctx.stroke();
+            }
+            for (let x = 0; x <= gridSize; x++) {
+                ctx.beginPath();
+                ctx.moveTo(x * cellSize, 0);
+                ctx.lineTo(x * cellSize, gridSize * cellSize);
+                ctx.stroke();
+            }
+            
+            // Draw contours
+            ctx.strokeStyle = '#0066cc';
+            ctx.lineWidth = 2;
+            
+            for (let y = 0; y < gridSize - 1; y++) {
+                for (let x = 0; x < gridSize - 1; x++) {
+                    const tl = grid[y][x];
+                    const tr = grid[y][x + 1];
+                    const br = grid[y + 1][x + 1];
+                    const bl = grid[y + 1][x];
+                    
+                    // Calculate marching squares case
+                    let caseIndex = 0;
+                    if (tl > threshold) caseIndex |= 8;
+                    if (tr > threshold) caseIndex |= 4;
+                    if (br > threshold) caseIndex |= 2;
+                    if (bl > threshold) caseIndex |= 1;
+                    
+                    // Draw edges based on case
+                    ctx.beginPath();
+                    
+                    switch (caseIndex) {
+                        case 1: case 14: // Bottom-left
+                            ctx.moveTo(x * cellSize, (y + interpolate(tl, bl, threshold, method)) * cellSize);
+                            ctx.lineTo((x + interpolate(bl, br, threshold, method)) * cellSize, (y + 1) * cellSize);
+                            break;
+                        case 2: case 13: // Bottom-right
+                            ctx.moveTo((x + interpolate(bl, br, threshold, method)) * cellSize, (y + 1) * cellSize);
+                            ctx.lineTo((x + 1) * cellSize, (y + interpolate(tr, br, threshold, method)) * cellSize);
+                            break;
+                        case 3: case 12: // Bottom
+                            ctx.moveTo(x * cellSize, (y + interpolate(tl, bl, threshold, method)) * cellSize);
+                            ctx.lineTo((x + 1) * cellSize, (y + interpolate(tr, br, threshold, method)) * cellSize);
+                            break;
+                        case 4: case 11: // Top-right
+                            ctx.moveTo((x + interpolate(tl, tr, threshold, method)) * cellSize, y * cellSize);
+                            ctx.lineTo((x + 1) * cellSize, (y + interpolate(tr, br, threshold, method)) * cellSize);
+                            break;
+                        case 5: // Saddle case
+                            ctx.moveTo(x * cellSize, (y + interpolate(tl, bl, threshold, method)) * cellSize);
+                            ctx.lineTo((x + interpolate(tl, tr, threshold, method)) * cellSize, y * cellSize);
+                            ctx.stroke();
+                            ctx.beginPath();
+                            ctx.moveTo((x + interpolate(bl, br, threshold, method)) * cellSize, (y + 1) * cellSize);
+                            ctx.lineTo((x + 1) * cellSize, (y + interpolate(tr, br, threshold, method)) * cellSize);
+                            break;
+                        case 6: case 9: // Right
+                            ctx.moveTo((x + interpolate(tl, tr, threshold, method)) * cellSize, y * cellSize);
+                            ctx.lineTo((x + interpolate(bl, br, threshold, method)) * cellSize, (y + 1) * cellSize);
+                            break;
+                        case 7: case 8: // Top-left
+                            ctx.moveTo(x * cellSize, (y + interpolate(tl, bl, threshold, method)) * cellSize);
+                            ctx.lineTo((x + interpolate(tl, tr, threshold, method)) * cellSize, y * cellSize);
+                            break;
+                        case 10: // Saddle case
+                            ctx.moveTo((x + interpolate(tl, tr, threshold, method)) * cellSize, y * cellSize);
+                            ctx.lineTo((x + 1) * cellSize, (y + interpolate(tr, br, threshold, method)) * cellSize);
+                            ctx.stroke();
+                            ctx.beginPath();
+                            ctx.moveTo(x * cellSize, (y + interpolate(tl, bl, threshold, method)) * cellSize);
+                            ctx.lineTo((x + interpolate(bl, br, threshold, method)) * cellSize, (y + 1) * cellSize);
+                            break;
+                    }
+                    
+                    ctx.stroke();
+                }
+            }
+        }
+
+        const grid = createGrid();
+        const thresholdInput = document.getElementById('threshold');
+        const thresholdValue = document.getElementById('thresholdValue');
+        
+        function update() {
+            const threshold = parseFloat(thresholdInput.value);
+            thresholdValue.textContent = threshold.toFixed(2);
+            
+            drawMarchingSquares(document.getElementById('linear'), grid, threshold, 'linear');
+            drawMarchingSquares(document.getElementById('cubic'), grid, threshold, 'cubic');
+            drawMarchingSquares(document.getElementById('none'), grid, threshold, 'none');
+        }
+        
+        thresholdInput.addEventListener('input', update);
+        update();
+    </script>
+</body>
+</html>
