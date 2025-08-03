@@ -66,17 +66,21 @@ export const AdvancedSettings: React.FC<AdvancedSettingsProps> = ({ scene }) => 
       }
       
       // Get smoothing
-      const smoothing = scene.getSmoothingOptions()
-      setSmoothingMethod(smoothing.smoothingMethod || 'basic')
-      setSmoothingIterations(smoothing.smoothingIterations || 2)
-      setSmoothingStrength(smoothing.smoothingStrength || 0.5)
+      const smoothing = scene.getSmoothingOptions?.()
+      if (smoothing) {
+        setSmoothingMethod(smoothing.smoothingMethod || 'basic')
+        setSmoothingIterations(smoothing.smoothingIterations || 2)
+        setSmoothingStrength(smoothing.smoothingStrength || 0.5)
+      }
       
       // Get collision
-      const collision = scene.getCollisionAvoidance()
-      setCollisionAvoidance(collision.collisionAvoidance)
-      setCollisionMinDistance(collision.collisionMinDistance)
-      setCollisionMethod(collision.collisionMethod)
-      setCollisionIterations(collision.collisionIterations)
+      const collision = scene.getCollisionAvoidance?.()
+      if (collision) {
+        setCollisionAvoidance(collision.collisionAvoidance)
+        setCollisionMinDistance(collision.collisionMinDistance)
+        setCollisionMethod(collision.collisionMethod)
+        setCollisionIterations(collision.collisionIterations)
+      }
     }
   }, [scene])
 

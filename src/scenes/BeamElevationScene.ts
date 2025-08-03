@@ -1354,12 +1354,12 @@ export class BeamElevationScene extends Phaser.Scene {
     )
   }
   
-  public getContourOffsets(): { offsetX: number; offsetY: number; globalOffsetX: number; globalOffsetY: number } {
+  public getContourOffsets(): { cellX: number; cellY: number; globalX: number; globalY: number } {
     return {
-      offsetX: this.contourOffsetX,
-      offsetY: this.contourOffsetY,
-      globalOffsetX: this.contourGlobalOffsetX,
-      globalOffsetY: this.contourGlobalOffsetY
+      cellX: this.contourOffsetX,
+      cellY: this.contourOffsetY,
+      globalX: this.contourGlobalOffsetX,
+      globalY: this.contourGlobalOffsetY
     }
   }
   
@@ -1373,10 +1373,10 @@ export class BeamElevationScene extends Phaser.Scene {
     )
   }
   
-  public getContourBuffer(): { bufferSize: number; bufferValue: number } {
+  public getContourBuffer(): { size: number; value: number } {
     return {
-      bufferSize: this.contourBufferSize,
-      bufferValue: this.contourBufferValue
+      size: this.contourBufferSize,
+      value: this.contourBufferValue
     }
   }
   
