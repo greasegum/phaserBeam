@@ -63,6 +63,10 @@ export class BeamElevationScene extends Phaser.Scene {
   private clampToGrid = true
   private extendToBoundary = false
   private snapDistance = 0.1
+  // Edge clamping options
+  private edgeClamping = true  // Enable by default for proper web section visualization
+  private edgeClampDistance = 0.8  // Slightly larger distance for more aggressive clamping
+  private cornerTreatment: 'trimmed' | 'flared' | 'square' = 'flared'
 
   constructor() {
     super({ key: 'BeamElevationScene' })
@@ -343,6 +347,9 @@ export class BeamElevationScene extends Phaser.Scene {
         collisionIterations: this.collisionIterations,
         alignmentMode: this.alignmentMode,
         clampToGrid: this.clampToGrid,
+        edgeClamping: this.edgeClamping,
+        edgeClampDistance: this.edgeClampDistance,
+        cornerTreatment: this.cornerTreatment,
         extendToBoundary: this.extendToBoundary
       }
       const contours = marchingSquaresOptimized(scalarGrid, marchingOptions)
@@ -517,7 +524,10 @@ export class BeamElevationScene extends Phaser.Scene {
         collisionAvoidance: this.collisionAvoidance,
         collisionMinDistance: this.collisionMinDistance,
         collisionMethod: this.collisionMethod,
-        collisionIterations: this.collisionIterations
+        collisionIterations: this.collisionIterations,
+        edgeClamping: this.edgeClamping,
+        edgeClampDistance: this.edgeClampDistance,
+        cornerTreatment: this.cornerTreatment
       }
       const smoothContours = marchingSquaresOptimized(scalarGrid, smoothOptions)
       
@@ -591,7 +601,10 @@ export class BeamElevationScene extends Phaser.Scene {
       collisionAvoidance: this.collisionAvoidance,
       collisionMinDistance: this.collisionMinDistance,
       collisionMethod: this.collisionMethod,
-      collisionIterations: this.collisionIterations
+      collisionIterations: this.collisionIterations,
+      edgeClamping: this.edgeClamping,
+      edgeClampDistance: this.edgeClampDistance,
+      cornerTreatment: this.cornerTreatment
     }
     
     const contours = marchingSquaresOptimized(scalarGrid, marchingOptions)
@@ -1645,6 +1658,46 @@ export class BeamElevationScene extends Phaser.Scene {
   
   public setSnapDistance(distance: number): void {
     this.snapDistance = distance
+    this.drawSectionLoss(
+      100,
+      this.cameras.main.centerY,
+      this.beamLength * this.gridSize
+    )
+  }
+  
+  // Edge Clamping Controls
+  public getEdgeClamping(): boolean {
+    return this.edgeClamping
+  }
+  
+  public setEdgeClamping(enabled: boolean): void {
+    this.edgeClamping = enabled
+    this.drawSectionLoss(
+      100,
+      this.cameras.main.centerY,
+      this.beamLength * this.gridSize
+    )
+  }
+  
+  public getEdgeClampDistance(): number {
+    return this.edgeClampDistance
+  }
+  
+  public setEdgeClampDistance(distance: number): void {
+    this.edgeClampDistance = distance
+    this.drawSectionLoss(
+      100,
+      this.cameras.main.centerY,
+      this.beamLength * this.gridSize
+    )
+  }
+  
+  public getCornerTreatment(): 'trimmed' | 'flared' | 'square' {
+    return this.cornerTreatment
+  }
+  
+  public setCornerTreatment(treatment: 'trimmed' | 'flared' | 'square'): void {
+    this.cornerTreatment = treatment
     this.drawSectionLoss(
       100,
       this.cameras.main.centerY,

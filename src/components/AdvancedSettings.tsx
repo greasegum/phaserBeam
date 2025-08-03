@@ -37,6 +37,10 @@ export const AdvancedSettings: React.FC<AdvancedSettingsProps> = ({ scene }) => 
   // Scalar Field settings
   const [scalarFieldMethod, setScalarFieldMethod] = useState<'gaussian' | 'distance' | 'box' | 'none'>('gaussian')
   const [scalarFieldRadius, setScalarFieldRadius] = useState(2)
+  // Edge clamping settings
+  const [edgeClamping, setEdgeClamping] = useState(true)  // Enable by default
+  const [edgeClampDistance, setEdgeClampDistance] = useState(0.8)  // Slightly larger for more aggressive clamping
+  const [cornerTreatment, setCornerTreatment] = useState<'trimmed' | 'flared' | 'square'>('flared')
 
   useEffect(() => {
     if (scene) {
@@ -91,6 +95,11 @@ export const AdvancedSettings: React.FC<AdvancedSettingsProps> = ({ scene }) => 
       // Get scalar field settings
       setScalarFieldMethod(scene.getScalarFieldMethod?.() || 'gaussian')
       setScalarFieldRadius(scene.getScalarFieldRadius?.() || 2)
+      
+      // Get edge clamping settings
+      setEdgeClamping(scene.getEdgeClamping?.() ?? true)  // Default to true
+      setEdgeClampDistance(scene.getEdgeClampDistance?.() || 0.8)
+      setCornerTreatment(scene.getCornerTreatment?.() || 'flared')
     }
   }, [scene])
 
@@ -203,6 +212,13 @@ export const AdvancedSettings: React.FC<AdvancedSettingsProps> = ({ scene }) => 
     setScalarFieldRadius(2)
     scene?.setScalarFieldMethod?.('gaussian')
     scene?.setScalarFieldRadius?.(2)
+    // Edge Clamping
+    setEdgeClamping(true)  // Enable by default for proper web visualization
+    setEdgeClampDistance(0.8)
+    setCornerTreatment('flared')
+    scene?.setEdgeClamping?.(true)
+    scene?.setEdgeClampDistance?.(0.8)
+    scene?.setCornerTreatment?.('flared')
   }
 
   if (!scene) return null
@@ -640,6 +656,104 @@ export const AdvancedSettings: React.FC<AdvancedSettingsProps> = ({ scene }) => 
                     style={{ width: '100%', cursor: 'pointer' }}
                   />
                 </div>
+              )}
+            </div>
+
+            <h4 style={{ margin: '16px 0 12px 0', fontSize: '14px', fontWeight: 600 }}>
+              Edge Clamping
+            </h4>
+
+            <div style={{ marginBottom: '16px' }}>
+              <label style={{ 
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px',
+                fontSize: '12px',
+                color: '#666',
+                cursor: 'pointer'
+              }}>
+                <input
+                  type="checkbox"
+                  checked={edgeClamping}
+                  onChange={(e) => {
+                    setEdgeClamping(e.target.checked)
+                    scene?.setEdgeClamping?.(e.target.checked)
+                  }}
+                  style={{ cursor: 'pointer' }}
+                />
+                Enable Edge Clamping
+                <HelpTooltip text="Strongly clamps contours to grid boundaries, preventing them from extending beyond edges. Essential for proper web section visualization." />
+              </label>
+
+              {edgeClamping && (
+                <>
+                  <div style={{ marginTop: '8px', marginBottom: '8px' }}>
+                    <label style={{ 
+                      display: 'flex', 
+                      justifyContent: 'space-between',
+                      alignItems: 'center',
+                      fontSize: '12px',
+                      color: '#666'
+                    }}>
+                      <span style={{ display: 'flex', alignItems: 'center' }}>
+                        Clamp Distance
+                        <HelpTooltip text="Distance from edge where clamping begins. Smaller values create tighter edge adherence." />
+                      </span>
+                      <span style={{ fontWeight: 'bold', color: '#333' }}>{edgeClampDistance.toFixed(2)}</span>
+                    </label>
+                    <input
+                      type="range"
+                      min="0.1"
+                      max="2.0"
+                      step="0.1"
+                      value={edgeClampDistance}
+                      onChange={(e) => {
+                        const value = parseFloat(e.target.value)
+                        setEdgeClampDistance(value)
+                        scene?.setEdgeClampDistance?.(value)
+                      }}
+                      style={{ width: '100%', cursor: 'pointer' }}
+                    />
+                  </div>
+
+                  <div style={{ marginBottom: '8px' }}>
+                    <label style={{ 
+                      display: 'block',
+                      fontSize: '12px',
+                      color: '#666',
+                      marginBottom: '4px'
+                    }}>
+                      Corner Treatment
+                      <HelpTooltip text="How corners are handled. Flared: contours hug edges (default). Trimmed: 45° cut corners. Square: sharp rectangular corners." />
+                    </label>
+                    <select
+                      value={cornerTreatment}
+                      onChange={(e) => {
+                        const treatment = e.target.value as 'trimmed' | 'flared' | 'square'
+                        setCornerTreatment(treatment)
+                        scene?.setCornerTreatment?.(treatment)
+                      }}
+                      onInput={(e) => {
+                        const treatment = (e.target as HTMLSelectElement).value as 'trimmed' | 'flared' | 'square'
+                        setCornerTreatment(treatment)
+                        scene?.setCornerTreatment?.(treatment)
+                      }}
+                      style={{
+                        width: '100%',
+                        padding: '4px 8px',
+                        fontSize: '12px',
+                        border: '1px solid #ddd',
+                        borderRadius: '4px',
+                        background: 'white',
+                        cursor: 'pointer'
+                      }}
+                    >
+                      <option value="flared">Flared (Default)</option>
+                      <option value="trimmed">Trimmed</option>
+                      <option value="square">Square</option>
+                    </select>
+                  </div>
+                </>
               )}
             </div>
 

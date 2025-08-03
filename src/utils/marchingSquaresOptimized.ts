@@ -79,6 +79,10 @@ export interface MarchingSquaresOptions {
   ensureClockwise?: boolean // Ensure clockwise orientation (default: true)
   mergeClosePoints?: boolean // Merge points that are too close (default: true)
   mergeDistance?: number // Distance threshold for merging points (default: 0.01)
+  // Edge clamping options
+  edgeClamping?: boolean // Enable strong edge clamping (default: false)
+  edgeClampDistance?: number // Distance from edge to start clamping (default: 0.5)
+  cornerTreatment?: 'trimmed' | 'flared' | 'square' // How to handle corners (default: 'flared')
 }
 
 // Validate and auto-correct conflicting parameters
@@ -168,7 +172,10 @@ export function marchingSquaresOptimized(
     removeSelfIntersections = true,
     ensureClockwise = true,
     mergeClosePoints = true,
-    mergeDistance = 0.01
+    mergeDistance = 0.01,
+    edgeClamping = false,
+    edgeClampDistance = 0.5,
+    cornerTreatment = 'flared'
   } = validatedOptions
 
   let processGrid = grid
@@ -228,12 +235,29 @@ export function marchingSquaresOptimized(
   
   const segments: Edge[] = []
   
+  // Calculate grid bounds for edge clamping
+  const gridBounds = {
+    minX: 0,
+    maxX: cols - 1,
+    minY: 0,
+    maxY: rows - 1
+  }
+  
   // Process each cell
   for (let row = 0; row < rows - 1; row++) {
     for (let col = 0; col < cols - 1; col++) {
       const cellSegments = processCellOptimized(
         row, col, processGrid, threshold, EDGE_TABLE, edgeCache, offsetX, offsetY, interpolationMethod, saddlePointResolution, alignmentMode
       )
+      
+      // Apply edge clamping to each segment if enabled
+      if (edgeClamping) {
+        cellSegments.forEach(segment => {
+          segment.p1 = applyEdgeClamping(segment.p1, gridBounds, edgeClamping, edgeClampDistance, cornerTreatment)
+          segment.p2 = applyEdgeClamping(segment.p2, gridBounds, edgeClamping, edgeClampDistance, cornerTreatment)
+        })
+      }
+      
       segments.push(...cellSegments)
     }
   }
@@ -256,7 +280,10 @@ export function marchingSquaresOptimized(
       rightEdge: edgeMode === 'clamp' ? gridRight : undefined,
       topEdge: edgeMode === 'clamp' ? gridTop : undefined,
       bottomEdge: edgeMode === 'clamp' ? gridBottom : undefined,
-      tolerance: 0.1
+      tolerance: 0.1,
+      edgeClamping,
+      edgeClampDistance,
+      cornerTreatment
     }
     
     // Apply the selected smoothing method
@@ -732,11 +759,19 @@ function interpolate(v1: number, v2: number, threshold: number, method: 'linear'
   // Avoid division by zero
   if (Math.abs(v1 - v2) < 1e-10) return 0.5
   
-  if (method === 'none') return 0.5
-  
-  // Linear interpolation
+  // Calculate the interpolation parameter based on threshold
   const t = (threshold - v1) / (v2 - v1)
   const tClamped = Math.max(0, Math.min(1, t))
+  
+  if (method === 'none') {
+    // For 'none', we still respect the threshold but snap to nearest grid position
+    // This creates a pixelated/stepped effect while still following the threshold
+    if (tClamped < 0.5) {
+      return 0.0  // Snap to first vertex
+    } else {
+      return 1.0  // Snap to second vertex
+    }
+  }
   
   if (method === 'linear') {
     return tClamped
@@ -748,6 +783,127 @@ function interpolate(v1: number, v2: number, threshold: number, method: 'linear'
   }
   
   return tClamped
+}
+
+// Apply edge clamping to a point based on grid boundaries
+function applyEdgeClamping(
+  point: Point, 
+  gridBounds: { minX: number, maxX: number, minY: number, maxY: number },
+  edgeClamping: boolean,
+  edgeClampDistance: number,
+  cornerTreatment: 'trimmed' | 'flared' | 'square'
+): Point {
+  if (!edgeClamping) return point
+  
+  const { minX, maxX, minY, maxY } = gridBounds
+  let { x, y } = point
+  
+  // Calculate distances to edges
+  const distToLeft = x - minX
+  const distToRight = maxX - x
+  const distToTop = y - minY
+  const distToBottom = maxY - y
+  
+  // Check if we're near edges
+  const nearLeft = distToLeft < edgeClampDistance
+  const nearRight = distToRight < edgeClampDistance
+  const nearTop = distToTop < edgeClampDistance
+  const nearBottom = distToBottom < edgeClampDistance
+  
+  // Handle corner regions differently based on treatment
+  const inCorner = (nearLeft || nearRight) && (nearTop || nearBottom)
+  
+  if (inCorner) {
+    switch (cornerTreatment) {
+      case 'trimmed':
+        // Trimmed corners: cut the corner at 45 degrees
+        if (nearLeft && nearTop) {
+          const minDist = Math.min(distToLeft, distToTop)
+          if (minDist < edgeClampDistance * 0.5) {
+            x = minX + edgeClampDistance * 0.5
+            y = minY + edgeClampDistance * 0.5
+          }
+        } else if (nearRight && nearTop) {
+          const minDist = Math.min(distToRight, distToTop)
+          if (minDist < edgeClampDistance * 0.5) {
+            x = maxX - edgeClampDistance * 0.5
+            y = minY + edgeClampDistance * 0.5
+          }
+        } else if (nearLeft && nearBottom) {
+          const minDist = Math.min(distToLeft, distToBottom)
+          if (minDist < edgeClampDistance * 0.5) {
+            x = minX + edgeClampDistance * 0.5
+            y = maxY - edgeClampDistance * 0.5
+          }
+        } else if (nearRight && nearBottom) {
+          const minDist = Math.min(distToRight, distToBottom)
+          if (minDist < edgeClampDistance * 0.5) {
+            x = maxX - edgeClampDistance * 0.5
+            y = maxY - edgeClampDistance * 0.5
+          }
+        }
+        break
+        
+      case 'flared':
+        // Flared corners: contours hug the edges more closely (default behavior)
+        // Apply aggressive clamping that pulls contours strongly to edges
+        if (nearLeft) {
+          // Pull strongly toward left edge
+          const pullStrength = Math.min(1.0, edgeClampDistance / Math.max(0.1, distToLeft))
+          x = minX + distToLeft * (1.0 - pullStrength * 0.8)
+        }
+        if (nearRight) {
+          // Pull strongly toward right edge  
+          const pullStrength = Math.min(1.0, edgeClampDistance / Math.max(0.1, distToRight))
+          x = maxX - distToRight * (1.0 - pullStrength * 0.8)
+        }
+        if (nearTop) {
+          // Pull strongly toward top edge
+          const pullStrength = Math.min(1.0, edgeClampDistance / Math.max(0.1, distToTop))
+          y = minY + distToTop * (1.0 - pullStrength * 0.8)
+        }
+        if (nearBottom) {
+          // Pull strongly toward bottom edge
+          const pullStrength = Math.min(1.0, edgeClampDistance / Math.max(0.1, distToBottom))
+          y = maxY - distToBottom * (1.0 - pullStrength * 0.8)
+        }
+        break
+        
+      case 'square':
+        // Square corners: maintain rectangular shape at corners
+        // Clamp to edge if within threshold
+        if (nearLeft && distToLeft < edgeClampDistance * 0.3) x = minX
+        if (nearRight && distToRight < edgeClampDistance * 0.3) x = maxX
+        if (nearTop && distToTop < edgeClampDistance * 0.3) y = minY
+        if (nearBottom && distToBottom < edgeClampDistance * 0.3) y = maxY
+        break
+    }
+  } else {
+    // Not in corner, apply standard edge clamping with stronger adherence
+    if (nearLeft && distToLeft < edgeClampDistance * 0.6) {
+      // Strong pull toward left edge
+      const pullStrength = Math.min(1.0, (edgeClampDistance * 0.6) / Math.max(0.05, distToLeft))
+      x = minX + distToLeft * (1.0 - pullStrength * 0.7)
+    } 
+    if (nearRight && distToRight < edgeClampDistance * 0.6) {
+      // Strong pull toward right edge
+      const pullStrength = Math.min(1.0, (edgeClampDistance * 0.6) / Math.max(0.05, distToRight))
+      x = maxX - distToRight * (1.0 - pullStrength * 0.7)
+    }
+    
+    if (nearTop && distToTop < edgeClampDistance * 0.6) {
+      // Strong pull toward top edge
+      const pullStrength = Math.min(1.0, (edgeClampDistance * 0.6) / Math.max(0.05, distToTop))
+      y = minY + distToTop * (1.0 - pullStrength * 0.7)
+    }
+    if (nearBottom && distToBottom < edgeClampDistance * 0.6) {
+      // Strong pull toward bottom edge
+      const pullStrength = Math.min(1.0, (edgeClampDistance * 0.6) / Math.max(0.05, distToBottom))
+      y = maxY - distToBottom * (1.0 - pullStrength * 0.7)
+    }
+  }
+  
+  return { x, y }
 }
 
 function connectSegmentsOptimized(segments: Edge[]): Point[][] {

@@ -13,6 +13,9 @@ export interface EdgeConstraints {
   topEdge?: number
   bottomEdge?: number
   tolerance?: number
+  edgeClamping?: boolean
+  edgeClampDistance?: number
+  cornerTreatment?: 'trimmed' | 'flared' | 'square'
 }
 
 function isEdgePoint(point: Point, constraints: EdgeConstraints, tolerance: number = 0.1): boolean {
@@ -27,17 +30,127 @@ function clampToEdges(point: Point, constraints: EdgeConstraints, tolerance: num
   let x = point.x
   let y = point.y
   
-  if (constraints.leftEdge !== undefined && Math.abs(x - constraints.leftEdge) < tolerance) {
-    x = constraints.leftEdge
-  }
-  if (constraints.rightEdge !== undefined && Math.abs(x - constraints.rightEdge) < tolerance) {
-    x = constraints.rightEdge
-  }
-  if (constraints.topEdge !== undefined && Math.abs(y - constraints.topEdge) < tolerance) {
-    y = constraints.topEdge
-  }
-  if (constraints.bottomEdge !== undefined && Math.abs(y - constraints.bottomEdge) < tolerance) {
-    y = constraints.bottomEdge
+  // Apply strong edge clamping if enabled
+  if (constraints.edgeClamping && constraints.edgeClampDistance !== undefined) {
+    const gridBounds = {
+      minX: constraints.leftEdge || 0,
+      maxX: constraints.rightEdge || 0,
+      minY: constraints.topEdge || 0,
+      maxY: constraints.bottomEdge || 0
+    }
+    
+    const clampDistance = constraints.edgeClampDistance
+    const cornerTreatment = constraints.cornerTreatment || 'flared'
+    
+    // Calculate distances to edges
+    const distToLeft = x - gridBounds.minX
+    const distToRight = gridBounds.maxX - x
+    const distToTop = y - gridBounds.minY
+    const distToBottom = gridBounds.maxY - y
+    
+    // Check if we're near edges
+    const nearLeft = distToLeft < clampDistance
+    const nearRight = distToRight < clampDistance
+    const nearTop = distToTop < clampDistance
+    const nearBottom = distToBottom < clampDistance
+    
+    // Handle corner regions differently based on treatment
+    const inCorner = (nearLeft || nearRight) && (nearTop || nearBottom)
+    
+    if (inCorner) {
+      switch (cornerTreatment) {
+        case 'trimmed':
+          // Trimmed corners: cut the corner at 45 degrees
+          if (nearLeft && nearTop) {
+            const minDist = Math.min(distToLeft, distToTop)
+            if (minDist < clampDistance * 0.5) {
+              x = gridBounds.minX + clampDistance * 0.5
+              y = gridBounds.minY + clampDistance * 0.5
+            }
+          } else if (nearRight && nearTop) {
+            const minDist = Math.min(distToRight, distToTop)
+            if (minDist < clampDistance * 0.5) {
+              x = gridBounds.maxX - clampDistance * 0.5
+              y = gridBounds.minY + clampDistance * 0.5
+            }
+          } else if (nearLeft && nearBottom) {
+            const minDist = Math.min(distToLeft, distToBottom)
+            if (minDist < clampDistance * 0.5) {
+              x = gridBounds.minX + clampDistance * 0.5
+              y = gridBounds.maxY - clampDistance * 0.5
+            }
+          } else if (nearRight && nearBottom) {
+            const minDist = Math.min(distToRight, distToBottom)
+            if (minDist < clampDistance * 0.5) {
+              x = gridBounds.maxX - clampDistance * 0.5
+              y = gridBounds.maxY - clampDistance * 0.5
+            }
+          }
+          break
+          
+        case 'flared':
+          // Flared corners: contours hug the edges more closely (default behavior)
+          // Apply aggressive clamping that pulls contours strongly to edges during smoothing
+          if (nearLeft) {
+            const pullStrength = Math.min(1.0, clampDistance / Math.max(0.1, distToLeft))
+            x = gridBounds.minX + distToLeft * (1.0 - pullStrength * 0.9)
+          }
+          if (nearRight) {
+            const pullStrength = Math.min(1.0, clampDistance / Math.max(0.1, distToRight))
+            x = gridBounds.maxX - distToRight * (1.0 - pullStrength * 0.9)
+          }
+          if (nearTop) {
+            const pullStrength = Math.min(1.0, clampDistance / Math.max(0.1, distToTop))
+            y = gridBounds.minY + distToTop * (1.0 - pullStrength * 0.9)
+          }
+          if (nearBottom) {
+            const pullStrength = Math.min(1.0, clampDistance / Math.max(0.1, distToBottom))
+            y = gridBounds.maxY - distToBottom * (1.0 - pullStrength * 0.9)
+          }
+          break
+          
+        case 'square':
+          // Square corners: maintain rectangular shape at corners
+          if (nearLeft && distToLeft < clampDistance * 0.3) x = gridBounds.minX
+          if (nearRight && distToRight < clampDistance * 0.3) x = gridBounds.maxX
+          if (nearTop && distToTop < clampDistance * 0.3) y = gridBounds.minY
+          if (nearBottom && distToBottom < clampDistance * 0.3) y = gridBounds.maxY
+          break
+      }
+    } else {
+      // Not in corner, apply stronger edge clamping during smoothing
+      if (nearLeft && distToLeft < clampDistance * 0.7) {
+        const pullStrength = Math.min(1.0, (clampDistance * 0.7) / Math.max(0.05, distToLeft))
+        x = gridBounds.minX + distToLeft * (1.0 - pullStrength * 0.8)
+      }
+      if (nearRight && distToRight < clampDistance * 0.7) {
+        const pullStrength = Math.min(1.0, (clampDistance * 0.7) / Math.max(0.05, distToRight))
+        x = gridBounds.maxX - distToRight * (1.0 - pullStrength * 0.8)
+      }
+      
+      if (nearTop && distToTop < clampDistance * 0.7) {
+        const pullStrength = Math.min(1.0, (clampDistance * 0.7) / Math.max(0.05, distToTop))
+        y = gridBounds.minY + distToTop * (1.0 - pullStrength * 0.8)
+      }
+      if (nearBottom && distToBottom < clampDistance * 0.7) {
+        const pullStrength = Math.min(1.0, (clampDistance * 0.7) / Math.max(0.05, distToBottom))
+        y = gridBounds.maxY - distToBottom * (1.0 - pullStrength * 0.8)
+      }
+    }
+  } else {
+    // Original simple clamping logic
+    if (constraints.leftEdge !== undefined && Math.abs(x - constraints.leftEdge) < tolerance) {
+      x = constraints.leftEdge
+    }
+    if (constraints.rightEdge !== undefined && Math.abs(x - constraints.rightEdge) < tolerance) {
+      x = constraints.rightEdge
+    }
+    if (constraints.topEdge !== undefined && Math.abs(y - constraints.topEdge) < tolerance) {
+      y = constraints.topEdge
+    }
+    if (constraints.bottomEdge !== undefined && Math.abs(y - constraints.bottomEdge) < tolerance) {
+      y = constraints.bottomEdge
+    }
   }
   
   return { x, y }
