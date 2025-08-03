@@ -1,6 +1,7 @@
 import Phaser from 'phaser'
 import { BeamProfile, GridCell } from '../types/beam'
 import { marchingSquaresOptimized, MarchingSquaresOptions } from '../utils/marchingSquaresOptimized'
+import { binaryToScalarField, ScalarFieldMethod } from '../utils/scalarField'
 import { drawBezierContour } from '../utils/phaserBezierPath'
 import { binaryToScalarField, ScalarFieldMethod } from '../utils/scalarField'
 
@@ -22,6 +23,11 @@ export class BeamElevationScene extends Phaser.Scene {
   private lossGraphics?: Phaser.GameObjects.Graphics
   private gridContainer?: Phaser.GameObjects.Container
   private controlPointGraphics?: Phaser.GameObjects.Graphics
+  // New visualization layers
+  private pixelOutlineGraphics?: Phaser.GameObjects.Graphics
+  private blurredFieldGraphics?: Phaser.GameObjects.Graphics
+  private rawContourGraphics?: Phaser.GameObjects.Graphics
+  private smoothedContourGraphics?: Phaser.GameObjects.Graphics
   private dimensionText: Phaser.GameObjects.Text[] = []
   private isMouseDown = false
   private isPainting = false
@@ -46,7 +52,8 @@ export class BeamElevationScene extends Phaser.Scene {
   private collisionIterations = 10
   // View mode options
   private showRawMarchingSquares = false // Show raw marching squares without smoothing
-  private showControlPoints = true // Show marching squares control points in edit mode
+  private showControlPoints = false // Show marching squares control points in edit mode
+  private showBlurredField = false // Show blurred field visualization
   // Marching Squares Algorithm Properties
   private interpolationMethod: 'linear' | 'cubic' | 'none' = 'linear'
   private scalarFieldMethod: ScalarFieldMethod = 'gaussian'
@@ -145,11 +152,14 @@ export class BeamElevationScene extends Phaser.Scene {
     this.topFlangeGraphics = this.add.graphics()
     this.drawBeamProfile(startX, centerY, beamWidth)
 
-    // Create loss graphics layer
-    this.lossGraphics = this.add.graphics()
+    // Create visualization layers in proper order (bottom to top)
+    this.blurredFieldGraphics = this.add.graphics() // Blurred field (bottom)
+    this.pixelOutlineGraphics = this.add.graphics() // Pixel outline
+    this.lossGraphics = this.add.graphics() // Filled regions (for non-edit mode)
+    this.rawContourGraphics = this.add.graphics() // Raw marching squares contours
+    this.smoothedContourGraphics = this.add.graphics() // Smoothed contours (top)
+    this.controlPointGraphics = this.add.graphics() // Control points (topmost)
     
-    // Create control point graphics layer
-    this.controlPointGraphics = this.add.graphics()
     this.drawSectionLoss(startX, centerY, beamWidth)
 
     // Create grid overlay container
@@ -268,13 +278,271 @@ export class BeamElevationScene extends Phaser.Scene {
     this.beamGraphics.lineTo(startX + width, centerY)
     this.beamGraphics.strokePath()
   }
-
+  
   private drawWebSectionLoss(webCells: {x: number, y: number}[], startX: number, centerY: number, width: number) {
-    if (!this.beamProfile || !this.lossGraphics) return
+    if (!this.beamProfile) return
     
     const { webHeight } = this.beamProfile
     const webBottom = centerY + (webHeight * this.gridSize) / 2
     const webTop = centerY - (webHeight * this.gridSize) / 2
+    const cols = Math.ceil(this.beamLength)
+    const rows = Math.ceil(webHeight)
+    
+    // Create binary grid
+    const grid: number[][] = Array(rows).fill(null).map(() => Array(cols).fill(0))
+    
+    // Fill the grid based on web cells
+    webCells.forEach(cell => {
+      const gridX = cell.x
+      const gridY = rows - 1 - cell.y // Invert because web cells have row=0 at bottom
+      
+      if (gridX >= 0 && gridX < cols && gridY >= 0 && gridY < rows) {
+        grid[gridY][gridX] = 1
+      }
+    })
+    
+    // In edit mode, show all visualization layers
+    if (this.editMode) {
+      // 1. Draw blurred field if enabled
+      if (this.showBlurredField && this.blurredFieldGraphics) {
+        this.drawBlurredField(grid, startX, webTop, webBottom, cols, rows)
+      }
+      
+      // 2. Draw pixelated outline
+      if (this.pixelOutlineGraphics) {
+        this.drawPixelatedOutline(webCells, startX, webBottom)
+      }
+      
+      // 3. Draw marching squares contours
+      this.drawMarchingSquaresLayers(grid, startX, webTop, webBottom, cols, rows)
+      
+    } else {
+      // View mode - show filled regions with marching squares
+      // Convert binary grid to scalar field for interpolation
+      const scalarGrid = binaryToScalarField(grid, this.scalarFieldMethod, this.scalarFieldRadius)
+      
+      // Apply marching squares
+      const marchingOptions: MarchingSquaresOptions = {
+        threshold: this.threshold,
+        interpolationMethod: this.interpolationMethod,
+        saddlePointResolution: this.saddlePointResolution,
+        smoothing: !this.showRawMarchingSquares,
+        edgeSnapping: true,
+        snapDistance: this.snapDistance,
+        offsetX: this.contourOffsetX,
+        offsetY: this.contourOffsetY,
+        globalOffsetX: this.contourGlobalOffsetX,
+        globalOffsetY: this.contourGlobalOffsetY,
+        bufferSize: this.contourBufferSize,
+        bufferValue: this.contourBufferValue,
+        smoothingMethod: this.smoothingMethod,
+        smoothingIterations: this.smoothingIterations,
+        smoothingStrength: this.smoothingStrength,
+        collisionAvoidance: this.collisionAvoidance,
+        collisionMinDistance: this.collisionMinDistance,
+        collisionMethod: this.collisionMethod,
+        collisionIterations: this.collisionIterations,
+        alignmentMode: this.alignmentMode,
+        clampToGrid: this.clampToGrid,
+        extendToBoundary: this.extendToBoundary
+      }
+      const contours = marchingSquaresOptimized(scalarGrid, marchingOptions)
+      
+      // Draw filled contours
+      if (this.lossGraphics) {
+        this.lossGraphics.fillStyle(0xFFB3BA, 0.8)
+        this.lossGraphics.lineStyle(2, 0xFF6B6B)
+        
+        contours.forEach(contour => {
+          const screenContour = contour.map(pt => ({
+            x: startX + pt.x * this.gridSize,
+            y: webTop + pt.y * this.gridSize
+          }))
+          
+          if (this.useSmoothCurves && !this.showRawMarchingSquares && screenContour.length > 4) {
+            drawBezierContour(this.lossGraphics, screenContour, true)
+          } else {
+            this.lossGraphics.beginPath()
+            screenContour.forEach((point, index) => {
+              if (index === 0) {
+                this.lossGraphics.moveTo(point.x, point.y)
+              } else {
+                this.lossGraphics.lineTo(point.x, point.y)
+              }
+            })
+            this.lossGraphics.closePath()
+            this.lossGraphics.fillPath()
+            this.lossGraphics.strokePath()
+          }
+        })
+      }
+    }
+  }
+  
+  private drawBlurredField(grid: number[][], startX: number, webTop: number, webBottom: number, cols: number, rows: number) {
+    if (!this.blurredFieldGraphics) return
+    
+    // Convert binary grid to scalar field
+    const scalarGrid = binaryToScalarField(grid, this.scalarFieldMethod, this.scalarFieldRadius)
+    
+    // Draw each cell with gradient based on scalar value
+    for (let y = 0; y < rows; y++) {
+      for (let x = 0; x < cols; x++) {
+        const value = scalarGrid[y][x]
+        if (value > 0.01) { // Only draw if there's some value
+          const alpha = value * 0.5 // Max 50% opacity
+          const screenX = startX + x * this.gridSize
+          const screenY = webTop + y * this.gridSize
+          
+          // Use a red gradient
+          this.blurredFieldGraphics.fillStyle(0xFFB3BA, alpha)
+          this.blurredFieldGraphics.fillRect(screenX, screenY, this.gridSize, this.gridSize)
+        }
+      }
+    }
+  }
+  
+  private drawPixelatedOutline(webCells: {x: number, y: number}[], startX: number, webBottom: number) {
+    if (!this.pixelOutlineGraphics) return
+    
+    // Create a set for quick lookup
+    const cellSet = new Set(webCells.map(cell => `${cell.x},${cell.y}`))
+    const maxCol = Math.ceil(this.beamLength) - 1
+    
+    // Set line style for outlines
+    this.pixelOutlineGraphics.lineStyle(2, 0xFF9999, 0.8)
+    
+    webCells.forEach(cell => {
+      const x = startX + cell.x * this.gridSize
+      const y = webBottom - (cell.y + 1) * this.gridSize
+      
+      // Check each edge - draw if no neighbor
+      // Top edge
+      if (!cellSet.has(`${cell.x},${cell.y + 1}`)) {
+        this.pixelOutlineGraphics.beginPath()
+        this.pixelOutlineGraphics.moveTo(x, y)
+        this.pixelOutlineGraphics.lineTo(x + this.gridSize, y)
+        this.pixelOutlineGraphics.strokePath()
+      }
+      
+      // Bottom edge
+      if (!cellSet.has(`${cell.x},${cell.y - 1}`)) {
+        this.pixelOutlineGraphics.beginPath()
+        this.pixelOutlineGraphics.moveTo(x, y + this.gridSize)
+        this.pixelOutlineGraphics.lineTo(x + this.gridSize, y + this.gridSize)
+        this.pixelOutlineGraphics.strokePath()
+      }
+      
+      // Left edge
+      if (!cellSet.has(`${cell.x - 1},${cell.y}`)) {
+        this.pixelOutlineGraphics.beginPath()
+        this.pixelOutlineGraphics.moveTo(x, y)
+        this.pixelOutlineGraphics.lineTo(x, y + this.gridSize)
+        this.pixelOutlineGraphics.strokePath()
+      }
+      
+      // Right edge
+      if (!cellSet.has(`${cell.x + 1},${cell.y}`)) {
+        this.pixelOutlineGraphics.beginPath()
+        this.pixelOutlineGraphics.moveTo(x + this.gridSize, y)
+        this.pixelOutlineGraphics.lineTo(x + this.gridSize, y + this.gridSize)
+        this.pixelOutlineGraphics.strokePath()
+      }
+    })
+  }
+  
+  private drawMarchingSquaresLayers(grid: number[][], startX: number, webTop: number, webBottom: number, cols: number, rows: number) {
+    // Convert binary grid to scalar field
+    const scalarGrid = binaryToScalarField(grid, this.scalarFieldMethod, this.scalarFieldRadius)
+    
+    // Apply marching squares without smoothing first
+    const rawOptions: MarchingSquaresOptions = {
+      threshold: this.threshold,
+      interpolationMethod: this.interpolationMethod,
+      saddlePointResolution: this.saddlePointResolution,
+      smoothing: false, // Always get raw contours first
+      edgeSnapping: true,
+      snapDistance: this.snapDistance,
+      offsetX: this.contourOffsetX,
+      offsetY: this.contourOffsetY,
+      globalOffsetX: this.contourGlobalOffsetX,
+      globalOffsetY: this.contourGlobalOffsetY,
+      bufferSize: this.contourBufferSize,
+      bufferValue: this.contourBufferValue,
+      alignmentMode: this.alignmentMode,
+      clampToGrid: this.clampToGrid,
+      extendToBoundary: this.extendToBoundary
+    }
+    const rawContours = marchingSquaresOptimized(scalarGrid, rawOptions)
+    
+    // Draw raw contours
+    if (this.rawContourGraphics) {
+      this.rawContourGraphics.lineStyle(3, 0xFF6B6B, 0.8) // Red, thicker line
+      
+      rawContours.forEach(contour => {
+        const screenContour = contour.map(pt => ({
+          x: startX + pt.x * this.gridSize,
+          y: webTop + pt.y * this.gridSize
+        }))
+        
+        this.rawContourGraphics.beginPath()
+        screenContour.forEach((point, index) => {
+          if (index === 0) {
+            this.rawContourGraphics.moveTo(point.x, point.y)
+          } else {
+            this.rawContourGraphics.lineTo(point.x, point.y)
+          }
+        })
+        this.rawContourGraphics.closePath()
+        this.rawContourGraphics.strokePath()
+        
+        // Draw control points if enabled
+        if (this.showControlPoints && this.controlPointGraphics) {
+          this.controlPointGraphics.fillStyle(0xFFFF00, 0.8) // Yellow
+          screenContour.forEach(point => {
+            this.controlPointGraphics.fillCircle(point.x, point.y, 3)
+          })
+        }
+      })
+    }
+    
+    // Draw smoothed contours if smoothing is enabled
+    if (!this.showRawMarchingSquares && this.smoothedContourGraphics) {
+      // Apply marching squares with smoothing
+      const smoothOptions: MarchingSquaresOptions = {
+        ...rawOptions,
+        smoothing: true,
+        smoothingMethod: this.smoothingMethod,
+        smoothingIterations: this.smoothingIterations,
+        smoothingStrength: this.smoothingStrength,
+        collisionAvoidance: this.collisionAvoidance,
+        collisionMinDistance: this.collisionMinDistance,
+        collisionMethod: this.collisionMethod,
+        collisionIterations: this.collisionIterations
+      }
+      const smoothContours = marchingSquaresOptimized(scalarGrid, smoothOptions)
+      
+      this.smoothedContourGraphics.lineStyle(3, 0x00FF00, 0.8) // Green, thicker line
+      
+      smoothContours.forEach(contour => {
+        const screenContour = contour.map(pt => ({
+          x: startX + pt.x * this.gridSize,
+          y: webTop + pt.y * this.gridSize
+        }))
+        
+        this.smoothedContourGraphics.beginPath()
+        screenContour.forEach((point, index) => {
+          if (index === 0) {
+            this.smoothedContourGraphics.moveTo(point.x, point.y)
+          } else {
+            this.smoothedContourGraphics.lineTo(point.x, point.y)
+          }
+        })
+        this.smoothedContourGraphics.closePath()
+        this.smoothedContourGraphics.strokePath()
+      })
+    }
+  }
     
     // Set fill style
     this.lossGraphics.fillStyle(0xFFB3BA, 0.8)
@@ -665,9 +933,15 @@ export class BeamElevationScene extends Phaser.Scene {
   }
 
   private drawSectionLoss(startX: number, centerY: number, width: number) {
-    if (!this.beamProfile || !this.lossGraphics) return
+    if (!this.beamProfile) return
     
-    this.lossGraphics.clear()
+    // Clear all visualization layers
+    this.lossGraphics?.clear()
+    this.pixelOutlineGraphics?.clear()
+    this.blurredFieldGraphics?.clear()
+    this.rawContourGraphics?.clear()
+    this.smoothedContourGraphics?.clear()
+    this.controlPointGraphics?.clear()
     
     const { webHeight, flangeThickness } = this.beamProfile
     const webTop = centerY - (webHeight * this.gridSize) / 2
@@ -1435,6 +1709,19 @@ export class BeamElevationScene extends Phaser.Scene {
   
   public getShowControlPoints(): boolean {
     return this.showControlPoints
+  }
+  
+  public setShowBlurredField(show: boolean): void {
+    this.showBlurredField = show
+    this.drawSectionLoss(
+      100,
+      this.cameras.main.centerY,
+      this.beamLength * this.gridSize
+    )
+  }
+  
+  public getShowBlurredField(): boolean {
+    return this.showBlurredField
   }
   
   // Getters for algorithm controls
