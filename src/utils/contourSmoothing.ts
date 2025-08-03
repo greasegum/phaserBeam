@@ -1,4 +1,4 @@
-import { Point } from './marchingSquaresOptimized'
+import { Point } from './marchingSquares'
 
 export interface SmoothingOptions {
   iterations?: number

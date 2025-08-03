@@ -1,5 +1,5 @@
 import Phaser from 'phaser'
-import { Point } from './marchingSquaresOptimized'
+import { Point } from './marchingSquares'
 
 export function drawBezierContour(
   graphics: Phaser.GameObjects.Graphics,

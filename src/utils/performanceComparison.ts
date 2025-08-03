@@ -3,9 +3,8 @@
  * Demonstrates the improvements from refactoring
  */
 
-import { marchingSquares } from './marchingSquares'
+import { marchingSquares, marchingSquaresOptimized } from './marchingSquares'
 import { processContours } from './contourProcessing'
-import { marchingSquaresOptimized } from './marchingSquaresOptimized'
 import { CONTOUR_PRESETS } from '../types/contourConfig'
 
 interface PerformanceResult {

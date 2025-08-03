@@ -1,6 +1,6 @@
 import Phaser from 'phaser'
 import { BeamProfile, GridCell } from '../types/beam'
-import { marchingSquaresOptimized, MarchingSquaresOptions } from '../utils/marchingSquaresOptimized'
+import { marchingSquaresOptimized, MarchingSquaresOptions } from '../utils/marchingSquares'
 import { binaryToScalarField, ScalarFieldMethod } from '../utils/scalarField'
 import { drawBezierContour } from '../utils/phaserBezierPath'
 
