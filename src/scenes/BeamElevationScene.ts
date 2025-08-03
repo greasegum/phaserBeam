@@ -379,56 +379,33 @@ export class BeamElevationScene extends Phaser.Scene {
           // X coordinate: map from grid space to screen space
           let x = startX + point.x * this.gridSize
           
-          // Y coordinate: invert and map to screen space
-          // Grid y=0 is at top, but screen rendering has y=0 at web top
-          // So we need to flip: screenY = webTop + (rows - point.y) * gridSize
-          let y = webTop + (rows - point.y) * this.gridSize
+          // Y coordinate: map to screen space
+          // Grid y=0 is at top, screen y=0 is also at top (webTop)
+          // Direct mapping: screenY = webTop + point.y * gridSize
+          let y = webTop + point.y * this.gridSize
           
-          // Enhanced edge clamping based on actual cell presence
-          const edgeProximityThreshold = 1.5 // cells from edge to consider clamping
+          // Enhanced edge clamping with buffer respect
+          const edgeBuffer = Math.max(0.1, this.contourBufferSize * 0.1) // Minimum 0.1 grid units from edge
           
           // Left edge clamping - only if we have cells at x=0
-          if (hasLeftEdgeCells && point.x < edgeProximityThreshold) {
-            // Calculate interpolation factor for smooth transition
-            const t = Math.max(0, Math.min(1, (edgeProximityThreshold - point.x) / edgeProximityThreshold))
-            x = startX * t + x * (1 - t)
-            
-            // Hard clamp if very close
-            if (point.x < 0.1) {
-              x = startX
-            }
+          if (hasLeftEdgeCells && point.x < edgeBuffer) {
+            x = startX + edgeBuffer * this.gridSize
           }
           
           // Right edge clamping - only if we have cells at the right edge
-          if (hasRightEdgeCells && point.x > cols - edgeProximityThreshold) {
+          if (hasRightEdgeCells && point.x > cols - edgeBuffer) {
             const rightEdge = startX + this.beamLength * this.gridSize
-            const t = Math.max(0, Math.min(1, (point.x - (cols - edgeProximityThreshold)) / edgeProximityThreshold))
-            x = x * (1 - t) + rightEdge * t
-            
-            // Hard clamp if very close
-            if (point.x > cols - 0.1) {
-              x = rightEdge
-            }
+            x = rightEdge - edgeBuffer * this.gridSize
           }
           
-          // Top edge clamping (remember: grid y=0 is top, but screen has web bottom at higher y)
-          if (hasBottomEdgeCells && point.y > rows - edgeProximityThreshold) {
-            const t = Math.max(0, Math.min(1, (point.y - (rows - edgeProximityThreshold)) / edgeProximityThreshold))
-            y = y * (1 - t) + webBottom * t
-            
-            if (point.y > rows - 0.1) {
-              y = webBottom
-            }
+          // Top edge clamping (grid y=0 is at top of screen)
+          if (hasTopEdgeCells && point.y < edgeBuffer) {
+            y = webTop + edgeBuffer * this.gridSize
           }
           
-          // Bottom edge clamping
-          if (hasTopEdgeCells && point.y < edgeProximityThreshold) {
-            const t = Math.max(0, Math.min(1, (edgeProximityThreshold - point.y) / edgeProximityThreshold))
-            y = webTop * t + y * (1 - t)
-            
-            if (point.y < 0.1) {
-              y = webTop
-            }
+          // Bottom edge clamping (grid y=rows is at bottom of screen)
+          if (hasBottomEdgeCells && point.y > rows - edgeBuffer) {
+            y = webBottom - edgeBuffer * this.gridSize
           }
           
           // Final safety clamp to ensure we never exceed beam boundaries
