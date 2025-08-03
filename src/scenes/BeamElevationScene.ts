@@ -29,17 +29,17 @@ export class BeamElevationScene extends Phaser.Scene {
   // Marching squares alignment offsets
   private contourOffsetX = 0 // Cell offset removed - use global offset
   private contourOffsetY = 0 // Cell offset removed - use global offset
-  private contourGlobalOffsetX = 0.5 // Default 0.5 to center contours on cells
-  private contourGlobalOffsetY = 0.5 // Default 0.5 to center contours on cells
+  private contourGlobalOffsetX = -0.5 // Default -0.5 to center contours on cells
+  private contourGlobalOffsetY = -0.5 // Default -0.5 to center contours on cells
   // Marching squares buffer configuration
   private contourBufferSize = 1 // Default buffer of 1 for proper edge handling
   private contourBufferValue = 0 // Default buffer value
   // Smoothing options
   private smoothingMethod: 'basic' | 'laplacian' | 'chaikin' | 'bilateral' | 'savitzky-golay' | 'catmull-rom' | 'edge-aware' | 'intelligent' = 'edge-aware'
-  private smoothingIterations = 2
-  private smoothingStrength = 0.5
+  private smoothingIterations = 1
+  private smoothingStrength = 0.3
   // Collision avoidance options
-  private collisionAvoidance = true // Default to enabled
+  private collisionAvoidance = false // Default to disabled for simpler behavior
   private collisionMinDistance = 0.5
   private collisionMethod: 'push' | 'shrink' | 'hybrid' = 'hybrid'
   private collisionIterations = 10
@@ -1326,7 +1326,7 @@ export class BeamElevationScene extends Phaser.Scene {
     this.contourOffsetX = offsetX
     this.contourOffsetY = offsetY
     this.drawSectionLoss(
-      this.gridOrigin === 'left' ? 100 : 100,
+      100,
       this.cameras.main.centerY,
       this.beamLength * this.gridSize
     )
@@ -1336,7 +1336,7 @@ export class BeamElevationScene extends Phaser.Scene {
     this.contourGlobalOffsetX = globalOffsetX
     this.contourGlobalOffsetY = globalOffsetY
     this.drawSectionLoss(
-      this.gridOrigin === 'left' ? 100 : 100,
+      100,
       this.cameras.main.centerY,
       this.beamLength * this.gridSize
     )
@@ -1355,7 +1355,7 @@ export class BeamElevationScene extends Phaser.Scene {
     this.contourBufferSize = bufferSize
     this.contourBufferValue = bufferValue
     this.drawSectionLoss(
-      this.gridOrigin === 'left' ? 100 : 100,
+      100,
       this.cameras.main.centerY,
       this.beamLength * this.gridSize
     )
@@ -1373,7 +1373,7 @@ export class BeamElevationScene extends Phaser.Scene {
     this.smoothingIterations = iterations
     this.smoothingStrength = strength
     this.drawSectionLoss(
-      this.gridOrigin === 'left' ? 100 : 100,
+      100,
       this.cameras.main.centerY,
       this.beamLength * this.gridSize
     )
@@ -1393,7 +1393,7 @@ export class BeamElevationScene extends Phaser.Scene {
     this.collisionMethod = method
     this.collisionIterations = iterations
     this.drawSectionLoss(
-      this.gridOrigin === 'left' ? 100 : 100,
+      100,
       this.cameras.main.centerY,
       this.beamLength * this.gridSize
     )
@@ -1411,7 +1411,7 @@ export class BeamElevationScene extends Phaser.Scene {
   public setShowRawMarchingSquares(show: boolean): void {
     this.showRawMarchingSquares = show
     this.drawSectionLoss(
-      this.gridOrigin === 'left' ? 100 : 100,
+      100,
       this.cameras.main.centerY,
       this.beamLength * this.gridSize
     )
@@ -1424,7 +1424,7 @@ export class BeamElevationScene extends Phaser.Scene {
   public setShowControlPoints(show: boolean): void {
     this.showControlPoints = show
     this.drawSectionLoss(
-      this.gridOrigin === 'left' ? 100 : 100,
+      100,
       this.cameras.main.centerY,
       this.beamLength * this.gridSize
     )
@@ -1467,7 +1467,7 @@ export class BeamElevationScene extends Phaser.Scene {
   public setInterpolationMethod(method: 'linear' | 'cubic' | 'none'): void {
     this.interpolationMethod = method
     this.drawSectionLoss(
-      this.gridOrigin === 'left' ? 100 : 100,
+      100,
       this.cameras.main.centerY,
       this.beamLength * this.gridSize
     )
@@ -1476,7 +1476,7 @@ export class BeamElevationScene extends Phaser.Scene {
   public setSaddlePointResolution(resolution: 'center' | 'gradient' | 'majority'): void {
     this.saddlePointResolution = resolution
     this.drawSectionLoss(
-      this.gridOrigin === 'left' ? 100 : 100,
+      100,
       this.cameras.main.centerY,
       this.beamLength * this.gridSize
     )
@@ -1485,7 +1485,7 @@ export class BeamElevationScene extends Phaser.Scene {
   public setThreshold(threshold: number): void {
     this.threshold = threshold
     this.drawSectionLoss(
-      this.gridOrigin === 'left' ? 100 : 100,
+      100,
       this.cameras.main.centerY,
       this.beamLength * this.gridSize
     )
@@ -1494,7 +1494,7 @@ export class BeamElevationScene extends Phaser.Scene {
   public setAlignmentMode(mode: 'edges' | 'vertices' | 'center'): void {
     this.alignmentMode = mode
     this.drawSectionLoss(
-      this.gridOrigin === 'left' ? 100 : 100,
+      100,
       this.cameras.main.centerY,
       this.beamLength * this.gridSize
     )
@@ -1503,7 +1503,7 @@ export class BeamElevationScene extends Phaser.Scene {
   public setClampToGrid(clamp: boolean): void {
     this.clampToGrid = clamp
     this.drawSectionLoss(
-      this.gridOrigin === 'left' ? 100 : 100,
+      100,
       this.cameras.main.centerY,
       this.beamLength * this.gridSize
     )
@@ -1512,7 +1512,7 @@ export class BeamElevationScene extends Phaser.Scene {
   public setExtendToBoundary(extend: boolean): void {
     this.extendToBoundary = extend
     this.drawSectionLoss(
-      this.gridOrigin === 'left' ? 100 : 100,
+      100,
       this.cameras.main.centerY,
       this.beamLength * this.gridSize
     )
@@ -1521,7 +1521,7 @@ export class BeamElevationScene extends Phaser.Scene {
   public setSnapDistance(distance: number): void {
     this.snapDistance = distance
     this.drawSectionLoss(
-      this.gridOrigin === 'left' ? 100 : 100,
+      100,
       this.cameras.main.centerY,
       this.beamLength * this.gridSize
     )

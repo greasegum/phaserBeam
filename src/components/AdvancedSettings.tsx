@@ -13,8 +13,8 @@ export const AdvancedSettings: React.FC<AdvancedSettingsProps> = ({ scene }) => 
   const [threshold, setThreshold] = useState(0.5)
   // Geometry
   const [alignmentMode, setAlignmentMode] = useState<'edges' | 'vertices' | 'center'>('edges')
-  const [globalOffsetX, setGlobalOffsetX] = useState(0.5)
-  const [globalOffsetY, setGlobalOffsetY] = useState(0.5)
+  const [globalOffsetX, setGlobalOffsetX] = useState(0)
+  const [globalOffsetY, setGlobalOffsetY] = useState(0)
   const [bufferSize, setBufferSize] = useState(1)
   const [bufferValue, setBufferValue] = useState(0)
   const [clampToGrid, setClampToGrid] = useState(true)
@@ -25,9 +25,9 @@ export const AdvancedSettings: React.FC<AdvancedSettingsProps> = ({ scene }) => 
   const [showControlPoints, setShowControlPoints] = useState(false)
   // Processing
   const [smoothingMethod, setSmoothingMethod] = useState<'basic' | 'laplacian' | 'chaikin' | 'bilateral' | 'savitzky-golay' | 'catmull-rom' | 'edge-aware' | 'intelligent'>('edge-aware')
-  const [smoothingIterations, setSmoothingIterations] = useState(2)
-  const [smoothingStrength, setSmoothingStrength] = useState(0.5)
-  const [collisionAvoidance, setCollisionAvoidance] = useState(true)
+  const [smoothingIterations, setSmoothingIterations] = useState(1)
+  const [smoothingStrength, setSmoothingStrength] = useState(0.3)
+  const [collisionAvoidance, setCollisionAvoidance] = useState(false)
   const [collisionMinDistance, setCollisionMinDistance] = useState(0.5)
   const [collisionMethod, setCollisionMethod] = useState<'push' | 'shrink' | 'hybrid'>('hybrid')
   const [collisionIterations, setCollisionIterations] = useState(10)
@@ -50,8 +50,9 @@ export const AdvancedSettings: React.FC<AdvancedSettingsProps> = ({ scene }) => 
       // Get offsets
       const offsets = scene.getContourOffsets?.()
       if (offsets) {
-        setGlobalOffsetX(offsets.globalX)
-        setGlobalOffsetY(offsets.globalY)
+        // Convert from internal offset (-0.5 = 0 in UI)
+        setGlobalOffsetX(offsets.globalX + 0.5)
+        setGlobalOffsetY(offsets.globalY + 0.5)
       }
       
       // Get buffer
@@ -83,12 +84,15 @@ export const AdvancedSettings: React.FC<AdvancedSettingsProps> = ({ scene }) => 
   const handleGlobalOffsetChange = (axis: 'x' | 'y', value: number) => {
     if (!scene) return
     
+    // Convert UI value to internal offset (0 in UI = -0.5 internal)
+    const internalValue = value - 0.5
+    
     if (axis === 'x') {
       setGlobalOffsetX(value)
-      scene.setContourGlobalOffsets(value, globalOffsetY)
+      scene.setContourGlobalOffsets(internalValue, globalOffsetY - 0.5)
     } else {
       setGlobalOffsetY(value)
-      scene.setContourGlobalOffsets(globalOffsetX, value)
+      scene.setContourGlobalOffsets(globalOffsetX - 0.5, internalValue)
     }
   }
 
@@ -116,130 +120,9 @@ export const AdvancedSettings: React.FC<AdvancedSettingsProps> = ({ scene }) => 
     scene.setCollisionAvoidance(enabled, minDistance, method, iterations)
   }
 
-  const applyPreset = (preset: 'default' | 'classic' | 'smooth' | 'precise') => {
-    switch (preset) {
-      case 'classic':
-        // Mimics the cleaner earlier implementation
-        setInterpolationMethod('linear')
-        setSaddlePointResolution('center')
-        setThreshold(0.5)
-        setAlignmentMode('edges')
-        setGlobalOffsetX(0.5) // Center on cells
-        setGlobalOffsetY(0.5) // Center on cells
-        setBufferSize(1) // Natural 1-cell buffer
-        setBufferValue(0)
-        setClampToGrid(true)
-        setExtendToBoundary(false)
-        setSnapDistance(0.1)
-        setShowRawMarchingSquares(false)
-        setShowControlPoints(false)
-        setSmoothingMethod('edge-aware')
-        setSmoothingIterations(1) // Minimal smoothing for clean edges
-        setSmoothingStrength(0.3)
-        setCollisionAvoidance(false) // Simple behavior
-        // Apply to scene
-        scene?.setInterpolationMethod?.('linear')
-        scene?.setSaddlePointResolution?.('center')
-        scene?.setThreshold?.(0.5)
-        scene?.setAlignmentMode?.('edges')
-        // Cell offsets removed - using global offsets only
-        scene?.setContourGlobalOffsets(0.5, 0.5)
-        scene?.setContourBuffer(1, 0)
-        scene?.setClampToGrid?.(true)
-        scene?.setExtendToBoundary?.(false)
-        scene?.setSnapDistance?.(0.1)
-        scene?.setShowRawMarchingSquares?.(false)
-        scene?.setShowControlPoints?.(false)
-        scene?.setSmoothingOptions('edge-aware', 1, 0.3)
-        scene?.setCollisionAvoidance(false, 0.5, 'hybrid', 10)
-        break
-        
-      case 'smooth':
-        // Smooth organic curves
-        setInterpolationMethod('cubic')
-        setSaddlePointResolution('gradient')
-        setThreshold(0.5)
-        setAlignmentMode('center')
-        setGlobalOffsetX(0.5)
-        setGlobalOffsetY(0.5)
-        setBufferSize(2)
-        setBufferValue(0)
-        setClampToGrid(true)
-        setExtendToBoundary(false)
-        setSnapDistance(0.05)
-        setShowRawMarchingSquares(false)
-        setShowControlPoints(false)
-        setSmoothingMethod('catmull-rom')
-        setSmoothingIterations(3)
-        setSmoothingStrength(0.7)
-        setCollisionAvoidance(true)
-        setCollisionMinDistance(0.5)
-        setCollisionMethod('hybrid')
-        setCollisionIterations(20)
-        // Apply to scene
-        scene?.setInterpolationMethod?.('cubic')
-        scene?.setSaddlePointResolution?.('gradient')
-        scene?.setThreshold?.(0.5)
-        scene?.setAlignmentMode?.('center')
-        // Cell offsets removed - using global offsets only
-        scene?.setContourGlobalOffsets(0.5, 0.5)
-        scene?.setContourBuffer(2, 0)
-        scene?.setClampToGrid?.(true)
-        scene?.setExtendToBoundary?.(false)
-        scene?.setSnapDistance?.(0.05)
-        scene?.setShowRawMarchingSquares?.(false)
-        scene?.setShowControlPoints?.(false)
-        scene?.setSmoothingOptions('catmull-rom', 3, 0.7)
-        scene?.setCollisionAvoidance(true, 0.5, 'hybrid', 20)
-        break
-        
-      case 'precise':
-        // Precise engineering mode
-        setInterpolationMethod('none')
-        setSaddlePointResolution('majority')
-        setThreshold(0.5)
-        setAlignmentMode('vertices')
-        setGlobalOffsetX(0.5)
-        setGlobalOffsetY(0.5)
-        setBufferSize(1)
-        setBufferValue(0)
-        setClampToGrid(true)
-        setExtendToBoundary(true)
-        setSnapDistance(0.5)
-        setShowRawMarchingSquares(true)
-        setShowControlPoints(true)
-        setSmoothingMethod('basic')
-        setSmoothingIterations(0)
-        setSmoothingStrength(0)
-        setCollisionAvoidance(true)
-        setCollisionMinDistance(1)
-        setCollisionMethod('push')
-        setCollisionIterations(5)
-        // Apply to scene
-        scene?.setInterpolationMethod?.('none')
-        scene?.setSaddlePointResolution?.('majority')
-        scene?.setThreshold?.(0.5)
-        scene?.setAlignmentMode?.('vertices')
-        // Cell offsets removed - using global offsets only
-        scene?.setContourGlobalOffsets(0.5, 0.5)
-        scene?.setContourBuffer(1, 0)
-        scene?.setClampToGrid?.(true)
-        scene?.setExtendToBoundary?.(true)
-        scene?.setSnapDistance?.(0.5)
-        scene?.setShowRawMarchingSquares?.(true)
-        scene?.setShowControlPoints?.(true)
-        scene?.setSmoothingOptions('basic', 0, 0)
-        scene?.setCollisionAvoidance(true, 1, 'push', 5)
-        break
-        
-      default: // 'default'
-        resetToDefaults()
-        break
-    }
-  }
 
   const resetToDefaults = () => {
-    // Algorithm
+    // Algorithm (Classic settings)
     setInterpolationMethod('linear')
     setSaddlePointResolution('center')
     setThreshold(0.5)
@@ -248,15 +131,14 @@ export const AdvancedSettings: React.FC<AdvancedSettingsProps> = ({ scene }) => 
     scene?.setThreshold?.(0.5)
     // Geometry
     setAlignmentMode('edges')
-    setGlobalOffsetX(0.5)
-    setGlobalOffsetY(0.5)
+    setGlobalOffsetX(0) // 0 in UI = -0.5 internal
+    setGlobalOffsetY(0) // 0 in UI = -0.5 internal
     setBufferSize(1)
     setBufferValue(0)
     setClampToGrid(true)
     setExtendToBoundary(false)
     setSnapDistance(0.1)
     scene?.setAlignmentMode?.('edges')
-    // Cell offsets removed - using global offsets only
     scene?.setContourGlobalOffsets(-0.5, -0.5)
     scene?.setContourBuffer(1, 0)
     scene?.setClampToGrid?.(true)
@@ -267,16 +149,16 @@ export const AdvancedSettings: React.FC<AdvancedSettingsProps> = ({ scene }) => 
     setShowControlPoints(false)
     scene?.setShowRawMarchingSquares?.(false)
     scene?.setShowControlPoints?.(false)
-    // Processing
-    setSmoothingMethod('intelligent')
-    setSmoothingIterations(2)
-    setSmoothingStrength(0.5)
-    scene?.setSmoothingOptions('intelligent', 2, 0.5)
-    setCollisionAvoidance(true)
+    // Processing (Classic settings)
+    setSmoothingMethod('edge-aware')
+    setSmoothingIterations(1)
+    setSmoothingStrength(0.3)
+    scene?.setSmoothingOptions('edge-aware', 1, 0.3)
+    setCollisionAvoidance(false)
     setCollisionMinDistance(0.5)
     setCollisionMethod('hybrid')
     setCollisionIterations(10)
-    scene?.setCollisionAvoidance(true, 0.5, 'hybrid', 10)
+    scene?.setCollisionAvoidance(false, 0.5, 'hybrid', 10)
   }
 
   if (!scene) return null
@@ -333,78 +215,6 @@ export const AdvancedSettings: React.FC<AdvancedSettingsProps> = ({ scene }) => 
         pointerEvents: isOpen ? 'auto' : 'none',
         transition: 'transform 0.3s ease, opacity 0.3s ease'
       }}>
-        {/* Preset Buttons */}
-        <div style={{ 
-          marginBottom: '16px',
-          display: 'flex',
-          gap: '8px',
-          justifyContent: 'center'
-        }}>
-          <button
-            onClick={() => applyPreset('default')}
-            style={{
-              padding: '6px 12px',
-              background: '#f0f0f0',
-              border: '1px solid #ddd',
-              borderRadius: '4px',
-              cursor: 'pointer',
-              fontSize: '12px',
-              transition: 'all 0.2s ease'
-            }}
-            onMouseEnter={(e) => e.currentTarget.style.background = '#e0e0e0'}
-            onMouseLeave={(e) => e.currentTarget.style.background = '#f0f0f0'}
-          >
-            Default
-          </button>
-          <button
-            onClick={() => applyPreset('classic')}
-            style={{
-              padding: '6px 12px',
-              background: '#e8f4f8',
-              border: '1px solid #b8d4e0',
-              borderRadius: '4px',
-              cursor: 'pointer',
-              fontSize: '12px',
-              transition: 'all 0.2s ease'
-            }}
-            onMouseEnter={(e) => e.currentTarget.style.background = '#d0e8f0'}
-            onMouseLeave={(e) => e.currentTarget.style.background = '#e8f4f8'}
-          >
-            Classic (Clean Edges)
-          </button>
-          <button
-            onClick={() => applyPreset('smooth')}
-            style={{
-              padding: '6px 12px',
-              background: '#f0e8f8',
-              border: '1px solid #d0b8e0',
-              borderRadius: '4px',
-              cursor: 'pointer',
-              fontSize: '12px',
-              transition: 'all 0.2s ease'
-            }}
-            onMouseEnter={(e) => e.currentTarget.style.background = '#e0d0f0'}
-            onMouseLeave={(e) => e.currentTarget.style.background = '#f0e8f8'}
-          >
-            Smooth (Organic)
-          </button>
-          <button
-            onClick={() => applyPreset('precise')}
-            style={{
-              padding: '6px 12px',
-              background: '#f8e8e8',
-              border: '1px solid #e0b8b8',
-              borderRadius: '4px',
-              cursor: 'pointer',
-              fontSize: '12px',
-              transition: 'all 0.2s ease'
-            }}
-            onMouseEnter={(e) => e.currentTarget.style.background = '#f0d0d0'}
-            onMouseLeave={(e) => e.currentTarget.style.background = '#f8e8e8'}
-          >
-            Precise (Engineering)
-          </button>
-        </div>
 
         {/* Two Column Layout */}
         <div style={{ display: 'flex', gap: '16px' }}>
@@ -793,89 +603,93 @@ export const AdvancedSettings: React.FC<AdvancedSettingsProps> = ({ scene }) => 
               </label>
             </div>
 
-            <h4 style={{ margin: '16px 0 12px 0', fontSize: '14px', fontWeight: 600 }}>
-              Smoothing Options
-            </h4>
+            {!showRawMarchingSquares && (
+              <>
+                <h4 style={{ margin: '16px 0 12px 0', fontSize: '14px', fontWeight: 600 }}>
+                  Smoothing Options
+                </h4>
 
-            <div style={{ marginBottom: '16px' }}>
-              <div style={{ marginBottom: '8px' }}>
-                <label style={{ 
-                  display: 'block',
-                  fontSize: '12px',
-                  color: '#666',
-                  marginBottom: '4px'
-                }}>
-                  Smoothing Method
-                </label>
-                <select
-                  value={smoothingMethod}
-                  onChange={(e) => handleSmoothingChange(e.target.value as typeof smoothingMethod, smoothingIterations, smoothingStrength)}
-                  onInput={(e) => handleSmoothingChange((e.target as HTMLSelectElement).value as typeof smoothingMethod, smoothingIterations, smoothingStrength)}
-                  style={{
-                    width: '100%',
-                    padding: '4px 8px',
-                    fontSize: '12px',
-                    border: '1px solid #ddd',
-                    borderRadius: '4px',
-                    background: 'white',
-                    cursor: 'pointer'
-                  }}
-                >
-                  <option value="basic">Basic (Simple averaging)</option>
-                  <option value="laplacian">Laplacian (Edge-preserving)</option>
-                  <option value="chaikin">Chaikin (Subdivision)</option>
-                  <option value="bilateral">Bilateral (Feature-preserving)</option>
-                  <option value="savitzky-golay">Savitzky-Golay (Polynomial)</option>
-                  <option value="catmull-rom">Catmull-Rom (Spline)</option>
-                  <option value="edge-aware">Edge-Aware (Smart transitions)</option>
-                  <option value="intelligent">Intelligent (Feature detection)</option>
-                </select>
-              </div>
+                <div style={{ marginBottom: '16px' }}>
+                  <div style={{ marginBottom: '8px' }}>
+                    <label style={{ 
+                      display: 'block',
+                      fontSize: '12px',
+                      color: '#666',
+                      marginBottom: '4px'
+                    }}>
+                      Smoothing Method
+                    </label>
+                    <select
+                      value={smoothingMethod}
+                      onChange={(e) => handleSmoothingChange(e.target.value as typeof smoothingMethod, smoothingIterations, smoothingStrength)}
+                      onInput={(e) => handleSmoothingChange((e.target as HTMLSelectElement).value as typeof smoothingMethod, smoothingIterations, smoothingStrength)}
+                      style={{
+                        width: '100%',
+                        padding: '4px 8px',
+                        fontSize: '12px',
+                        border: '1px solid #ddd',
+                        borderRadius: '4px',
+                        background: 'white',
+                        cursor: 'pointer'
+                      }}
+                    >
+                      <option value="basic">Basic (Simple averaging)</option>
+                      <option value="laplacian">Laplacian (Edge-preserving)</option>
+                      <option value="chaikin">Chaikin (Subdivision)</option>
+                      <option value="bilateral">Bilateral (Feature-preserving)</option>
+                      <option value="savitzky-golay">Savitzky-Golay (Polynomial)</option>
+                      <option value="catmull-rom">Catmull-Rom (Spline)</option>
+                      <option value="edge-aware">Edge-Aware (Smart transitions)</option>
+                      <option value="intelligent">Intelligent (Feature detection)</option>
+                    </select>
+                  </div>
 
-              <div style={{ marginBottom: '8px' }}>
-                <label style={{ 
-                  display: 'flex', 
-                  justifyContent: 'space-between',
-                  alignItems: 'center',
-                  fontSize: '12px',
-                  color: '#666'
-                }}>
-                  Smoothing Iterations
-                  <span style={{ fontWeight: 'bold', color: '#333' }}>{smoothingIterations}</span>
-                </label>
-                <input
-                  type="range"
-                  min="0"
-                  max="10"
-                  step="1"
-                  value={smoothingIterations}
-                  onChange={(e) => handleSmoothingChange(smoothingMethod, parseInt(e.target.value), smoothingStrength)}
-                  style={{ width: '100%', cursor: 'pointer' }}
-                />
-              </div>
+                  <div style={{ marginBottom: '8px' }}>
+                    <label style={{ 
+                      display: 'flex', 
+                      justifyContent: 'space-between',
+                      alignItems: 'center',
+                      fontSize: '12px',
+                      color: '#666'
+                    }}>
+                      Smoothing Iterations
+                      <span style={{ fontWeight: 'bold', color: '#333' }}>{smoothingIterations}</span>
+                    </label>
+                    <input
+                      type="range"
+                      min="0"
+                      max="10"
+                      step="1"
+                      value={smoothingIterations}
+                      onChange={(e) => handleSmoothingChange(smoothingMethod, parseInt(e.target.value), smoothingStrength)}
+                      style={{ width: '100%', cursor: 'pointer' }}
+                    />
+                  </div>
 
-              <div style={{ marginBottom: '8px' }}>
-                <label style={{ 
-                  display: 'flex', 
-                  justifyContent: 'space-between',
-                  alignItems: 'center',
-                  fontSize: '12px',
-                  color: '#666'
-                }}>
-                  Smoothing Strength
-                  <span style={{ fontWeight: 'bold', color: '#333' }}>{smoothingStrength.toFixed(2)}</span>
-                </label>
-                <input
-                  type="range"
-                  min="0"
-                  max="1"
-                  step="0.05"
-                  value={smoothingStrength}
-                  onChange={(e) => handleSmoothingChange(smoothingMethod, smoothingIterations, parseFloat(e.target.value))}
-                  style={{ width: '100%', cursor: 'pointer' }}
-                />
-              </div>
-            </div>
+                  <div style={{ marginBottom: '8px' }}>
+                    <label style={{ 
+                      display: 'flex', 
+                      justifyContent: 'space-between',
+                      alignItems: 'center',
+                      fontSize: '12px',
+                      color: '#666'
+                    }}>
+                      Smoothing Strength
+                      <span style={{ fontWeight: 'bold', color: '#333' }}>{smoothingStrength.toFixed(2)}</span>
+                    </label>
+                    <input
+                      type="range"
+                      min="0"
+                      max="1"
+                      step="0.05"
+                      value={smoothingStrength}
+                      onChange={(e) => handleSmoothingChange(smoothingMethod, smoothingIterations, parseFloat(e.target.value))}
+                      style={{ width: '100%', cursor: 'pointer' }}
+                    />
+                  </div>
+                </div>
+              </>
+            )}
 
             <h4 style={{ margin: '16px 0 12px 0', fontSize: '14px', fontWeight: 600 }}>
               Collision Avoidance
