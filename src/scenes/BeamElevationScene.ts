@@ -373,11 +373,12 @@ export class BeamElevationScene extends Phaser.Scene {
       contours.forEach(contour => {
         if (contour.length < 3) return
         
-        // Check if any web cells are at the edges for clamping
-        const hasLeftEdgeCells = webCells.some(cell => cell.x === 0)
-        const hasRightEdgeCells = webCells.some(cell => cell.x === Math.ceil(this.beamLength) - 1)
-        const hasTopEdgeCells = webCells.some(cell => cell.y === Math.ceil(webHeight) - 1)
-        const hasBottomEdgeCells = webCells.some(cell => cell.y === 0)
+        // For web boundaries, we always need to clamp at all edges
+        // because the web is bounded by flanges on top/bottom and beam ends on left/right
+        const hasLeftEdgeCells = true  // Always clamp at beam start
+        const hasRightEdgeCells = true // Always clamp at beam end
+        const hasTopEdgeCells = true   // Always clamp at top flange boundary
+        const hasBottomEdgeCells = true // Always clamp at bottom flange boundary
         
         // Transform contour points to screen coordinates
         const screenContour = contour.map(point => {
@@ -389,28 +390,32 @@ export class BeamElevationScene extends Phaser.Scene {
           // Direct mapping: screenY = webTop + point.y * gridSize
           let y = webTop + point.y * this.gridSize
           
-          // Enhanced edge clamping with buffer respect
-          const edgeBuffer = Math.max(0.1, this.contourBufferSize * 0.1) // Minimum 0.1 grid units from edge
+          // Enhanced edge clamping - always engaged with proper square corners
+          // Use a small default buffer even when bufferSize is 0
+          const minBuffer = 0.05 // Minimum buffer to prevent rendering artifacts
+          // Scale buffer based on bufferSize setting (0-5 maps to 0-0.5 grid units)
+          const edgeBuffer = Math.max(minBuffer, this.contourBufferSize * 0.1)
           
-          // Left edge clamping - only if we have cells at x=0
-          if (hasLeftEdgeCells && point.x < edgeBuffer) {
-            x = startX + edgeBuffer * this.gridSize
+          // Apply edge clamping to create square corners
+          // Left edge
+          if (hasLeftEdgeCells) {
+            x = Math.max(startX + edgeBuffer * this.gridSize, x)
           }
           
-          // Right edge clamping - only if we have cells at the right edge
-          if (hasRightEdgeCells && point.x > cols - edgeBuffer) {
+          // Right edge
+          if (hasRightEdgeCells) {
             const rightEdge = startX + this.beamLength * this.gridSize
-            x = rightEdge - edgeBuffer * this.gridSize
+            x = Math.min(rightEdge - edgeBuffer * this.gridSize, x)
           }
           
-          // Top edge clamping (grid y=0 is at top of screen)
-          if (hasTopEdgeCells && point.y < edgeBuffer) {
-            y = webTop + edgeBuffer * this.gridSize
+          // Top edge
+          if (hasTopEdgeCells) {
+            y = Math.max(webTop + edgeBuffer * this.gridSize, y)
           }
           
-          // Bottom edge clamping (grid y=rows is at bottom of screen)
-          if (hasBottomEdgeCells && point.y > rows - edgeBuffer) {
-            y = webBottom - edgeBuffer * this.gridSize
+          // Bottom edge
+          if (hasBottomEdgeCells) {
+            y = Math.min(webBottom - edgeBuffer * this.gridSize, y)
           }
           
           // Final safety clamp to ensure we never exceed beam boundaries
@@ -500,10 +505,20 @@ export class BeamElevationScene extends Phaser.Scene {
     contours.forEach(contour => {
       if (contour.length < 3) return
       
-      // Transform contour points to screen coordinates
+      // Transform contour points to screen coordinates with edge clamping
+      const minBuffer = 0.05
+      const edgeBuffer = Math.max(minBuffer, this.contourBufferSize * 0.1)
+      
       const screenContour = contour.map(point => {
-        const x = startX + point.x * this.gridSize
-        const y = webTop + point.y * this.gridSize
+        let x = startX + point.x * this.gridSize
+        let y = webTop + point.y * this.gridSize
+        
+        // Apply edge clamping for square corners
+        x = Math.max(startX + edgeBuffer * this.gridSize, x)
+        x = Math.min(startX + cols * this.gridSize - edgeBuffer * this.gridSize, x)
+        y = Math.max(webTop + edgeBuffer * this.gridSize, y)
+        y = Math.min(webBottom - edgeBuffer * this.gridSize, y)
+        
         return { x, y }
       })
       

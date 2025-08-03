@@ -508,8 +508,20 @@ export const AdvancedSettings: React.FC<AdvancedSettingsProps> = ({ scene }) => 
                     color: '#666'
                   }}>
                     Buffer Value
-                    <span style={{ fontWeight: 'bold', color: '#333' }}>{bufferValue.toFixed(2)}</span>
+                    <span style={{ fontWeight: 'bold', color: bufferValue > threshold ? '#ff6b6b' : '#333' }}>
+                      {bufferValue.toFixed(2)}
+                    </span>
                   </label>
+                  {bufferValue > threshold && (
+                    <div style={{
+                      fontSize: '10px',
+                      color: '#ff6b6b',
+                      marginTop: '4px',
+                      marginBottom: '4px'
+                    }}>
+                      ⚠️ Values above threshold ({threshold}) will invert contours
+                    </div>
+                  )}
                   <input
                     type="range"
                     min="0"
