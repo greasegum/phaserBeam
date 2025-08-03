@@ -14,6 +14,11 @@ import {
   validateAndRepairContours,
   ValidationOptions
 } from './contourValidation'
+import {
+  edgeAwareSmoothing,
+  intelligentEdgeSmoothing,
+  GridBounds
+} from './edgeAwareSmoothing'
 
 export interface Point {
   x: number
@@ -58,9 +63,11 @@ export interface MarchingSquaresOptions {
   // Grid alignment mode
   alignmentMode?: 'edges' | 'vertices' | 'center' // Draw through cell edges, vertices or centers (default: 'edges')
   // Advanced smoothing options
-  smoothingMethod?: 'basic' | 'laplacian' | 'chaikin' | 'bilateral' | 'savitzky-golay' | 'catmull-rom'
+  smoothingMethod?: 'basic' | 'laplacian' | 'chaikin' | 'bilateral' | 'savitzky-golay' | 'catmull-rom' | 'edge-aware' | 'intelligent'
   smoothingIterations?: number // Number of smoothing iterations (default: 2)
   smoothingStrength?: number // Smoothing strength factor (default: 0.5)
+  edgeTransitionZone?: number // Distance from edge where smoothing transitions (default: 1.0)
+  preserveCorners?: boolean // Keep sharp corners at edges (default: true)
   // Collision avoidance options
   collisionAvoidance?: boolean // Enable collision avoidance between regions (default: false)
   collisionMinDistance?: number // Minimum distance between contours in grid units (default: 0.5)
@@ -150,6 +157,8 @@ export function marchingSquaresOptimized(
     smoothingMethod = 'basic',
     smoothingIterations = 2,
     smoothingStrength = 0.5,
+    edgeTransitionZone = 1.0,
+    preserveCorners = true,
     collisionAvoidance = false,
     collisionMinDistance = 0.5,
     collisionMethod = 'hybrid',
@@ -295,6 +304,44 @@ export function marchingSquaresOptimized(
             preserveEdges: true
           })
         )
+        break
+        
+      case 'edge-aware':
+        {
+          const gridBounds: GridBounds = {
+            left: gridLeft,
+            right: gridRight,
+            top: gridTop,
+            bottom: gridBottom
+          }
+          finalContours = contours.map(contour => 
+            edgeAwareSmoothing(contour, gridBounds, {
+              iterations: smoothingIterations,
+              strength: smoothingStrength,
+              edgeTransitionZone: edgeTransitionZone,
+              preserveCorners: preserveCorners
+            })
+          )
+        }
+        break
+        
+      case 'intelligent':
+        {
+          const gridBounds: GridBounds = {
+            left: gridLeft,
+            right: gridRight,
+            top: gridTop,
+            bottom: gridBottom
+          }
+          finalContours = contours.map(contour => 
+            intelligentEdgeSmoothing(contour, gridBounds, {
+              iterations: smoothingIterations,
+              strength: smoothingStrength,
+              edgeTransitionZone: edgeTransitionZone,
+              preserveCorners: preserveCorners
+            })
+          )
+        }
         break
         
       case 'basic':

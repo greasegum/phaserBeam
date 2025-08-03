@@ -26,7 +26,7 @@ export const AdvancedSettings: React.FC<AdvancedSettingsProps> = ({ scene }) => 
   const [showRawMarchingSquares, setShowRawMarchingSquares] = useState(false)
   const [showControlPoints, setShowControlPoints] = useState(false)
   // Processing
-  const [smoothingMethod, setSmoothingMethod] = useState<'basic' | 'laplacian' | 'chaikin' | 'bilateral' | 'savitzky-golay' | 'catmull-rom'>('basic')
+  const [smoothingMethod, setSmoothingMethod] = useState<'basic' | 'laplacian' | 'chaikin' | 'bilateral' | 'savitzky-golay' | 'catmull-rom' | 'edge-aware' | 'intelligent'>('edge-aware')
   const [smoothingIterations, setSmoothingIterations] = useState(2)
   const [smoothingStrength, setSmoothingStrength] = useState(0.5)
   const [collisionAvoidance, setCollisionAvoidance] = useState(true)
@@ -149,9 +149,9 @@ export const AdvancedSettings: React.FC<AdvancedSettingsProps> = ({ scene }) => 
         setSnapDistance(0.1)
         setShowRawMarchingSquares(false)
         setShowControlPoints(false)
-        setSmoothingMethod('basic')
-        setSmoothingIterations(0) // No smoothing for clean edges
-        setSmoothingStrength(0)
+        setSmoothingMethod('edge-aware')
+        setSmoothingIterations(1) // Minimal smoothing for clean edges
+        setSmoothingStrength(0.3)
         setCollisionAvoidance(false) // Simple behavior
         // Apply to scene
         scene?.setInterpolationMethod?.('linear')
@@ -166,7 +166,7 @@ export const AdvancedSettings: React.FC<AdvancedSettingsProps> = ({ scene }) => 
         scene?.setSnapDistance?.(0.1)
         scene?.setShowRawMarchingSquares?.(false)
         scene?.setShowControlPoints?.(false)
-        scene?.setSmoothingOptions('basic', 0, 0)
+        scene?.setSmoothingOptions('edge-aware', 1, 0.3)
         scene?.setCollisionAvoidance(false, 0.5, 'hybrid', 10)
         break
         
@@ -290,10 +290,10 @@ export const AdvancedSettings: React.FC<AdvancedSettingsProps> = ({ scene }) => 
     scene?.setShowRawMarchingSquares?.(false)
     scene?.setShowControlPoints?.(false)
     // Processing
-    setSmoothingMethod('basic')
+    setSmoothingMethod('intelligent')
     setSmoothingIterations(2)
     setSmoothingStrength(0.5)
-    scene?.setSmoothingOptions('basic', 2, 0.5)
+    scene?.setSmoothingOptions('intelligent', 2, 0.5)
     setCollisionAvoidance(true)
     setCollisionMinDistance(0.5)
     setCollisionMethod('hybrid')
@@ -892,6 +892,8 @@ export const AdvancedSettings: React.FC<AdvancedSettingsProps> = ({ scene }) => 
                   <option value="bilateral">Bilateral (Feature-preserving)</option>
                   <option value="savitzky-golay">Savitzky-Golay (Polynomial)</option>
                   <option value="catmull-rom">Catmull-Rom (Spline)</option>
+                  <option value="edge-aware">Edge-Aware (Smart transitions)</option>
+                  <option value="intelligent">Intelligent (Feature detection)</option>
                 </select>
               </div>
 
