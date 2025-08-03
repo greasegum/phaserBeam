@@ -503,7 +503,7 @@ export class BeamElevationScene extends Phaser.Scene {
       // Transform contour points to screen coordinates
       const screenContour = contour.map(point => {
         const x = startX + point.x * this.gridSize
-        const y = webTop + (rows - point.y) * this.gridSize
+        const y = webTop + point.y * this.gridSize
         return { x, y }
       })
       
