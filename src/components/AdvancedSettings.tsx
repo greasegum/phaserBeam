@@ -9,6 +9,7 @@ interface AdvancedSettingsProps {
 export const AdvancedSettings: React.FC<AdvancedSettingsProps> = ({ scene }) => {
   const [isOpen, setIsOpen] = useState(false)
   // Marching Squares Algorithm
+  const [interpolationEnabled, setInterpolationEnabled] = useState(true)
   const [interpolationMethod, setInterpolationMethod] = useState<'linear' | 'cubic' | 'none'>('linear')
   const [saddlePointResolution, setSaddlePointResolution] = useState<'center' | 'gradient' | 'majority'>('center')
   const [threshold, setThreshold] = useState(0.5)
@@ -40,7 +41,9 @@ export const AdvancedSettings: React.FC<AdvancedSettingsProps> = ({ scene }) => 
   useEffect(() => {
     if (scene) {
       // Algorithm settings
-      setInterpolationMethod(scene.getInterpolationMethod?.() || 'linear')
+      const currentInterpolationMethod = scene.getInterpolationMethod?.() || 'linear'
+      setInterpolationMethod(currentInterpolationMethod)
+      setInterpolationEnabled(currentInterpolationMethod !== 'none')
       setSaddlePointResolution(scene.getSaddlePointResolution?.() || 'center')
       setThreshold(scene.getThreshold?.() || 0.5)
       setAlignmentMode(scene.getAlignmentMode?.() || 'edges')
@@ -130,9 +133,35 @@ export const AdvancedSettings: React.FC<AdvancedSettingsProps> = ({ scene }) => 
     scene.setCollisionAvoidance(enabled, minDistance, method, iterations)
   }
 
+  const handleInterpolationEnabledChange = (enabled: boolean) => {
+    if (!scene) return
+    setInterpolationEnabled(enabled)
+    
+    if (enabled) {
+      // Re-enable interpolation with previous method, defaulting to linear
+      const method = interpolationMethod === 'none' ? 'linear' : interpolationMethod
+      setInterpolationMethod(method)
+      scene.setInterpolationMethod(method)
+      
+      // Re-enable scalar field with previous method, defaulting to gaussian
+      const scalarMethod = scalarFieldMethod === 'none' ? 'gaussian' : scalarFieldMethod
+      setScalarFieldMethod(scalarMethod)
+      scene.setScalarFieldMethod(scalarMethod)
+    } else {
+      // Disable interpolation
+      setInterpolationMethod('none')
+      scene.setInterpolationMethod('none')
+      
+      // Disable scalar field
+      setScalarFieldMethod('none')
+      scene.setScalarFieldMethod('none')
+    }
+  }
+
 
   const resetToDefaults = () => {
     // Algorithm (Classic settings)
+    setInterpolationEnabled(true)
     setInterpolationMethod('linear')
     setSaddlePointResolution('center')
     setThreshold(0.5)
@@ -236,117 +265,39 @@ export const AdvancedSettings: React.FC<AdvancedSettingsProps> = ({ scene }) => 
           {/* Left Column */}
           <div style={{ flex: 1 }}>
             <h4 style={{ margin: '0 0 12px 0', fontSize: '14px', fontWeight: 600 }}>
-              Marching Squares Algorithm
+              Basic Algorithm Settings
             </h4>
 
+            {/* Basic Algorithm Settings */}
             <div style={{ marginBottom: '16px' }}>
               <div style={{ marginBottom: '8px' }}>
                 <label style={{ 
-                  display: 'block',
+                  display: 'flex', 
+                  justifyContent: 'space-between',
+                  alignItems: 'center',
                   fontSize: '12px',
-                  color: '#666',
-                  marginBottom: '4px'
+                  color: '#666'
                 }}>
-                  Interpolation Method
-                  <HelpTooltip text="Controls how contour points are positioned along cell edges. Linear gives smooth curves, Cubic provides smoother S-curves, None creates pixelated edges." />
+                  <span style={{ display: 'flex', alignItems: 'center' }}>
+                    Threshold
+                    <HelpTooltip text="The value that determines the contour boundary. Values above this threshold are considered inside the shape." />
+                  </span>
+                  <span style={{ fontWeight: 'bold', color: '#333' }}>{threshold.toFixed(2)}</span>
                 </label>
-                <select
-                  value={interpolationMethod}
+                <input
+                  type="range"
+                  min="0"
+                  max="1"
+                  step="0.05"
+                  value={threshold}
                   onChange={(e) => {
-                    const method = e.target.value as 'linear' | 'cubic' | 'none'
-                    setInterpolationMethod(method)
-                    scene?.setInterpolationMethod?.(method)
+                    const value = parseFloat(e.target.value)
+                    setThreshold(value)
+                    scene?.setThreshold?.(value)
                   }}
-                  onInput={(e) => {
-                    const method = (e.target as HTMLSelectElement).value as 'linear' | 'cubic' | 'none'
-                    setInterpolationMethod(method)
-                    scene?.setInterpolationMethod?.(method)
-                  }}
-                  style={{
-                    width: '100%',
-                    padding: '4px 8px',
-                    fontSize: '12px',
-                    border: '1px solid #ddd',
-                    borderRadius: '4px',
-                    background: 'white',
-                    cursor: 'pointer'
-                  }}
-                >
-                  <option value="linear">Linear (Smooth)</option>
-                  <option value="cubic">Cubic (Smoother)</option>
-                  <option value="none">None (Pixelated)</option>
-                </select>
+                  style={{ width: '100%', cursor: 'pointer' }}
+                />
               </div>
-
-              <div style={{ marginBottom: '8px' }}>
-                <label style={{ 
-                  display: 'block',
-                  fontSize: '12px',
-                  color: '#666',
-                  marginBottom: '4px'
-                }}>
-                  Scalar Field Method
-                  <HelpTooltip text="Converts binary grid data to continuous gradients. Gaussian blur creates smooth transitions, Distance field generates gradients based on distance to edges, Box blur provides simple averaging." />
-                </label>
-                <select
-                  value={scalarFieldMethod}
-                  onChange={(e) => {
-                    const method = e.target.value as 'gaussian' | 'distance' | 'box' | 'none'
-                    setScalarFieldMethod(method)
-                    scene?.setScalarFieldMethod?.(method)
-                  }}
-                  onInput={(e) => {
-                    const method = (e.target as HTMLSelectElement).value as 'gaussian' | 'distance' | 'box' | 'none'
-                    setScalarFieldMethod(method)
-                    scene?.setScalarFieldMethod?.(method)
-                  }}
-                  style={{
-                    width: '100%',
-                    padding: '4px 8px',
-                    fontSize: '12px',
-                    border: '1px solid #ddd',
-                    borderRadius: '4px',
-                    background: 'white',
-                    cursor: 'pointer'
-                  }}
-                >
-                  <option value="gaussian">Gaussian Blur</option>
-                  <option value="distance">Distance Field</option>
-                  <option value="box">Box Blur</option>
-                  <option value="none">None (Binary)</option>
-                </select>
-              </div>
-
-              {scalarFieldMethod !== 'none' && (
-                <div style={{ marginBottom: '8px' }}>
-                  <label style={{ 
-                    display: 'flex', 
-                    justifyContent: 'space-between',
-                    alignItems: 'center',
-                    fontSize: '12px',
-                    color: '#666'
-                  }}>
-                    <span style={{ display: 'flex', alignItems: 'center' }}>
-                      Blur Radius
-                      <HelpTooltip text="The size of the blur kernel in grid cells. Larger values create smoother gradients but may round corners more." />
-                    </span>
-                    <span style={{ fontWeight: 'bold', color: '#333' }}>{scalarFieldRadius}</span>
-                  </label>
-                  <input
-                    type="range"
-                    min="1"
-                    max="5"
-                    step="1"
-                    value={scalarFieldRadius}
-                    onChange={(e) => {
-                      const radius = parseInt(e.target.value)
-                      setScalarFieldRadius(radius)
-                      scene?.setScalarFieldRadius?.(radius)
-                    }}
-                    style={{ width: '100%', cursor: 'pointer' }}
-                  />
-                </div>
-              )}
 
               <div style={{ marginBottom: '8px' }}>
                 <label style={{ 
@@ -385,39 +336,146 @@ export const AdvancedSettings: React.FC<AdvancedSettingsProps> = ({ scene }) => 
                   <option value="majority">Majority (Sharp)</option>
                 </select>
               </div>
-
-              <div style={{ marginBottom: '8px' }}>
-                <label style={{ 
-                  display: 'flex', 
-                  justifyContent: 'space-between',
-                  alignItems: 'center',
-                  fontSize: '12px',
-                  color: '#666'
-                }}>
-                  <span style={{ display: 'flex', alignItems: 'center' }}>
-                    Threshold
-                    <HelpTooltip text="The value that determines the contour boundary. Values above this threshold are considered inside the shape." />
-                  </span>
-                  <span style={{ fontWeight: 'bold', color: '#333' }}>{threshold.toFixed(2)}</span>
-                </label>
-                <input
-                  type="range"
-                  min="0"
-                  max="1"
-                  step="0.05"
-                  value={threshold}
-                  onChange={(e) => {
-                    const value = parseFloat(e.target.value)
-                    setThreshold(value)
-                    scene?.setThreshold?.(value)
-                  }}
-                  style={{ width: '100%', cursor: 'pointer' }}
-                />
-              </div>
             </div>
 
             <h4 style={{ margin: '16px 0 12px 0', fontSize: '14px', fontWeight: 600 }}>
-              Contour Alignment
+              Interpolation Settings
+            </h4>
+
+            {/* Interpolation Settings */}
+            <div style={{ marginBottom: '16px' }}>
+              <label style={{ 
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px',
+                fontSize: '12px',
+                color: '#666',
+                cursor: 'pointer',
+                marginBottom: '12px'
+              }}>
+                <input
+                  type="checkbox"
+                  checked={interpolationEnabled}
+                  onChange={(e) => handleInterpolationEnabledChange(e.target.checked)}
+                  style={{ cursor: 'pointer' }}
+                />
+                Enable Interpolation
+                <HelpTooltip text="Enables smooth interpolation of contour points and scalar field processing. When disabled, contours use raw pixelated edges." />
+              </label>
+
+              {interpolationEnabled && (
+                <>
+                  <div style={{ marginBottom: '8px' }}>
+                    <label style={{ 
+                      display: 'block',
+                      fontSize: '12px',
+                      color: '#666',
+                      marginBottom: '4px'
+                    }}>
+                      Interpolation Method
+                      <HelpTooltip text="Controls how contour points are positioned along cell edges. Linear gives smooth curves, Cubic provides smoother S-curves." />
+                    </label>
+                    <select
+                      value={interpolationMethod}
+                      onChange={(e) => {
+                        const method = e.target.value as 'linear' | 'cubic' | 'none'
+                        setInterpolationMethod(method)
+                        scene?.setInterpolationMethod?.(method)
+                      }}
+                      onInput={(e) => {
+                        const method = (e.target as HTMLSelectElement).value as 'linear' | 'cubic' | 'none'
+                        setInterpolationMethod(method)
+                        scene?.setInterpolationMethod?.(method)
+                      }}
+                      style={{
+                        width: '100%',
+                        padding: '4px 8px',
+                        fontSize: '12px',
+                        border: '1px solid #ddd',
+                        borderRadius: '4px',
+                        background: 'white',
+                        cursor: 'pointer'
+                      }}
+                    >
+                      <option value="linear">Linear (Smooth)</option>
+                      <option value="cubic">Cubic (Smoother)</option>
+                    </select>
+                  </div>
+
+                  <div style={{ marginBottom: '8px' }}>
+                    <label style={{ 
+                      display: 'block',
+                      fontSize: '12px',
+                      color: '#666',
+                      marginBottom: '4px'
+                    }}>
+                      Scalar Field Method
+                      <HelpTooltip text="Converts binary grid data to continuous gradients. Gaussian blur creates smooth transitions, Distance field generates gradients based on distance to edges, Box blur provides simple averaging." />
+                    </label>
+                    <select
+                      value={scalarFieldMethod}
+                      onChange={(e) => {
+                        const method = e.target.value as 'gaussian' | 'distance' | 'box' | 'none'
+                        setScalarFieldMethod(method)
+                        scene?.setScalarFieldMethod?.(method)
+                      }}
+                      onInput={(e) => {
+                        const method = (e.target as HTMLSelectElement).value as 'gaussian' | 'distance' | 'box' | 'none'
+                        setScalarFieldMethod(method)
+                        scene?.setScalarFieldMethod?.(method)
+                      }}
+                      style={{
+                        width: '100%',
+                        padding: '4px 8px',
+                        fontSize: '12px',
+                        border: '1px solid #ddd',
+                        borderRadius: '4px',
+                        background: 'white',
+                        cursor: 'pointer'
+                      }}
+                    >
+                      <option value="gaussian">Gaussian Blur</option>
+                      <option value="distance">Distance Field</option>
+                      <option value="box">Box Blur</option>
+                    </select>
+                  </div>
+
+                  {scalarFieldMethod !== 'none' && (
+                    <div style={{ marginBottom: '8px' }}>
+                      <label style={{ 
+                        display: 'flex', 
+                        justifyContent: 'space-between',
+                        alignItems: 'center',
+                        fontSize: '12px',
+                        color: '#666'
+                      }}>
+                        <span style={{ display: 'flex', alignItems: 'center' }}>
+                          Scalar Field Radius
+                          <HelpTooltip text="The size of the blur kernel in grid cells. Larger values create smoother gradients but may round corners more." />
+                        </span>
+                        <span style={{ fontWeight: 'bold', color: '#333' }}>{scalarFieldRadius}</span>
+                      </label>
+                      <input
+                        type="range"
+                        min="1"
+                        max="5"
+                        step="1"
+                        value={scalarFieldRadius}
+                        onChange={(e) => {
+                          const radius = parseInt(e.target.value)
+                          setScalarFieldRadius(radius)
+                          scene?.setScalarFieldRadius?.(radius)
+                        }}
+                        style={{ width: '100%', cursor: 'pointer' }}
+                      />
+                    </div>
+                  )}
+                </>
+              )}
+            </div>
+
+            <h4 style={{ margin: '16px 0 12px 0', fontSize: '14px', fontWeight: 600 }}>
+              Contour Geometry
             </h4>
 
             <div style={{ marginBottom: '16px' }}>
@@ -660,7 +718,7 @@ export const AdvancedSettings: React.FC<AdvancedSettingsProps> = ({ scene }) => 
           {/* Right Column */}
           <div style={{ flex: 1 }}>
             <h4 style={{ margin: '0 0 12px 0', fontSize: '14px', fontWeight: 600 }}>
-              View Mode
+              View Options
             </h4>
 
             <div style={{ marginBottom: '16px' }}>
