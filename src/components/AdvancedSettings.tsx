@@ -252,6 +252,11 @@ export const AdvancedSettings: React.FC<AdvancedSettingsProps> = ({ scene }) => 
                     setInterpolationMethod(method)
                     scene?.setInterpolationMethod?.(method)
                   }}
+                  onInput={(e) => {
+                    const method = (e.target as HTMLSelectElement).value as 'linear' | 'cubic' | 'none'
+                    setInterpolationMethod(method)
+                    scene?.setInterpolationMethod?.(method)
+                  }}
                   style={{
                     width: '100%',
                     padding: '4px 8px',
@@ -281,6 +286,11 @@ export const AdvancedSettings: React.FC<AdvancedSettingsProps> = ({ scene }) => 
                   value={saddlePointResolution}
                   onChange={(e) => {
                     const resolution = e.target.value as 'center' | 'gradient' | 'majority'
+                    setSaddlePointResolution(resolution)
+                    scene?.setSaddlePointResolution?.(resolution)
+                  }}
+                  onInput={(e) => {
+                    const resolution = (e.target as HTMLSelectElement).value as 'center' | 'gradient' | 'majority'
                     setSaddlePointResolution(resolution)
                     scene?.setSaddlePointResolution?.(resolution)
                   }}
@@ -345,6 +355,11 @@ export const AdvancedSettings: React.FC<AdvancedSettingsProps> = ({ scene }) => 
                   value={alignmentMode}
                   onChange={(e) => {
                     const mode = e.target.value as 'edges' | 'vertices' | 'center'
+                    setAlignmentMode(mode)
+                    scene?.setAlignmentMode?.(mode)
+                  }}
+                  onInput={(e) => {
+                    const mode = (e.target as HTMLSelectElement).value as 'edges' | 'vertices' | 'center'
                     setAlignmentMode(mode)
                     scene?.setAlignmentMode?.(mode)
                   }}
@@ -647,6 +662,7 @@ export const AdvancedSettings: React.FC<AdvancedSettingsProps> = ({ scene }) => 
                 <select
                   value={smoothingMethod}
                   onChange={(e) => handleSmoothingChange(e.target.value as typeof smoothingMethod, smoothingIterations, smoothingStrength)}
+                  onInput={(e) => handleSmoothingChange((e.target as HTMLSelectElement).value as typeof smoothingMethod, smoothingIterations, smoothingStrength)}
                   style={{
                     width: '100%',
                     padding: '4px 8px',
@@ -769,6 +785,7 @@ export const AdvancedSettings: React.FC<AdvancedSettingsProps> = ({ scene }) => 
                     <select
                       value={collisionMethod}
                       onChange={(e) => handleCollisionChange(collisionAvoidance, collisionMinDistance, e.target.value as typeof collisionMethod, collisionIterations)}
+                      onInput={(e) => handleCollisionChange(collisionAvoidance, collisionMinDistance, (e.target as HTMLSelectElement).value as typeof collisionMethod, collisionIterations)}
                       style={{
                         width: '100%',
                         padding: '4px 8px',

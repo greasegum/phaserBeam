@@ -315,11 +315,11 @@ export class BeamElevationScene extends Phaser.Scene {
       
       // Fill the grid based on web cells
       // Grid coordinates: (0,0) is top-left, y increases downward
-      // Cell coordinates: (0,0) is bottom-left, y increases upward
+      // Web cells: row=0 is at BOTTOM of web, row increases going UP
+      // So we need to invert: gridY = (rows - 1) - cell.y
       webCells.forEach(cell => {
-        // Convert cell coordinates to grid coordinates
         const gridX = cell.x
-        const gridY = rows - 1 - cell.y // Invert y coordinate
+        const gridY = rows - 1 - cell.y // Invert because web cells have row=0 at bottom
         
         if (gridX >= 0 && gridX < cols && gridY >= 0 && gridY < rows) {
           grid[gridY][gridX] = 1
@@ -334,10 +334,12 @@ export class BeamElevationScene extends Phaser.Scene {
       
       // Apply optimized marching squares
       const marchingOptions: MarchingSquaresOptions = {
-        threshold: 0.5,
+        threshold: this.threshold,
+        interpolationMethod: this.interpolationMethod,
+        saddlePointResolution: this.saddlePointResolution,
         smoothing: !this.showRawMarchingSquares,
         edgeSnapping: true,
-        snapDistance: 0.01,
+        snapDistance: this.snapDistance,
         offsetX: this.contourOffsetX,
         offsetY: this.contourOffsetY,
         globalOffsetX: this.contourGlobalOffsetX,
@@ -350,7 +352,10 @@ export class BeamElevationScene extends Phaser.Scene {
         collisionAvoidance: this.collisionAvoidance,
         collisionMinDistance: this.collisionMinDistance,
         collisionMethod: this.collisionMethod,
-        collisionIterations: this.collisionIterations
+        collisionIterations: this.collisionIterations,
+        alignmentMode: this.alignmentMode,
+        clampToGrid: this.clampToGrid,
+        extendToBoundary: this.extendToBoundary
       }
       const contours = marchingSquaresOptimized(grid, marchingOptions)
       // console.log('Generated contours:', contours.length, 'contours')
