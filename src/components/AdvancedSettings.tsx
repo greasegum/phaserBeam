@@ -14,8 +14,8 @@ export const AdvancedSettings: React.FC<AdvancedSettingsProps> = ({ scene }) => 
   const [threshold, setThreshold] = useState(0.5)
   // Geometry
   const [alignmentMode, setAlignmentMode] = useState<'edges' | 'vertices' | 'center'>('edges')
-  const [globalOffsetX, setGlobalOffsetX] = useState(0)
-  const [globalOffsetY, setGlobalOffsetY] = useState(0)
+  const [globalOffsetX, setGlobalOffsetX] = useState(1)
+  const [globalOffsetY, setGlobalOffsetY] = useState(1)
   const [bufferSize, setBufferSize] = useState(1)
   const [bufferValue, setBufferValue] = useState(0)
   const [clampToGrid, setClampToGrid] = useState(true)
@@ -56,9 +56,9 @@ export const AdvancedSettings: React.FC<AdvancedSettingsProps> = ({ scene }) => 
       // Get offsets
       const offsets = scene.getContourOffsets?.()
       if (offsets) {
-        // Convert from internal offset (-0.5 = 0 in UI)
-        setGlobalOffsetX(offsets.globalX + 0.5)
-        setGlobalOffsetY(offsets.globalY + 0.5)
+        // Convert from internal offset (0 = 1 in UI)
+        setGlobalOffsetX(offsets.globalX + 1)
+        setGlobalOffsetY(offsets.globalY + 1)
       }
       
       // Get buffer
@@ -94,15 +94,15 @@ export const AdvancedSettings: React.FC<AdvancedSettingsProps> = ({ scene }) => 
   const handleGlobalOffsetChange = (axis: 'x' | 'y', value: number) => {
     if (!scene) return
     
-    // Convert UI value to internal offset (0 in UI = -0.5 internal)
-    const internalValue = value - 0.5
+    // Convert UI value to internal offset (1 in UI = 0 internal)
+    const internalValue = value - 1
     
     if (axis === 'x') {
       setGlobalOffsetX(value)
-      scene.setContourGlobalOffsets(internalValue, globalOffsetY - 0.5)
+      scene.setContourGlobalOffsets(internalValue, globalOffsetY - 1)
     } else {
       setGlobalOffsetY(value)
-      scene.setContourGlobalOffsets(globalOffsetX - 0.5, internalValue)
+      scene.setContourGlobalOffsets(globalOffsetX - 1, internalValue)
     }
   }
 
@@ -141,15 +141,15 @@ export const AdvancedSettings: React.FC<AdvancedSettingsProps> = ({ scene }) => 
     scene?.setThreshold?.(0.5)
     // Geometry
     setAlignmentMode('edges')
-    setGlobalOffsetX(0) // 0 in UI = -0.5 internal
-    setGlobalOffsetY(0) // 0 in UI = -0.5 internal
+    setGlobalOffsetX(1) // 1 in UI = 0 internal
+    setGlobalOffsetY(1) // 1 in UI = 0 internal
     setBufferSize(1)
     setBufferValue(0)
     setClampToGrid(true)
     setExtendToBoundary(false)
     setSnapDistance(0.1)
     scene?.setAlignmentMode?.('edges')
-    scene?.setContourGlobalOffsets(-0.5, -0.5)
+    scene?.setContourGlobalOffsets(0, 0)
     scene?.setContourBuffer(1, 0)
     scene?.setClampToGrid?.(true)
     scene?.setExtendToBoundary?.(false)
@@ -429,7 +429,7 @@ export const AdvancedSettings: React.FC<AdvancedSettingsProps> = ({ scene }) => 
                   marginBottom: '4px'
                 }}>
                   Alignment Mode
-                  <HelpTooltip text="Controls where contours are drawn relative to grid cells. Edge aligned follows cell edges, Vertex aligned connects cell corners, Center aligned passes through cell centers." />
+                  <HelpTooltip text="Controls contour placement. Edges: smooth contours along cell edges (default). Vertices: pixelated/stepped contours following grid lines. Center: contours pulled toward cell centers for smoother appearance." />
                 </label>
                 <select
                   value={alignmentMode}
@@ -472,7 +472,7 @@ export const AdvancedSettings: React.FC<AdvancedSettingsProps> = ({ scene }) => 
                 }}>
                   <span style={{ display: 'flex', alignItems: 'center' }}>
                     Global Offset X
-                    <HelpTooltip text="Shifts the entire contour horizontally in grid units. 0 is centered on grid cells." />
+                    <HelpTooltip text="Shifts the entire contour horizontally in grid units. 1 is centered on grid cells." />
                   </span>
                   <span style={{ fontWeight: 'bold', color: '#333' }}>{globalOffsetX.toFixed(2)}</span>
                 </label>
@@ -497,7 +497,7 @@ export const AdvancedSettings: React.FC<AdvancedSettingsProps> = ({ scene }) => 
                 }}>
                   <span style={{ display: 'flex', alignItems: 'center' }}>
                     Global Offset Y
-                    <HelpTooltip text="Shifts the entire contour vertically in grid units. 0 is centered on grid cells." />
+                    <HelpTooltip text="Shifts the entire contour vertically in grid units. 1 is centered on grid cells." />
                   </span>
                   <span style={{ fontWeight: 'bold', color: '#333' }}>{globalOffsetY.toFixed(2)}</span>
                 </label>

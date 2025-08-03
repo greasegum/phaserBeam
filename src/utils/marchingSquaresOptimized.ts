@@ -86,15 +86,16 @@ function validateAndCorrectOptions(options: MarchingSquaresOptions): MarchingSqu
   const corrected = { ...options }
   
   // Auto-corrections for logical conflicts
-  if (corrected.alignmentMode === 'vertices' && corrected.interpolationMethod === 'linear') {
-    // Interpolation is meaningless in vertex mode
+  if (corrected.alignmentMode === 'vertices' && corrected.interpolationMethod !== 'none') {
+    // Vertices mode creates stepped paths, interpolation doesn't apply
     corrected.interpolationMethod = 'none'
     console.warn('Marching Squares: Setting interpolationMethod to "none" for vertex alignment mode')
   }
   
-  // Reduce smoothing intensity for vertex mode
-  if (corrected.alignmentMode === 'vertices' && corrected.smoothing) {
-    console.warn('Marching Squares: Smoothing may reduce the angular appearance of vertex mode')
+  // Center mode works best with interpolation
+  if (corrected.alignmentMode === 'center' && corrected.interpolationMethod === 'none') {
+    corrected.interpolationMethod = 'linear'
+    console.warn('Marching Squares: Setting interpolationMethod to "linear" for center alignment mode')
   }
   
   // Warn about contradictory combinations
@@ -464,86 +465,85 @@ function processCellOptimized(
   
   const segments: Edge[] = []
   
-  // In vertices mode, use a different approach
+  // In vertices mode, create pixelated contours that follow edges
   if (alignmentMode === 'vertices') {
-    // Vertex-based contours connect grid vertices directly
-    const points: Point[] = []
-    
-    // Define vertex positions relative to cell
-    const vertices: Point[] = [
-      { x: col, y: row },         // top-left
-      { x: col + 1, y: row },     // top-right
-      { x: col + 1, y: row + 1 }, // bottom-right
-      { x: col, y: row + 1 }      // bottom-left
-    ]
-    
-    // For each configuration, determine which vertices to connect
-    // This creates contours that pass through grid intersections
-    switch (config) {
-      case 1: // bottom-left inside
-        points.push(vertices[3], vertices[0])
-        break
-      case 2: // bottom-right inside
-        points.push(vertices[2], vertices[3])
-        break
-      case 3: // bottom inside
-        points.push(vertices[2], vertices[0])
-        break
-      case 4: // top-right inside
-        points.push(vertices[1], vertices[2])
-        break
-      case 5: // diagonal - connect based on center
-        {
-          const center = (tl + tr + br + bl) / 4
-          if (center >= threshold) {
-            points.push(vertices[0], vertices[2]) // connect tl to br
-          } else {
-            points.push(vertices[1], vertices[3]) // connect tr to bl
-          }
-        }
-        break
-      case 6: // right inside
-        points.push(vertices[1], vertices[3])
-        break
-      case 7: // all except top-left
-        points.push(vertices[1], vertices[0])
-        break
-      case 8: // top-left inside
-        points.push(vertices[0], vertices[1])
-        break
-      case 9: // left inside
-        points.push(vertices[3], vertices[1])
-        break
-      case 10: // diagonal - opposite of case 5
-        {
-          const center = (tl + tr + br + bl) / 4
-          if (center >= threshold) {
-            points.push(vertices[1], vertices[3]) // connect tr to bl
-          } else {
-            points.push(vertices[0], vertices[2]) // connect tl to br
-          }
-        }
-        break
-      case 11: // all except top-right
-        points.push(vertices[0], vertices[2])
-        break
-      case 12: // top inside
-        points.push(vertices[0], vertices[3])
-        break
-      case 13: // all except bottom-right
-        points.push(vertices[3], vertices[1])
-        break
-      case 14: // all except bottom-left
-        points.push(vertices[2], vertices[0])
-        break
-    }
-    
-    // Apply offsets to vertex positions
-    if (points.length === 2) {
-      segments.push({
-        p1: { x: points[0].x + offsetX, y: points[0].y + offsetY },
-        p2: { x: points[1].x + offsetX, y: points[1].y + offsetY }
-      })
+    // Instead of connecting arbitrary vertices, create a stepped/pixelated contour
+    // that follows the actual edge transitions
+    for (let i = 0; i < edges.length; i += 2) {
+      const edge1 = edges[i]
+      const edge2 = edges[i + 1]
+      
+      // Get the standard edge points
+      const p1 = getInterpolatedEdgePointCached(col, row, edge1, grid, threshold, edgeCache, 0, 0, 'none', 'edges')
+      const p2 = getInterpolatedEdgePointCached(col, row, edge2, grid, threshold, edgeCache, 0, 0, 'none', 'edges')
+      
+      // Convert to stepped/pixelated path that goes through vertices
+      const steppedPoints: Point[] = []
+      
+      // Determine which vertices to include based on the edge pair
+      if (edge1 === 0 && edge2 === 1) { // top to right
+        steppedPoints.push(
+          { x: col + 0.5 + offsetX, y: row + offsetY },
+          { x: col + 1 + offsetX, y: row + offsetY },
+          { x: col + 1 + offsetX, y: row + 0.5 + offsetY }
+        )
+      } else if (edge1 === 1 && edge2 === 2) { // right to bottom
+        steppedPoints.push(
+          { x: col + 1 + offsetX, y: row + 0.5 + offsetY },
+          { x: col + 1 + offsetX, y: row + 1 + offsetY },
+          { x: col + 0.5 + offsetX, y: row + 1 + offsetY }
+        )
+      } else if (edge1 === 2 && edge2 === 3) { // bottom to left
+        steppedPoints.push(
+          { x: col + 0.5 + offsetX, y: row + 1 + offsetY },
+          { x: col + offsetX, y: row + 1 + offsetY },
+          { x: col + offsetX, y: row + 0.5 + offsetY }
+        )
+      } else if (edge1 === 3 && edge2 === 0) { // left to top
+        steppedPoints.push(
+          { x: col + offsetX, y: row + 0.5 + offsetY },
+          { x: col + offsetX, y: row + offsetY },
+          { x: col + 0.5 + offsetX, y: row + offsetY }
+        )
+      } else if (edge1 === 0 && edge2 === 3) { // top to left
+        steppedPoints.push(
+          { x: col + 0.5 + offsetX, y: row + offsetY },
+          { x: col + offsetX, y: row + offsetY },
+          { x: col + offsetX, y: row + 0.5 + offsetY }
+        )
+      } else if (edge1 === 1 && edge2 === 0) { // right to top
+        steppedPoints.push(
+          { x: col + 1 + offsetX, y: row + 0.5 + offsetY },
+          { x: col + 1 + offsetX, y: row + offsetY },
+          { x: col + 0.5 + offsetX, y: row + offsetY }
+        )
+      } else if (edge1 === 2 && edge2 === 1) { // bottom to right
+        steppedPoints.push(
+          { x: col + 0.5 + offsetX, y: row + 1 + offsetY },
+          { x: col + 1 + offsetX, y: row + 1 + offsetY },
+          { x: col + 1 + offsetX, y: row + 0.5 + offsetY }
+        )
+      } else if (edge1 === 3 && edge2 === 2) { // left to bottom
+        steppedPoints.push(
+          { x: col + offsetX, y: row + 0.5 + offsetY },
+          { x: col + offsetX, y: row + 1 + offsetY },
+          { x: col + 0.5 + offsetX, y: row + 1 + offsetY }
+        )
+      } else {
+        // For other edge combinations, use direct connection
+        steppedPoints.push(
+          { x: p1.x + offsetX, y: p1.y + offsetY },
+          { x: p2.x + offsetX, y: p2.y + offsetY }
+        )
+      }
+      
+      // Create segments from stepped points
+      for (let j = 0; j < steppedPoints.length - 1; j++) {
+        segments.push({
+          p1: steppedPoints[j],
+          p2: steppedPoints[j + 1]
+        })
+      }
     }
     
     return segments
@@ -701,25 +701,16 @@ function getInterpolatedEdgePointCached(
   
   // Apply alignment mode adjustments
   if (alignmentMode === 'center') {
-    // In center mode, shift all points to cell centers
-    const centerOffsetX = 0.5
-    const centerOffsetY = 0.5
+    // In center mode, create contours that pass through cell centers
+    // This mode is useful for creating smoother, more centered paths
+    // We adjust the interpolation point to be closer to the cell center
+    const centerX = cellX + 0.5
+    const centerY = cellY + 0.5
     
-    // Find which cell this edge belongs to and adjust to its center
-    switch (edge) {
-      case 0: // top edge - shift down to center
-        y += centerOffsetY
-        break
-      case 1: // right edge - shift left to center
-        x -= centerOffsetX
-        break
-      case 2: // bottom edge - shift up to center
-        y -= centerOffsetY
-        break
-      case 3: // left edge - shift right to center
-        x += centerOffsetX
-        break
-    }
+    // Blend the edge point with the cell center
+    const blendFactor = 0.3 // How much to pull toward center (0=edge, 1=center)
+    x = x + (centerX - x) * blendFactor
+    y = y + (centerY - y) * blendFactor
   }
   
   // Apply offsets

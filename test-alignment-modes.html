@@ -1,0 +1,310 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Alignment Mode Test</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 20px;
+        }
+        .container {
+            display: flex;
+            gap: 20px;
+            margin-bottom: 20px;
+        }
+        canvas {
+            border: 1px solid #ccc;
+        }
+        .controls {
+            display: flex;
+            gap: 20px;
+            margin-bottom: 20px;
+        }
+    </style>
+</head>
+<body>
+    <h1>Marching Squares Alignment Mode Test</h1>
+    <div class="controls">
+        <label>
+            Alignment Mode:
+            <select id="alignmentMode">
+                <option value="edges">Edges (Default)</option>
+                <option value="vertices">Vertices</option>
+                <option value="center">Center</option>
+            </select>
+        </label>
+        <label>
+            Show Grid: <input type="checkbox" id="showGrid" checked>
+        </label>
+    </div>
+    <div class="container">
+        <div>
+            <h3>Binary Grid</h3>
+            <canvas id="gridCanvas" width="300" height="300"></canvas>
+        </div>
+        <div>
+            <h3>Marching Squares Contours</h3>
+            <canvas id="contourCanvas" width="300" height="300"></canvas>
+        </div>
+    </div>
+    
+    <script type="module">
+        // Simple test grid - a circle-like shape
+        const gridSize = 10;
+        const cellSize = 30;
+        const grid = [];
+        
+        // Create a circle in the grid
+        const centerX = gridSize / 2;
+        const centerY = gridSize / 2;
+        const radius = 3;
+        
+        for (let y = 0; y < gridSize; y++) {
+            grid[y] = [];
+            for (let x = 0; x < gridSize; x++) {
+                const dx = x - centerX;
+                const dy = y - centerY;
+                const distance = Math.sqrt(dx * dx + dy * dy);
+                grid[y][x] = distance <= radius ? 1 : 0;
+            }
+        }
+        
+        // Edge table for marching squares
+        const edgeTable = [
+            [],
+            [3, 2],
+            [2, 1],
+            [3, 1],
+            [1, 0],
+            [3, 2, 1, 0],
+            [2, 0],
+            [3, 0],
+            [0, 3],
+            [0, 2],
+            [0, 3, 2, 1],
+            [0, 1],
+            [1, 3],
+            [1, 2],
+            [2, 3],
+            []
+        ];
+        
+        function drawGrid(ctx) {
+            ctx.clearRect(0, 0, 300, 300);
+            
+            // Draw grid cells
+            for (let y = 0; y < gridSize; y++) {
+                for (let x = 0; x < gridSize; x++) {
+                    if (grid[y][x] === 1) {
+                        ctx.fillStyle = 'rgba(0, 128, 255, 0.5)';
+                        ctx.fillRect(x * cellSize, y * cellSize, cellSize, cellSize);
+                    }
+                }
+            }
+            
+            // Draw grid lines
+            if (document.getElementById('showGrid').checked) {
+                ctx.strokeStyle = '#ddd';
+                ctx.lineWidth = 1;
+                for (let i = 0; i <= gridSize; i++) {
+                    ctx.beginPath();
+                    ctx.moveTo(i * cellSize, 0);
+                    ctx.lineTo(i * cellSize, gridSize * cellSize);
+                    ctx.stroke();
+                    
+                    ctx.beginPath();
+                    ctx.moveTo(0, i * cellSize);
+                    ctx.lineTo(gridSize * cellSize, i * cellSize);
+                    ctx.stroke();
+                }
+            }
+        }
+        
+        function getEdgePoint(cellX, cellY, edge, alignmentMode) {
+            let x, y;
+            
+            // Basic edge interpolation (always at midpoint for simplicity)
+            switch (edge) {
+                case 0: // top edge
+                    x = cellX + 0.5;
+                    y = cellY;
+                    break;
+                case 1: // right edge
+                    x = cellX + 1;
+                    y = cellY + 0.5;
+                    break;
+                case 2: // bottom edge
+                    x = cellX + 0.5;
+                    y = cellY + 1;
+                    break;
+                case 3: // left edge
+                    x = cellX;
+                    y = cellY + 0.5;
+                    break;
+            }
+            
+            // Apply alignment mode adjustments
+            if (alignmentMode === 'center') {
+                // Shift points toward cell center
+                switch (edge) {
+                    case 0: y += 0.5; break;
+                    case 1: x -= 0.5; break;
+                    case 2: y -= 0.5; break;
+                    case 3: x += 0.5; break;
+                }
+            }
+            
+            return { x: x * cellSize, y: y * cellSize };
+        }
+        
+        function drawContours(ctx, alignmentMode) {
+            ctx.clearRect(0, 0, 300, 300);
+            
+            // Draw grid if enabled
+            if (document.getElementById('showGrid').checked) {
+                ctx.strokeStyle = '#eee';
+                ctx.lineWidth = 1;
+                for (let i = 0; i <= gridSize; i++) {
+                    ctx.beginPath();
+                    ctx.moveTo(i * cellSize, 0);
+                    ctx.lineTo(i * cellSize, gridSize * cellSize);
+                    ctx.stroke();
+                    
+                    ctx.beginPath();
+                    ctx.moveTo(0, i * cellSize);
+                    ctx.lineTo(gridSize * cellSize, i * cellSize);
+                    ctx.stroke();
+                }
+            }
+            
+            // Draw marching squares contours
+            ctx.strokeStyle = '#ff0000';
+            ctx.lineWidth = 2;
+            
+            for (let y = 0; y < gridSize - 1; y++) {
+                for (let x = 0; x < gridSize - 1; x++) {
+                    // Get corner values
+                    const tl = grid[y][x];
+                    const tr = grid[y][x + 1];
+                    const br = grid[y + 1][x + 1];
+                    const bl = grid[y + 1][x];
+                    
+                    // Calculate configuration
+                    const config = 
+                        (bl >= 0.5 ? 1 : 0) |
+                        (br >= 0.5 ? 2 : 0) |
+                        (tr >= 0.5 ? 4 : 0) |
+                        (tl >= 0.5 ? 8 : 0);
+                    
+                    const edges = edgeTable[config];
+                    
+                    if (alignmentMode === 'vertices') {
+                        // Vertex mode - connect grid vertices
+                        const vertices = [
+                            { x: x * cellSize, y: y * cellSize },         // top-left
+                            { x: (x + 1) * cellSize, y: y * cellSize },   // top-right
+                            { x: (x + 1) * cellSize, y: (y + 1) * cellSize }, // bottom-right
+                            { x: x * cellSize, y: (y + 1) * cellSize }    // bottom-left
+                        ];
+                        
+                        ctx.beginPath();
+                        switch (config) {
+                            case 1: // bl inside
+                                ctx.moveTo(vertices[3].x, vertices[3].y);
+                                ctx.lineTo(vertices[0].x, vertices[0].y);
+                                break;
+                            case 2: // br inside
+                                ctx.moveTo(vertices[2].x, vertices[2].y);
+                                ctx.lineTo(vertices[3].x, vertices[3].y);
+                                break;
+                            case 3: // bottom inside
+                                ctx.moveTo(vertices[2].x, vertices[2].y);
+                                ctx.lineTo(vertices[0].x, vertices[0].y);
+                                break;
+                            case 4: // tr inside
+                                ctx.moveTo(vertices[1].x, vertices[1].y);
+                                ctx.lineTo(vertices[2].x, vertices[2].y);
+                                break;
+                            case 5: // diagonal
+                                ctx.moveTo(vertices[0].x, vertices[0].y);
+                                ctx.lineTo(vertices[2].x, vertices[2].y);
+                                break;
+                            case 6: // right inside
+                                ctx.moveTo(vertices[1].x, vertices[1].y);
+                                ctx.lineTo(vertices[3].x, vertices[3].y);
+                                break;
+                            case 7: // all except tl
+                                ctx.moveTo(vertices[1].x, vertices[1].y);
+                                ctx.lineTo(vertices[0].x, vertices[0].y);
+                                break;
+                            case 8: // tl inside
+                                ctx.moveTo(vertices[0].x, vertices[0].y);
+                                ctx.lineTo(vertices[1].x, vertices[1].y);
+                                break;
+                            case 9: // left inside
+                                ctx.moveTo(vertices[3].x, vertices[3].y);
+                                ctx.lineTo(vertices[1].x, vertices[1].y);
+                                break;
+                            case 10: // diagonal opposite
+                                ctx.moveTo(vertices[1].x, vertices[1].y);
+                                ctx.lineTo(vertices[3].x, vertices[3].y);
+                                break;
+                            case 11: // all except tr
+                                ctx.moveTo(vertices[0].x, vertices[0].y);
+                                ctx.lineTo(vertices[2].x, vertices[2].y);
+                                break;
+                            case 12: // top inside
+                                ctx.moveTo(vertices[0].x, vertices[0].y);
+                                ctx.lineTo(vertices[3].x, vertices[3].y);
+                                break;
+                            case 13: // all except br
+                                ctx.moveTo(vertices[3].x, vertices[3].y);
+                                ctx.lineTo(vertices[1].x, vertices[1].y);
+                                break;
+                            case 14: // all except bl
+                                ctx.moveTo(vertices[2].x, vertices[2].y);
+                                ctx.lineTo(vertices[0].x, vertices[0].y);
+                                break;
+                        }
+                        ctx.stroke();
+                    } else {
+                        // Edge-based modes
+                        for (let i = 0; i < edges.length; i += 2) {
+                            const p1 = getEdgePoint(x, y, edges[i], alignmentMode);
+                            const p2 = getEdgePoint(x, y, edges[i + 1], alignmentMode);
+                            
+                            ctx.beginPath();
+                            ctx.moveTo(p1.x, p1.y);
+                            ctx.lineTo(p2.x, p2.y);
+                            ctx.stroke();
+                        }
+                    }
+                }
+            }
+        }
+        
+        // Initialize
+        const gridCanvas = document.getElementById('gridCanvas');
+        const contourCanvas = document.getElementById('contourCanvas');
+        const gridCtx = gridCanvas.getContext('2d');
+        const contourCtx = contourCanvas.getContext('2d');
+        
+        function update() {
+            const alignmentMode = document.getElementById('alignmentMode').value;
+            drawGrid(gridCtx);
+            drawContours(contourCtx, alignmentMode);
+        }
+        
+        // Event listeners
+        document.getElementById('alignmentMode').addEventListener('change', update);
+        document.getElementById('showGrid').addEventListener('change', update);
+        
+        // Initial draw
+        update();
+    </script>
+</body>
+</html>
