@@ -130,6 +130,134 @@ export const AdvancedSettings: React.FC<AdvancedSettingsProps> = ({ scene }) => 
     scene.setCollisionAvoidance(enabled, minDistance, method, iterations)
   }
 
+  const applyPreset = (preset: 'default' | 'classic' | 'smooth' | 'precise') => {
+    switch (preset) {
+      case 'classic':
+        // Mimics the cleaner earlier implementation
+        setInterpolationMethod('linear')
+        setSaddlePointResolution('center')
+        setThreshold(0.5)
+        setAlignmentMode('edges')
+        setOffsetX(0.5)
+        setOffsetY(0.5)
+        setGlobalOffsetX(-1) // Account for natural padding
+        setGlobalOffsetY(-1) // Account for natural padding
+        setBufferSize(1) // Natural 1-cell buffer
+        setBufferValue(0)
+        setClampToGrid(true)
+        setExtendToBoundary(false)
+        setSnapDistance(0.1)
+        setShowRawMarchingSquares(false)
+        setShowControlPoints(false)
+        setSmoothingMethod('basic')
+        setSmoothingIterations(0) // No smoothing for clean edges
+        setSmoothingStrength(0)
+        setCollisionAvoidance(false) // Simple behavior
+        // Apply to scene
+        scene?.setInterpolationMethod?.('linear')
+        scene?.setSaddlePointResolution?.('center')
+        scene?.setThreshold?.(0.5)
+        scene?.setAlignmentMode?.('edges')
+        scene?.setContourOffsets(0.5, 0.5)
+        scene?.setContourGlobalOffsets(-1, -1)
+        scene?.setContourBuffer(1, 0)
+        scene?.setClampToGrid?.(true)
+        scene?.setExtendToBoundary?.(false)
+        scene?.setSnapDistance?.(0.1)
+        scene?.setShowRawMarchingSquares?.(false)
+        scene?.setShowControlPoints?.(false)
+        scene?.setSmoothingOptions('basic', 0, 0)
+        scene?.setCollisionAvoidance(false, 0.5, 'hybrid', 10)
+        break
+        
+      case 'smooth':
+        // Smooth organic curves
+        setInterpolationMethod('cubic')
+        setSaddlePointResolution('gradient')
+        setThreshold(0.5)
+        setAlignmentMode('center')
+        setOffsetX(0.5)
+        setOffsetY(0.5)
+        setGlobalOffsetX(0)
+        setGlobalOffsetY(0)
+        setBufferSize(2)
+        setBufferValue(0)
+        setClampToGrid(true)
+        setExtendToBoundary(false)
+        setSnapDistance(0.05)
+        setShowRawMarchingSquares(false)
+        setShowControlPoints(false)
+        setSmoothingMethod('catmull-rom')
+        setSmoothingIterations(3)
+        setSmoothingStrength(0.7)
+        setCollisionAvoidance(true)
+        setCollisionMinDistance(0.5)
+        setCollisionMethod('hybrid')
+        setCollisionIterations(20)
+        // Apply to scene
+        scene?.setInterpolationMethod?.('cubic')
+        scene?.setSaddlePointResolution?.('gradient')
+        scene?.setThreshold?.(0.5)
+        scene?.setAlignmentMode?.('center')
+        scene?.setContourOffsets(0.5, 0.5)
+        scene?.setContourGlobalOffsets(0, 0)
+        scene?.setContourBuffer(2, 0)
+        scene?.setClampToGrid?.(true)
+        scene?.setExtendToBoundary?.(false)
+        scene?.setSnapDistance?.(0.05)
+        scene?.setShowRawMarchingSquares?.(false)
+        scene?.setShowControlPoints?.(false)
+        scene?.setSmoothingOptions('catmull-rom', 3, 0.7)
+        scene?.setCollisionAvoidance(true, 0.5, 'hybrid', 20)
+        break
+        
+      case 'precise':
+        // Precise engineering mode
+        setInterpolationMethod('none')
+        setSaddlePointResolution('majority')
+        setThreshold(0.5)
+        setAlignmentMode('vertices')
+        setOffsetX(0)
+        setOffsetY(0)
+        setGlobalOffsetX(0)
+        setGlobalOffsetY(0)
+        setBufferSize(0)
+        setBufferValue(0)
+        setClampToGrid(true)
+        setExtendToBoundary(true)
+        setSnapDistance(0.5)
+        setShowRawMarchingSquares(true)
+        setShowControlPoints(true)
+        setSmoothingMethod('basic')
+        setSmoothingIterations(0)
+        setSmoothingStrength(0)
+        setCollisionAvoidance(true)
+        setCollisionMinDistance(1)
+        setCollisionMethod('push')
+        setCollisionIterations(5)
+        // Apply to scene
+        scene?.setInterpolationMethod?.('none')
+        scene?.setSaddlePointResolution?.('majority')
+        scene?.setThreshold?.(0.5)
+        scene?.setAlignmentMode?.('vertices')
+        scene?.setContourOffsets(0, 0)
+        scene?.setContourGlobalOffsets(0, 0)
+        scene?.setContourBuffer(0, 0)
+        scene?.setClampToGrid?.(true)
+        scene?.setExtendToBoundary?.(true)
+        scene?.setSnapDistance?.(0.5)
+        scene?.setShowRawMarchingSquares?.(true)
+        scene?.setShowControlPoints?.(true)
+        scene?.setSmoothingOptions('basic', 0, 0)
+        scene?.setCollisionAvoidance(true, 1, 'push', 5)
+        break
+        
+      default: // 'default'
+        resetToDefaults()
+        break
+    }
+  }
+
   const resetToDefaults = () => {
     // Algorithm
     setInterpolationMethod('linear')
@@ -227,6 +355,79 @@ export const AdvancedSettings: React.FC<AdvancedSettingsProps> = ({ scene }) => 
         pointerEvents: isOpen ? 'auto' : 'none',
         transition: 'transform 0.3s ease, opacity 0.3s ease'
       }}>
+        {/* Preset Buttons */}
+        <div style={{ 
+          marginBottom: '16px',
+          display: 'flex',
+          gap: '8px',
+          justifyContent: 'center'
+        }}>
+          <button
+            onClick={() => applyPreset('default')}
+            style={{
+              padding: '6px 12px',
+              background: '#f0f0f0',
+              border: '1px solid #ddd',
+              borderRadius: '4px',
+              cursor: 'pointer',
+              fontSize: '12px',
+              transition: 'all 0.2s ease'
+            }}
+            onMouseEnter={(e) => e.currentTarget.style.background = '#e0e0e0'}
+            onMouseLeave={(e) => e.currentTarget.style.background = '#f0f0f0'}
+          >
+            Default
+          </button>
+          <button
+            onClick={() => applyPreset('classic')}
+            style={{
+              padding: '6px 12px',
+              background: '#e8f4f8',
+              border: '1px solid #b8d4e0',
+              borderRadius: '4px',
+              cursor: 'pointer',
+              fontSize: '12px',
+              transition: 'all 0.2s ease'
+            }}
+            onMouseEnter={(e) => e.currentTarget.style.background = '#d0e8f0'}
+            onMouseLeave={(e) => e.currentTarget.style.background = '#e8f4f8'}
+          >
+            Classic (Clean Edges)
+          </button>
+          <button
+            onClick={() => applyPreset('smooth')}
+            style={{
+              padding: '6px 12px',
+              background: '#f0e8f8',
+              border: '1px solid #d0b8e0',
+              borderRadius: '4px',
+              cursor: 'pointer',
+              fontSize: '12px',
+              transition: 'all 0.2s ease'
+            }}
+            onMouseEnter={(e) => e.currentTarget.style.background = '#e0d0f0'}
+            onMouseLeave={(e) => e.currentTarget.style.background = '#f0e8f8'}
+          >
+            Smooth (Organic)
+          </button>
+          <button
+            onClick={() => applyPreset('precise')}
+            style={{
+              padding: '6px 12px',
+              background: '#f8e8e8',
+              border: '1px solid #e0b8b8',
+              borderRadius: '4px',
+              cursor: 'pointer',
+              fontSize: '12px',
+              transition: 'all 0.2s ease'
+            }}
+            onMouseEnter={(e) => e.currentTarget.style.background = '#f0d0d0'}
+            onMouseLeave={(e) => e.currentTarget.style.background = '#f8e8e8'}
+          >
+            Precise (Engineering)
+          </button>
+        </div>
+
         {/* Two Column Layout */}
         <div style={{ display: 'flex', gap: '16px' }}>
           {/* Left Column */}
