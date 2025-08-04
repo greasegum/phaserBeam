@@ -108,6 +108,7 @@ export class BeamElevationScene extends Phaser.Scene {
     gridCells?: GridCell[];
     elevationView?: 'N' | 'S' | 'E' | 'W';
     appMode?: AppMode;
+    savedAnnotations?: any[];
     onCellChange?: (cells: GridCell[]) => void 
   }) {
     this.beamProfile = data.beamProfile
@@ -119,6 +120,7 @@ export class BeamElevationScene extends Phaser.Scene {
     this.elevationView = data.elevationView || 'N'
     this.appMode = data.appMode || 'edit'
     this.storedCells = data.gridCells || []
+    this.savedAnnotations = data.savedAnnotations || []
     this.onCellChange = data.onCellChange
     
     console.log('Scene init complete:', {
@@ -1503,6 +1505,13 @@ export class BeamElevationScene extends Phaser.Scene {
     })
   }
 
+  private getCurrentAnnotations(): any[] {
+    if (this.annotationManager) {
+      return this.annotationManager.getAnnotations()
+    }
+    return this.savedAnnotations || []
+  }
+
   updateBeamProfile(profile: BeamProfile, length?: number, editMode?: boolean, showGrid?: boolean, gridOrigin?: 'left' | 'right', showTopFlange?: boolean, gridCells?: GridCell[], elevationView?: 'N' | 'S' | 'E' | 'W', appMode?: AppMode) {
     console.log('updateBeamProfile called with:', {
       appMode,
@@ -1529,6 +1538,7 @@ export class BeamElevationScene extends Phaser.Scene {
         gridCells: gridCells || this.storedCells,
         elevationView: elevationView || this.elevationView,
         appMode: this.appMode,
+        savedAnnotations: this.getCurrentAnnotations(),
         onCellChange: this.onCellChange 
       })
       return
@@ -1555,6 +1565,7 @@ export class BeamElevationScene extends Phaser.Scene {
         gridCells: gridCells || this.storedCells,
         elevationView: elevationView || this.elevationView,
         appMode: this.appMode,
+        savedAnnotations: this.getCurrentAnnotations(),
         onCellChange: this.onCellChange 
       })
       
@@ -1582,6 +1593,7 @@ export class BeamElevationScene extends Phaser.Scene {
         gridCells: gridCells || this.storedCells,
         elevationView: elevationView || this.elevationView,
         appMode: this.appMode,
+        savedAnnotations: this.getCurrentAnnotations(),
         onCellChange: this.onCellChange 
       })
       
@@ -1667,6 +1679,7 @@ export class BeamElevationScene extends Phaser.Scene {
       gridCells: this.storedCells,
       elevationView: this.elevationView,
       appMode: this.appMode,
+      savedAnnotations: this.getCurrentAnnotations(),
       onCellChange: this.onCellChange 
     })
   }
