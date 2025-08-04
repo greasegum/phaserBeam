@@ -17,7 +17,7 @@ export const AdvancedSettings: React.FC<AdvancedSettingsProps> = ({ scene }) => 
   const [alignmentMode, setAlignmentMode] = useState<'edges' | 'vertices' | 'center'>('edges')
   const [globalOffsetX, setGlobalOffsetX] = useState(0.0)
   const [globalOffsetY, setGlobalOffsetY] = useState(0.0)
-  const [bufferSize, setBufferSize] = useState(1)
+  // Buffer size permanently set to 1 (minimum required for marching squares)
   // Buffer value removed - using edge-aware blurring instead
   const [clampToGrid, setClampToGrid] = useState(true)
   const [extendToBoundary, setExtendToBoundary] = useState(false)
@@ -67,12 +67,7 @@ export const AdvancedSettings: React.FC<AdvancedSettingsProps> = ({ scene }) => 
         setGlobalOffsetY(offsets.globalY)
       }
       
-      // Get buffer
-      const buffer = scene.getContourBuffer?.()
-      if (buffer) {
-        setBufferSize(buffer.size)
-        // Buffer value no longer used
-      }
+      // Buffer size is now permanently 1 (no UI control needed)
       
       // Get smoothing
       const smoothing = scene.getSmoothingOptions?.()
@@ -114,11 +109,7 @@ export const AdvancedSettings: React.FC<AdvancedSettingsProps> = ({ scene }) => 
     }
   }
 
-  const handleBufferChange = (size: number) => {
-    if (!scene) return
-    setBufferSize(size)
-    scene.setContourBuffer(size, 0) // Always use 0 for buffer value in binary field
-  }
+  // Buffer size is now permanently 1 - no UI control needed
 
   const handleSmoothingChange = (method: typeof smoothingMethod, iterations: number, strength: number) => {
     if (!scene) return
@@ -593,41 +584,7 @@ export const AdvancedSettings: React.FC<AdvancedSettingsProps> = ({ scene }) => 
               </div>
             </div>
 
-            <h4 style={{ margin: '16px 0 12px 0', fontSize: '14px', fontWeight: 600 }}>
-              Grid Buffer
-            </h4>
-
-            <div style={{ marginBottom: '16px' }}>
-              <div style={{ marginBottom: '8px' }}>
-                <label style={{ 
-                  display: 'flex', 
-                  justifyContent: 'space-between',
-                  alignItems: 'center',
-                  fontSize: '12px',
-                  color: '#666'
-                }}>
-                  <span style={{ display: 'flex', alignItems: 'center' }}>
-                    Buffer Size
-                    <HelpTooltip text="Buffer cells around the grid boundary. Must be at least 1 for marching squares edge processing. The buffer is always filled with 0 (empty) values." />
-                  </span>
-                  <span style={{ fontWeight: 'bold', color: '#333' }}>{bufferSize}</span>
-                </label>
-                <input
-                  type="range"
-                  min="1"
-                  max="5"
-                  step="1"
-                  value={bufferSize}
-                  onChange={(e) => {
-                    const size = parseInt(e.target.value)
-                    handleBufferChange(size)
-                  }}
-                  style={{ width: '100%', cursor: 'pointer' }}
-                />
-              </div>
-
-              {/* Buffer value control removed - using edge-aware blurring instead */}
-            </div>
+            {/* Buffer size permanently set to 1 - no UI control needed */}
 
             <h4 style={{ margin: '16px 0 12px 0', fontSize: '14px', fontWeight: 600 }}>
               Edge Clamping

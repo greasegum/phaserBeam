@@ -1689,8 +1689,9 @@ export class BeamElevationScene extends Phaser.Scene {
   }
   
   public setContourBuffer(bufferSize: number, bufferValue: number): void {
-    this.contourBufferSize = bufferSize
-    this.contourBufferValue = bufferValue
+    // Buffer size is now permanently 1 for optimal edge processing
+    this.contourBufferSize = 1
+    this.contourBufferValue = 0  // Always 0 for binary fields
     this.drawSectionLoss(
       100,
       this.cameras.main.centerY,
