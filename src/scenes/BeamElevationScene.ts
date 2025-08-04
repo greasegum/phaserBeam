@@ -207,6 +207,14 @@ export class BeamElevationScene extends Phaser.Scene {
 
     // Create grid overlay container
     this.gridContainer = this.add.container()
+    // Set grid container depth to be visible above section loss but below annotations
+    this.gridContainer.setDepth(100)
+    console.log('Grid creation check:', {
+      editMode: this.editMode,
+      appMode: this.appMode,
+      showGrid: this.showGrid,
+      shouldCreateGrid: (this.editMode || this.appMode === 'annotation') && this.showGrid
+    })
     if ((this.editMode || this.appMode === 'annotation') && this.showGrid) {
       this.createGrid(startX, centerY, beamWidth)
       // Update grid cell visibility after creating grid
@@ -1424,6 +1432,14 @@ export class BeamElevationScene extends Phaser.Scene {
   }
 
   updateBeamProfile(profile: BeamProfile, length?: number, editMode?: boolean, showGrid?: boolean, gridOrigin?: 'left' | 'right', showTopFlange?: boolean, gridCells?: GridCell[], elevationView?: 'N' | 'S' | 'E' | 'W', appMode?: AppMode) {
+    console.log('updateBeamProfile called with:', {
+      appMode,
+      currentAppMode: this.appMode,
+      editMode,
+      currentEditMode: this.editMode,
+      showGrid,
+      currentShowGrid: this.showGrid
+    })
     // Check if we just need to toggle grid origin
     if (profile.id === this.beamProfile?.id && 
         length === this.beamLength && 
@@ -1489,7 +1505,9 @@ export class BeamElevationScene extends Phaser.Scene {
       
       // Toggle grid visibility
       if (this.gridContainer) {
-        this.gridContainer.setVisible((this.editMode || this.appMode === 'annotation') && this.showGrid)
+        const shouldShow = (this.editMode || this.appMode === 'annotation') && this.showGrid
+        console.log('Toggling grid visibility:', { shouldShow, editMode: this.editMode, appMode: this.appMode, showGrid: this.showGrid })
+        this.gridContainer.setVisible(shouldShow)
       }
       
       // Redraw section loss with appropriate style
@@ -1515,7 +1533,9 @@ export class BeamElevationScene extends Phaser.Scene {
       
       // Toggle grid visibility
       if (this.gridContainer) {
-        this.gridContainer.setVisible((this.editMode || this.appMode === 'annotation') && this.showGrid)
+        const shouldShow = (this.editMode || this.appMode === 'annotation') && this.showGrid
+        console.log('Toggling grid visibility:', { shouldShow, editMode: this.editMode, appMode: this.appMode, showGrid: this.showGrid })
+        this.gridContainer.setVisible(shouldShow)
       }
       
       // Redraw section loss with appropriate style

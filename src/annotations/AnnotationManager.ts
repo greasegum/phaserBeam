@@ -81,7 +81,7 @@ export class AnnotationManager {
     const { width, height } = this.scene.cameras.main
     this.inputZone = this.scene.add.zone(width / 2, height / 2, width, height)
     this.inputZone.setInteractive()
-    this.inputZone.setDepth(999) // High but below UI elements
+    this.inputZone.setDepth(50) // Below grid (100) but above beam graphics
     
     // Attach handlers to the zone instead of scene
     this.inputZone.on('pointerdown', this.handlePointerDown, this)

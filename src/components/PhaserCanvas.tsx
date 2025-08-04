@@ -32,6 +32,7 @@ export const PhaserCanvas: React.FC<PhaserCanvasProps> = ({
   elevationView = 'N',
   appMode = 'edit'
 }) => {
+  console.log('PhaserCanvas render - appMode:', appMode, 'editMode:', editMode, 'showGrid:', showGrid)
   const gameRef = useRef<Phaser.Game | null>(null)
   const containerRef = useRef<HTMLDivElement>(null)
   const scrollContainerRef = useRef<HTMLDivElement>(null)
