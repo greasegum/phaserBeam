@@ -209,9 +209,9 @@ export class BeamElevationSceneRefactored extends Phaser.Scene {
       // Core settings for perfect grid alignment
       threshold: this.contourConfig.core.threshold,
       interpolationMethod: 'none',
-      offsetX: 0,
-      offsetY: 0,
-      bufferSize: 0,
+      offsetX: -1,  // Compensate for buffer shift
+      offsetY: -1,  // Compensate for buffer shift
+      bufferSize: 1,  // Required for marching squares to process edge cells
       bufferValue: 0,
       
       // Edge clamping settings - aggressive for perfect alignment
