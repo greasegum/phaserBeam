@@ -18,7 +18,7 @@ export const AdvancedSettings: React.FC<AdvancedSettingsProps> = ({ scene }) => 
   const [globalOffsetX, setGlobalOffsetX] = useState(0.0)
   const [globalOffsetY, setGlobalOffsetY] = useState(0.0)
   const [bufferSize, setBufferSize] = useState(1)
-  const [bufferValue, setBufferValue] = useState(0)
+  // Buffer value removed - using edge-aware blurring instead
   const [clampToGrid, setClampToGrid] = useState(true)
   const [extendToBoundary, setExtendToBoundary] = useState(false)
   const [snapDistance, setSnapDistance] = useState(0.1)
@@ -71,7 +71,7 @@ export const AdvancedSettings: React.FC<AdvancedSettingsProps> = ({ scene }) => 
       const buffer = scene.getContourBuffer?.()
       if (buffer) {
         setBufferSize(buffer.size)
-        setBufferValue(buffer.value)
+        // Buffer value no longer used
       }
       
       // Get smoothing
@@ -114,11 +114,10 @@ export const AdvancedSettings: React.FC<AdvancedSettingsProps> = ({ scene }) => 
     }
   }
 
-  const handleBufferChange = (size: number, value: number) => {
+  const handleBufferChange = (size: number) => {
     if (!scene) return
     setBufferSize(size)
-    setBufferValue(value)
-    scene.setContourBuffer(size, value)
+    scene.setContourBuffer(size, 0) // Always use 0 for buffer value in binary field
   }
 
   const handleSmoothingChange = (method: typeof smoothingMethod, iterations: number, strength: number) => {
@@ -178,13 +177,13 @@ export const AdvancedSettings: React.FC<AdvancedSettingsProps> = ({ scene }) => 
     setGlobalOffsetX(0.0) // 0 = centered alignment
     setGlobalOffsetY(0.0) // 0 = centered alignment
     setBufferSize(1)
-    setBufferValue(0)
+    // Buffer value no longer used
     setClampToGrid(true)
     setExtendToBoundary(false)
     setSnapDistance(0.1)
     scene?.setAlignmentMode?.('edges')
     scene?.setContourGlobalOffsets(0.0, 0.0)
-    scene?.setContourBuffer(1, 0)
+    scene?.setContourBuffer(1, 0) // Always use 0 for buffer value
     scene?.setClampToGrid?.(true)
     scene?.setExtendToBoundary?.(false)
     scene?.setSnapDistance?.(0.1)
@@ -616,53 +615,13 @@ export const AdvancedSettings: React.FC<AdvancedSettingsProps> = ({ scene }) => 
                   value={bufferSize}
                   onChange={(e) => {
                     const size = parseInt(e.target.value)
-                    handleBufferChange(size, bufferValue)
+                    handleBufferChange(size)
                   }}
                   style={{ width: '100%', cursor: 'pointer' }}
                 />
               </div>
 
-              {bufferSize > 0 && (
-                <div style={{ marginBottom: '8px' }}>
-                  <label style={{ 
-                    display: 'flex', 
-                    justifyContent: 'space-between',
-                    alignItems: 'center',
-                    fontSize: '12px',
-                    color: '#666'
-                  }}>
-                    <span style={{ display: 'flex', alignItems: 'center' }}>
-                      Buffer Value
-                      <HelpTooltip text="The value to fill buffer cells with. Set below threshold for empty buffer, above threshold to extend the shape." />
-                    </span>
-                    <span style={{ fontWeight: 'bold', color: bufferValue > threshold ? '#ff6b6b' : '#333' }}>
-                      {bufferValue.toFixed(2)}
-                    </span>
-                  </label>
-                  {bufferValue > threshold && (
-                    <div style={{
-                      fontSize: '10px',
-                      color: '#ff6b6b',
-                      marginTop: '4px',
-                      marginBottom: '4px'
-                    }}>
-                      ⚠️ Values above threshold ({threshold}) will invert contours
-                    </div>
-                  )}
-                  <input
-                    type="range"
-                    min="0"
-                    max="0.5"
-                    step="0.05"
-                    value={bufferValue}
-                    onChange={(e) => {
-                      const value = parseFloat(e.target.value)
-                      handleBufferChange(bufferSize, value)
-                    }}
-                    style={{ width: '100%', cursor: 'pointer' }}
-                  />
-                </div>
-              )}
+              {/* Buffer value control removed - using edge-aware blurring instead */}
             </div>
 
             <h4 style={{ margin: '16px 0 12px 0', fontSize: '14px', fontWeight: 600 }}>

@@ -8,6 +8,7 @@ import { BeamProfile, GridCell } from '../types/beam'
 import { ContourConfig } from '../types/contourConfig'
 import { marchingSquares } from '../utils/marchingSquares'
 import { processContours, transformToScreen } from '../utils/contourProcessing'
+import { binaryToScalarField, ScalarFieldMethod } from '../utils/scalarField'
 
 export class BeamElevationSceneRefactored extends Phaser.Scene {
   // Core properties
@@ -26,6 +27,10 @@ export class BeamElevationSceneRefactored extends Phaser.Scene {
     edges: { clampToBeam: false, bufferSize: 0 },  // Edge clamping is handled in marching squares
     separation: { enabled: true, minDistance: 0.5 }
   }
+  
+  // Scalar field configuration for edge-aware blurring
+  private scalarFieldMethod: ScalarFieldMethod = 'edge-clamping'
+  private scalarFieldRadius = 2
   
   // Graphics objects
   private beamGraphics: Phaser.GameObjects.Graphics | null = null
@@ -204,15 +209,18 @@ export class BeamElevationSceneRefactored extends Phaser.Scene {
   private drawSectionLoss(centerX: number, centerY: number): void {
     if (!this.lossGraphics || !this.beamProfile || this.webGrid.length === 0) return
     
+    // Convert binary grid to scalar field using edge-aware blurring
+    const scalarGrid = binaryToScalarField(this.webGrid, this.scalarFieldMethod, this.scalarFieldRadius)
+    
     // Run marching squares with proper options to ensure grid alignment
-    const contours = marchingSquares(this.webGrid, {
+    const contours = marchingSquares(scalarGrid, {
       // Core settings for perfect grid alignment
       threshold: this.contourConfig.core.threshold,
-      interpolationMethod: 'none',
+      interpolationMethod: 'linear',  // Use linear interpolation with scalar field
       offsetX: -1,  // Compensate for buffer shift
       offsetY: -1,  // Compensate for buffer shift
       bufferSize: 1,  // Required for marching squares to process edge cells
-      bufferValue: 0,
+      bufferValue: 0,  // Always 0 for binary fields
       
       // Edge clamping settings - aggressive for perfect alignment
       clampToGrid: true,
@@ -395,6 +403,22 @@ export class BeamElevationSceneRefactored extends Phaser.Scene {
    */
   public setShowGrid(show: boolean): void {
     this.showGrid = show
+    this.render()
+  }
+  
+  /**
+   * Set scalar field method for edge-aware blurring
+   */
+  public setScalarFieldMethod(method: ScalarFieldMethod): void {
+    this.scalarFieldMethod = method
+    this.render()
+  }
+  
+  /**
+   * Set scalar field radius
+   */
+  public setScalarFieldRadius(radius: number): void {
+    this.scalarFieldRadius = radius
     this.render()
   }
 
