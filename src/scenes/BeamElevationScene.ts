@@ -1491,6 +1491,28 @@ export class BeamElevationScene extends Phaser.Scene {
       showGrid,
       currentShowGrid: this.showGrid
     })
+    
+    // IMPORTANT: Check app mode FIRST before other checks to ensure mode switching works
+    // Check if we're changing app mode
+    if (appMode !== undefined && appMode !== this.appMode) {
+      console.log('App mode changing from', this.appMode, 'to', appMode, '- restarting scene')
+      // Need to restart scene to initialize/destroy annotation manager
+      this.appMode = appMode
+      this.scene.restart({ 
+        beamProfile: profile, 
+        beamLength: this.beamLength || length || 120,
+        editMode: editMode !== undefined ? editMode : this.editMode,
+        showGrid: showGrid !== undefined ? showGrid : this.showGrid,
+        gridOrigin: gridOrigin !== undefined ? gridOrigin : this.gridOrigin,
+        showTopFlange: showTopFlange !== undefined ? showTopFlange : this.showTopFlange,
+        gridCells: gridCells || this.storedCells,
+        elevationView: elevationView || this.elevationView,
+        appMode: this.appMode,
+        onCellChange: this.onCellChange 
+      })
+      return
+    }
+    
     // Check if we just need to toggle grid origin
     if (profile.id === this.beamProfile?.id && 
         length === this.beamLength && 
@@ -1602,29 +1624,7 @@ export class BeamElevationScene extends Phaser.Scene {
       return
     }
     
-    // Check if we're changing app mode
-    if (profile.id === this.beamProfile?.id && 
-        length === this.beamLength && 
-        appMode !== undefined && 
-        appMode !== this.appMode) {
-      
-      // Need to restart scene to initialize/destroy annotation manager
-      this.appMode = appMode
-      this.scene.restart({ 
-        beamProfile: profile, 
-        beamLength: this.beamLength,
-        editMode: this.editMode,
-        showGrid: this.showGrid,
-        gridOrigin: this.gridOrigin,
-        showTopFlange: this.showTopFlange,
-        gridCells: gridCells || this.storedCells,
-        elevationView: this.elevationView,
-        appMode: this.appMode,
-        onCellChange: this.onCellChange 
-      })
-      
-      return
-    }
+    // App mode check has been moved to the beginning of the method
     
     // Otherwise restart the scene
     this.beamProfile = profile

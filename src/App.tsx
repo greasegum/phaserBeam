@@ -61,7 +61,10 @@ export default function App() {
         <div style={{ display: 'flex', gap: '10px' }}>
           <select
             value={appMode}
-            onChange={(e) => setAppMode(e.target.value as AppMode)}
+            onChange={(e) => {
+              console.log('App.tsx: Changing mode from', appMode, 'to', e.target.value)
+              setAppMode(e.target.value as AppMode)
+            }}
             style={{
               padding: '6px 12px',
               backgroundColor: '#4CAF50',
