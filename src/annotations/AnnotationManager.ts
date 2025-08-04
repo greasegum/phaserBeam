@@ -773,6 +773,35 @@ export class AnnotationManager {
   
   public setOrdinateOriginSide(side: 'left' | 'right'): void {
     this.ordinateOriginSide = side
+    // Update only system ordinate dimensions
+    this.updateSystemOrdinateOrigin(side)
+  }
+  
+  /**
+   * Update origin side for system ordinate dimensions only
+   */
+  private updateSystemOrdinateOrigin(side: 'left' | 'right'): void {
+    this.systemAnnotations.forEach((annotation, id) => {
+      if (annotation.type === 'ordinate-dimension' && id.includes('system-ordinate')) {
+        const ordinateDim = annotation as OrdinateDimension
+        ordinateDim.originSide = side
+        
+        // Update the text based on new origin
+        if (ordinateDim.measurePoint.gridX !== undefined) {
+          const value = side === 'left' 
+            ? ordinateDim.measurePoint.gridX 
+            : this.beamLength - ordinateDim.measurePoint.gridX
+          ordinateDim.text = `${value}"`
+        }
+        
+        // Re-render the dimension
+        const container = this.annotationGraphics.get(id)
+        if (container) {
+          container.destroy()
+          this.renderAnnotation(ordinateDim, true)
+        }
+      }
+    })
   }
   
   private updatePreview(currentPoint: AnnotationPoint): void {
@@ -1332,6 +1361,9 @@ export class AnnotationManager {
       const x = centerX + i * this.gridSize
       const dimId = `system-ordinate-${i}`
       
+      // Calculate value based on current origin side
+      const value = this.ordinateOriginSide === 'left' ? i : beamLength - i
+      
       const ordinateDim: OrdinateDimension = {
         id: dimId,
         type: 'ordinate-dimension',
@@ -1339,11 +1371,11 @@ export class AnnotationManager {
         locked: true,
         style: { ...DEFAULT_ANNOTATION_STYLE, color: 0x888888, textColor: '#888888' },
         measurePoint: { x, y: bottomY, gridX: i },
-        originSide: this.originSide,
+        originSide: this.ordinateOriginSide,
         jogOffset: 40,
         beamLength,
         beamBottom: bottomY,
-        text: `${i}"`,
+        text: `${value}"`,
         unit: 'inches',
         autoText: false,
         showArrow: true,
