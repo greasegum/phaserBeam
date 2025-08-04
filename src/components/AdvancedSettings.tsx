@@ -35,7 +35,7 @@ export const AdvancedSettings: React.FC<AdvancedSettingsProps> = ({ scene }) => 
   const [collisionMethod, setCollisionMethod] = useState<'push' | 'shrink' | 'hybrid'>('hybrid')
   const [collisionIterations, setCollisionIterations] = useState(10)
   // Scalar Field settings
-  const [scalarFieldMethod, setScalarFieldMethod] = useState<'gaussian' | 'distance' | 'box' | 'none' | 'edge-preserving' | 'adaptive-edge-preserving'>('edge-preserving')
+  const [scalarFieldMethod, setScalarFieldMethod] = useState<'gaussian' | 'distance' | 'box' | 'none' | 'edge-preserving' | 'adaptive-edge-preserving' | 'edge-clamping'>('edge-clamping')
   const [scalarFieldRadius, setScalarFieldRadius] = useState(2)
   // Edge clamping settings
   const [edgeClamping, setEdgeClamping] = useState(true)  // Enable by default
@@ -203,9 +203,9 @@ export const AdvancedSettings: React.FC<AdvancedSettingsProps> = ({ scene }) => 
     setCollisionIterations(10)
     scene?.setCollisionAvoidance(false, 0.5, 'hybrid', 10)
     // Scalar Field
-    setScalarFieldMethod('gaussian')
+    setScalarFieldMethod('edge-clamping')
     setScalarFieldRadius(2)
-    scene?.setScalarFieldMethod?.('gaussian')
+    scene?.setScalarFieldMethod?.('edge-clamping')
     scene?.setScalarFieldRadius?.(2)
     // Edge Clamping
     setEdgeClamping(true)  // Enable by default for proper web visualization
@@ -431,17 +431,17 @@ export const AdvancedSettings: React.FC<AdvancedSettingsProps> = ({ scene }) => 
                       marginBottom: '4px'
                     }}>
                       Scalar Field Method
-                      <HelpTooltip text="Converts binary grid data to continuous gradients. Gaussian blur creates smooth transitions, Distance field generates gradients based on distance to edges, Box blur provides simple averaging." />
+                      <HelpTooltip text="Converts binary grid data to continuous gradients. Edge-Clamping blur ensures contours snap to grid boundaries while maintaining smooth interiors. This replaces the need for buffer values." />
                     </label>
                     <select
                       value={scalarFieldMethod}
                       onChange={(e) => {
-                        const method = e.target.value as 'gaussian' | 'distance' | 'box' | 'none' | 'edge-preserving' | 'adaptive-edge-preserving'
+                        const method = e.target.value as 'gaussian' | 'distance' | 'box' | 'none' | 'edge-preserving' | 'adaptive-edge-preserving' | 'edge-clamping'
                         setScalarFieldMethod(method)
                         scene?.setScalarFieldMethod?.(method)
                       }}
                       onInput={(e) => {
-                        const method = (e.target as HTMLSelectElement).value as 'gaussian' | 'distance' | 'box' | 'none' | 'edge-preserving' | 'adaptive-edge-preserving'
+                        const method = (e.target as HTMLSelectElement).value as 'gaussian' | 'distance' | 'box' | 'none' | 'edge-preserving' | 'adaptive-edge-preserving' | 'edge-clamping'
                         setScalarFieldMethod(method)
                         scene?.setScalarFieldMethod?.(method)
                       }}
@@ -455,9 +455,10 @@ export const AdvancedSettings: React.FC<AdvancedSettingsProps> = ({ scene }) => 
                         cursor: 'pointer'
                       }}
                     >
+                      <option value="edge-clamping">Edge-Clamping Blur (Recommended)</option>
+                      <option value="adaptive-edge-preserving">Adaptive Edge-Preserving</option>
+                      <option value="edge-preserving">Edge-Preserving</option>
                       <option value="gaussian">Gaussian Blur</option>
-                      <option value="edge-preserving">Edge-Preserving Blur</option>
-                      <option value="adaptive-edge-preserving">Adaptive Edge-Preserving Blur</option>
                       <option value="distance">Distance Field</option>
                       <option value="box">Box Blur</option>
                     </select>
@@ -592,6 +593,10 @@ export const AdvancedSettings: React.FC<AdvancedSettingsProps> = ({ scene }) => 
               </div>
             </div>
 
+            <h4 style={{ margin: '16px 0 12px 0', fontSize: '14px', fontWeight: 600 }}>
+              Grid Buffer
+            </h4>
+
             <div style={{ marginBottom: '16px' }}>
               <div style={{ marginBottom: '8px' }}>
                 <label style={{ 
@@ -603,7 +608,7 @@ export const AdvancedSettings: React.FC<AdvancedSettingsProps> = ({ scene }) => 
                 }}>
                   <span style={{ display: 'flex', alignItems: 'center' }}>
                     Buffer Size
-                    <HelpTooltip text="Extends the grid beyond visible edges by this many cells. Ensures proper edge detection and prevents contour clipping." />
+                    <HelpTooltip text="Buffer cells around the grid boundary. Must be at least 1 for marching squares edge processing. The buffer is always filled with 0 (empty) values." />
                   </span>
                   <span style={{ fontWeight: 'bold', color: '#333' }}>{bufferSize}</span>
                 </label>
