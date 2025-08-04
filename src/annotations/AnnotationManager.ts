@@ -24,6 +24,8 @@ export class AnnotationManager {
   private selectedAnnotationId: string | null = null
   private gridSize: number
   private gridOrigin: { x: number, y: number }
+  private beamBottom: number = 0
+  private beamLength: number = 0
   
   // Renderers for different annotation types
   private linearDimensionRenderer: LinearDimensionRenderer
@@ -35,15 +37,18 @@ export class AnnotationManager {
   private creationType: AnnotationType | null = null
   private creationPoints: AnnotationPoint[] = []
   private previewGraphics: Phaser.GameObjects.Graphics
+  private ordinateOriginSide: 'left' | 'right' = 'left'
   
-  constructor(scene: Phaser.Scene, gridSize: number, gridOrigin: { x: number, y: number }) {
+  constructor(scene: Phaser.Scene, gridSize: number, gridOrigin: { x: number, y: number }, beamBottom?: number, beamLength?: number) {
     this.scene = scene
     this.gridSize = gridSize
     this.gridOrigin = gridOrigin
+    this.beamBottom = beamBottom || 0
+    this.beamLength = beamLength || 0
     
     // Initialize renderers
     this.linearDimensionRenderer = new LinearDimensionRenderer(scene)
-    this.ordinateDimensionRenderer = new OrdinateDimensionRenderer(scene)
+    this.ordinateDimensionRenderer = new OrdinateDimensionRenderer(scene, gridSize)
     this.calloutRenderer = new CalloutRenderer(scene)
     
     // Create preview graphics layer
@@ -146,12 +151,17 @@ export class AnnotationManager {
       y: pointer.worldY
     }
     
+    console.log('AnnotationManager handlePointerDown:', point, 'isCreating:', this.isCreating, 'type:', this.creationType)
+    
     if (this.isCreating) {
       const snappedPoint = this.snapToGrid(point)
       this.creationPoints.push(snappedPoint)
       
+      console.log('Added creation point:', snappedPoint, 'total points:', this.creationPoints.length)
+      
       // Check if we have enough points to create the annotation
       if (this.shouldCreateAnnotation()) {
+        console.log('Creating annotation...')
         this.createAnnotation()
         this.cancelCreation()
       }
@@ -190,8 +200,9 @@ export class AnnotationManager {
     
     switch (this.creationType) {
       case 'linear-dimension':
-      case 'ordinate-dimension':
         return this.creationPoints.length >= 2
+      case 'ordinate-dimension':
+        return this.creationPoints.length >= 1 // Only need one click for ordinate
       case 'callout':
         return this.creationPoints.length >= 1
       default:
@@ -204,6 +215,8 @@ export class AnnotationManager {
     
     const id = `annotation_${Date.now()}`
     let annotation: Annotation | null = null
+    
+    console.log('Creating annotation type:', this.creationType)
     
     switch (this.creationType) {
       case 'linear-dimension':
@@ -218,7 +231,10 @@ export class AnnotationManager {
     }
     
     if (annotation) {
+      console.log('Adding annotation:', annotation)
       this.addAnnotation(annotation)
+    } else {
+      console.log('Failed to create annotation')
     }
   }
   
@@ -249,12 +265,13 @@ export class AnnotationManager {
   }
   
   private createOrdinateDimension(id: string): OrdinateDimension {
-    const [origin, measure] = this.creationPoints
-    const isVertical = Math.abs(measure.x - origin.x) < Math.abs(measure.y - origin.y)
-    const distance = isVertical 
-      ? Math.abs(measure.y - origin.y) 
-      : Math.abs(measure.x - origin.x)
-    const dimensionInInches = distance / this.gridSize
+    const [measurePoint] = this.creationPoints
+    
+    // Snap to bottom edge of beam
+    const snappedMeasurePoint = {
+      ...measurePoint,
+      y: this.beamBottom
+    }
     
     return {
       id,
@@ -262,14 +279,16 @@ export class AnnotationManager {
       visible: true,
       locked: false,
       style: { ...DEFAULT_ANNOTATION_STYLE },
-      originPoint: origin,
-      measurePoint: measure,
-      isVertical,
-      joggedLine: true,
-      jogOffset: 30,
-      text: `${dimensionInInches.toFixed(1)}"`,
+      measurePoint: snappedMeasurePoint,
+      originSide: this.ordinateOriginSide,
+      jogOffset: 40,
+      text: '',
       unit: 'in',
-      showArrow: true
+      autoText: true,
+      showArrow: true,
+      witnessLineHeight: 10,
+      beamLength: this.beamLength,
+      beamBottom: this.beamBottom
     }
   }
   
@@ -321,6 +340,8 @@ export class AnnotationManager {
   }
   
   private renderAnnotation(annotation: Annotation): void {
+    console.log('Rendering annotation:', annotation.type, annotation.id)
+    
     // Remove existing graphics
     const existingContainer = this.annotationGraphics.get(annotation.id)
     if (existingContainer) {
@@ -329,18 +350,24 @@ export class AnnotationManager {
     
     // Create new container
     const container = this.scene.add.container(0, 0)
+    container.setDepth(500) // Ensure annotations appear above other elements
     
     // Render based on type
-    switch (annotation.type) {
-      case 'linear-dimension':
-        this.linearDimensionRenderer.render(annotation, container)
-        break
-      case 'ordinate-dimension':
-        this.ordinateDimensionRenderer.render(annotation, container)
-        break
-      case 'callout':
-        this.calloutRenderer.render(annotation, container)
-        break
+    try {
+      switch (annotation.type) {
+        case 'linear-dimension':
+          this.linearDimensionRenderer.render(annotation, container)
+          break
+        case 'ordinate-dimension':
+          this.ordinateDimensionRenderer.render(annotation, container)
+          break
+        case 'callout':
+          this.calloutRenderer.render(annotation, container)
+          break
+      }
+      console.log('Rendered successfully, container children:', container.length)
+    } catch (error) {
+      console.error('Error rendering annotation:', error)
     }
     
     // Make interactive
@@ -352,9 +379,16 @@ export class AnnotationManager {
   
   // Interaction methods
   private getAnnotationAtPoint(point: AnnotationPoint): Annotation | null {
-    // Implementation would check bounds of each annotation
-    // For now, return null
-    return null
+    let foundAnnotation: Annotation | null = null
+    
+    // Check each annotation container for hit
+    this.annotationGraphics.forEach((container, id) => {
+      if (container.getBounds().contains(point.x, point.y)) {
+        foundAnnotation = this.annotations.get(id) || null
+      }
+    })
+    
+    return foundAnnotation
   }
   
   private startDragging(annotation: Annotation, point: AnnotationPoint): void {
@@ -368,8 +402,15 @@ export class AnnotationManager {
   private updateDraggedAnnotation(point: AnnotationPoint): void {
     if (!this.activeAnnotation) return
     
-    // Implementation would update annotation position based on drag
-    // This is a placeholder
+    const annotation = this.activeAnnotation.annotation
+    
+    if (annotation.type === 'ordinate-dimension') {
+      // Update measure point X position only (keep Y at beam bottom)
+      const snappedPoint = this.snapToGrid({ ...point, y: this.beamBottom })
+      this.updateAnnotation(annotation.id, {
+        measurePoint: snappedPoint
+      })
+    }
   }
   
   // Public API
@@ -387,6 +428,15 @@ export class AnnotationManager {
       return this.annotations.get(this.selectedAnnotationId) || null
     }
     return null
+  }
+  
+  public setBeamDimensions(beamBottom: number, beamLength: number): void {
+    this.beamBottom = beamBottom
+    this.beamLength = beamLength
+  }
+  
+  public setOrdinateOriginSide(side: 'left' | 'right'): void {
+    this.ordinateOriginSide = side
   }
   
   private updatePreview(currentPoint: AnnotationPoint): void {
@@ -433,14 +483,31 @@ export class AnnotationManager {
         break
         
       case 'ordinate-dimension':
-        if (this.creationPoints.length === 1) {
-          const origin = this.creationPoints[0]
-          this.previewGraphics.strokeCircle(origin.x, origin.y, 4)
-          this.previewGraphics.beginPath()
-          this.previewGraphics.moveTo(origin.x, origin.y)
-          this.previewGraphics.lineTo(currentPoint.x, currentPoint.y)
-          this.previewGraphics.stroke()
-        }
+        // Show vertical line at cursor position
+        this.previewGraphics.beginPath()
+        this.previewGraphics.moveTo(currentPoint.x, this.beamBottom)
+        this.previewGraphics.lineTo(currentPoint.x, this.beamBottom + 50)
+        this.previewGraphics.stroke()
+        
+        // Show distance from selected origin
+        const gridX = Math.round((currentPoint.x - this.gridOrigin.x) / this.gridSize)
+        const distance = this.ordinateOriginSide === 'left' 
+          ? gridX 
+          : this.beamLength - gridX
+        const distanceText = `${Math.abs(distance)}"`
+        
+        // Draw text background
+        const textBounds = this.scene.add.text(0, 0, distanceText, { fontSize: '12px' })
+        const textWidth = textBounds.width
+        const textHeight = textBounds.height
+        textBounds.destroy()
+        
+        this.previewGraphics.fillRect(
+          currentPoint.x - textWidth/2 - 4,
+          this.beamBottom + 40 - textHeight/2 - 2,
+          textWidth + 8,
+          textHeight + 4
+        )
         break
         
       case 'callout':

@@ -5,12 +5,16 @@ interface AnnotationToolbarProps {
   onSelectTool: (type: AnnotationType) => void
   selectedTool: AnnotationType
   visible: boolean
+  ordinateOriginSide: 'left' | 'right'
+  onToggleOrdinateOrigin: () => void
 }
 
 export const AnnotationToolbar: React.FC<AnnotationToolbarProps> = ({
   onSelectTool,
   selectedTool,
-  visible
+  visible,
+  ordinateOriginSide,
+  onToggleOrdinateOrigin
 }) => {
   if (!visible) return null
 
@@ -85,6 +89,33 @@ export const AnnotationToolbar: React.FC<AnnotationToolbarProps> = ({
           }}>({tool.shortcut})</span>
         </button>
       ))}
+      
+      {selectedTool === 'ordinate-dimension' && (
+        <div style={{
+          marginTop: '8px',
+          paddingTop: '8px',
+          borderTop: '1px solid #eee'
+        }}>
+          <button
+            onClick={onToggleOrdinateOrigin}
+            style={{
+              width: '100%',
+              padding: '6px 12px',
+              backgroundColor: '#f0f0f0',
+              border: '1px solid #ddd',
+              borderRadius: '4px',
+              cursor: 'pointer',
+              fontSize: '13px',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between'
+            }}
+          >
+            <span>Origin: {ordinateOriginSide === 'left' ? 'Left End' : 'Right End'}</span>
+            <span style={{ fontSize: '11px', opacity: 0.7 }}>Click to toggle</span>
+          </button>
+        </div>
+      )}
       
       <div style={{
         marginTop: '8px',

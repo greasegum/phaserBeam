@@ -213,10 +213,16 @@ export class BeamElevationScene extends Phaser.Scene {
     
     // Initialize annotation manager for annotation mode
     if (this.appMode === 'annotation') {
+      // Calculate beam bottom position
+      const totalHeight = this.beamProfile.webHeight + 2 * this.beamProfile.flangeThickness
+      const beamBottom = centerY + (totalHeight * this.gridSize) / 2
+      
       this.annotationManager = new AnnotationManager(
         this,
         this.gridSize,
-        { x: startX, y: centerY }
+        { x: startX, y: centerY },
+        beamBottom,
+        this.beamLength
       )
       // Update snap points based on grid
       this.updateAnnotationSnapPoints()
@@ -1093,7 +1099,10 @@ export class BeamElevationScene extends Phaser.Scene {
     )
     
     cell.setStrokeStyle(1, 0x999999, 0.8)
-    cell.setInteractive()
+    // Only make cells interactive in edit mode
+    if (this.appMode === 'edit') {
+      cell.setInteractive()
+    }
     cell.setData('col', col)
     cell.setData('row', row)
     cell.setData('zone', zone)

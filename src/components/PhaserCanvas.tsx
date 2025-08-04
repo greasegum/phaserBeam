@@ -37,6 +37,7 @@ export const PhaserCanvas: React.FC<PhaserCanvasProps> = ({
   const scrollContainerRef = useRef<HTMLDivElement>(null)
   const [currentScene, setCurrentScene] = useState<BeamElevationScene | null>(null)
   const [selectedAnnotationTool, setSelectedAnnotationTool] = useState<AnnotationType>('linear-dimension')
+  const [ordinateOriginSide, setOrdinateOriginSide] = useState<'left' | 'right'>('left')
 
   useEffect(() => {
     if (!containerRef.current) return
@@ -182,6 +183,15 @@ export const PhaserCanvas: React.FC<PhaserCanvasProps> = ({
           visible={appMode === 'annotation'}
           selectedTool={selectedAnnotationTool}
           onSelectTool={handleSelectAnnotationTool}
+          ordinateOriginSide={ordinateOriginSide}
+          onToggleOrdinateOrigin={() => {
+            const newSide = ordinateOriginSide === 'left' ? 'right' : 'left'
+            setOrdinateOriginSide(newSide)
+            if (currentScene && appMode === 'annotation') {
+              // @ts-ignore
+              currentScene.annotationManager?.setOrdinateOriginSide(newSide)
+            }
+          }}
         />
       </div>
       <AdvancedSettings scene={currentScene} />

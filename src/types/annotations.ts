@@ -43,14 +43,16 @@ export interface LinearDimension extends BaseAnnotation {
 
 export interface OrdinateDimension extends BaseAnnotation {
   type: 'ordinate-dimension'
-  originPoint: AnnotationPoint
-  measurePoint: AnnotationPoint
-  isVertical: boolean
-  joggedLine: boolean
-  jogOffset: number
+  measurePoint: AnnotationPoint // Point along bottom edge of beam
+  originSide: 'left' | 'right' // Which end to measure from
+  jogOffset: number // Vertical offset below beam for dimension line
   text: string
   unit: 'in' | 'ft'
+  autoText: boolean // Automatically calculate dimension text
   showArrow: boolean
+  witnessLineHeight: number // Height of witness line from beam bottom
+  beamLength: number // Total beam length for calculating distance
+  beamBottom: number // Y coordinate of beam bottom edge
 }
 
 export interface Callout extends BaseAnnotation {
@@ -64,6 +66,8 @@ export interface Callout extends BaseAnnotation {
     text: string
     showBorder: boolean
     padding: number
+    isEditing?: boolean
+    decimalReading?: number // For UT meter readings
   }
   leaderStyle: 'straight' | 'curved' | 'polyline'
   endStyle: 'arrow' | 'dot' | 'none'

@@ -121,10 +121,16 @@ export class CalloutRenderer {
     }
     
     // Add text
+    let displayText = textBox.text
+    // Format decimal reading if present
+    if (textBox.decimalReading !== undefined) {
+      displayText = textBox.decimalReading.toFixed(3) + '"'
+    }
+    
     const textObj = this.scene.add.text(
       textBox.x + textBox.padding,
       textBox.y + textBox.padding,
-      textBox.text,
+      displayText,
       {
         fontSize: `${style.fontSize}px`,
         fontFamily: style.fontFamily,
