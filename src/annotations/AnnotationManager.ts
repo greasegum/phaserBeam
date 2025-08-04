@@ -17,6 +17,10 @@ import { OrdinateDimensionRenderer } from './OrdinateDimensionRenderer'
 import { CalloutRenderer } from './CalloutRenderer'
 
 export class AnnotationManager {
+  private textInputElement?: HTMLInputElement
+  private textInputContainer?: HTMLDivElement
+  private lastClickTime?: number
+  private lastClickAnnotation?: string
   private scene: Phaser.Scene
   private annotations: Map<string, Annotation> = new Map()
   private annotationGraphics: Map<string, Phaser.GameObjects.Container> = new Map()
@@ -96,6 +100,13 @@ export class AnnotationManager {
     this.previewGraphics.destroy()
     this.cursorGraphics.destroy()
     this.modeIndicator.destroy()
+    
+    // Clean up text input if exists
+    if (this.textInputContainer) {
+      document.body.removeChild(this.textInputContainer)
+      this.textInputContainer = undefined
+      this.textInputElement = undefined
+    }
     
     // Clean up all annotations
     this.annotationGraphics.forEach(container => container.destroy())
@@ -258,9 +269,20 @@ export class AnnotationManager {
     
     } else {
       // Check if clicking on an existing annotation
-      const annotation = this.getAnnotationAtPoint(point)
-      if (annotation) {
-        this.startDragging(annotation, point)
+      const result = this.getAnnotationAtPoint(point)
+      if (result) {
+        // Check for double-click to edit
+        const now = Date.now()
+        if (this.lastClickTime && now - this.lastClickTime < 300 && 
+            this.lastClickAnnotation === result.annotation.id) {
+          // Double click - edit annotation
+          this.editAnnotation(result.annotation)
+        } else {
+          // Single click - start dragging
+          this.startDragging(result.annotation, point, result.handle)
+        }
+        this.lastClickTime = now
+        this.lastClickAnnotation = result.annotation.id
       }
     }
   }
@@ -298,7 +320,7 @@ export class AnnotationManager {
       case 'ordinate-dimension':
         return this.creationPoints.length >= 1 // Only need one click for ordinate
       case 'callout':
-        return this.creationPoints.length >= 1
+        return this.creationPoints.length >= 2 // Need 2 clicks: arrow point and text location
       default:
         return false
     }
@@ -387,27 +409,62 @@ export class AnnotationManager {
   }
   
   private createCallout(id: string): Callout {
-    const [leader] = this.creationPoints
+    const [arrowPoint, textPoint] = this.creationPoints
     
-    return {
+    // Calculate broken leader midpoint
+    // Create a horizontal/vertical elbow based on positions
+    const dx = textPoint.x - arrowPoint.x
+    const dy = textPoint.y - arrowPoint.y
+    const midPoint = { ...arrowPoint }
+    
+    // If more horizontal than vertical, break vertically first
+    if (Math.abs(dx) > Math.abs(dy)) {
+      midPoint.x = arrowPoint.x
+      midPoint.y = textPoint.y
+    } else {
+      midPoint.x = textPoint.x
+      midPoint.y = arrowPoint.y
+    }
+    
+    // Calculate text box position relative to text point
+    const textBoxWidth = 120
+    const textBoxHeight = 50
+    let textBoxX = textPoint.x - textBoxWidth / 2
+    let textBoxY = textPoint.y - textBoxHeight / 2
+    
+    // Adjust if text point is at edge of box
+    if (dx > 0) {
+      textBoxX = textPoint.x - 10 // Left edge connection
+    } else {
+      textBoxX = textPoint.x - textBoxWidth + 10 // Right edge connection
+    }
+    
+    const callout: Callout = {
       id,
       type: 'callout',
       visible: true,
       locked: false,
       style: { ...DEFAULT_ANNOTATION_STYLE },
-      leaderPoints: [leader],
+      leaderPoints: [arrowPoint, midPoint], // Broken leader
       textBox: {
-        x: leader.x + 50,
-        y: leader.y - 30,
-        width: 100,
-        height: 40,
-        text: 'Note',
+        x: textBoxX,
+        y: textBoxY,
+        width: textBoxWidth,
+        height: textBoxHeight,
+        text: '', // Start with empty text
         showBorder: true,
         padding: 8
       },
-      leaderStyle: 'straight',
+      leaderStyle: 'polyline', // Use polyline for broken leader
       endStyle: 'arrow'
     }
+    
+    // Prompt for text content after creation
+    setTimeout(() => {
+      this.promptForCalloutText(callout)
+    }, 100)
+    
+    return callout
   }
   
   // Annotation management
@@ -429,7 +486,99 @@ export class AnnotationManager {
     const annotation = this.annotations.get(id)
     if (annotation) {
       Object.assign(annotation, updates)
+      
+      // Apply intelligent nudging for callouts to avoid overlaps
+      if (annotation.type === 'callout') {
+        this.applyCalloutNudging(annotation as Callout)
+      }
+      
       this.renderAnnotation(annotation)
+    }
+  }
+  
+  private applyCalloutNudging(targetCallout: Callout): void {
+    const padding = 10 // Minimum space between callouts
+    const iterations = 10 // Max nudge iterations
+    
+    for (let iter = 0; iter < iterations; iter++) {
+      let hasOverlap = false
+      
+      // Check against all other callouts
+      this.annotations.forEach((annotation) => {
+        if (annotation.id === targetCallout.id || annotation.type !== 'callout') return
+        
+        const otherCallout = annotation as Callout
+        
+        // Check text box overlap
+        const targetBounds = {
+          left: targetCallout.textBox.x,
+          right: targetCallout.textBox.x + targetCallout.textBox.width,
+          top: targetCallout.textBox.y,
+          bottom: targetCallout.textBox.y + targetCallout.textBox.height
+        }
+        
+        const otherBounds = {
+          left: otherCallout.textBox.x,
+          right: otherCallout.textBox.x + otherCallout.textBox.width,
+          top: otherCallout.textBox.y,
+          bottom: otherCallout.textBox.y + otherCallout.textBox.height
+        }
+        
+        // Check for overlap
+        if (targetBounds.left < otherBounds.right + padding &&
+            targetBounds.right > otherBounds.left - padding &&
+            targetBounds.top < otherBounds.bottom + padding &&
+            targetBounds.bottom > otherBounds.top - padding) {
+          
+          hasOverlap = true
+          
+          // Calculate nudge direction (away from overlap)
+          const targetCenterX = (targetBounds.left + targetBounds.right) / 2
+          const targetCenterY = (targetBounds.top + targetBounds.bottom) / 2
+          const otherCenterX = (otherBounds.left + otherBounds.right) / 2
+          const otherCenterY = (otherBounds.top + otherBounds.bottom) / 2
+          
+          const dx = targetCenterX - otherCenterX
+          const dy = targetCenterY - otherCenterY
+          const distance = Math.sqrt(dx * dx + dy * dy)
+          
+          if (distance > 0) {
+            // Nudge away from the other callout
+            const nudgeDistance = 5
+            const nudgeX = (dx / distance) * nudgeDistance
+            const nudgeY = (dy / distance) * nudgeDistance
+            
+            targetCallout.textBox.x += nudgeX
+            targetCallout.textBox.y += nudgeY
+            
+            // Update leader line connection if needed
+            if (targetCallout.leaderPoints.length > 1) {
+              const lastIdx = targetCallout.leaderPoints.length - 1
+              const textCenterX = targetCallout.textBox.x + targetCallout.textBox.width / 2
+              const textCenterY = targetCallout.textBox.y + targetCallout.textBox.height / 2
+              const arrowPoint = targetCallout.leaderPoints[0]
+              
+              // Recalculate midpoint for broken leader
+              const dx = textCenterX - arrowPoint.x
+              const dy = textCenterY - arrowPoint.y
+              
+              if (Math.abs(dx) > Math.abs(dy)) {
+                targetCallout.leaderPoints[1] = {
+                  x: arrowPoint.x,
+                  y: textCenterY
+                }
+              } else {
+                targetCallout.leaderPoints[1] = {
+                  x: textCenterX,
+                  y: arrowPoint.y
+                }
+              }
+            }
+          }
+        }
+      })
+      
+      if (!hasOverlap) break
     }
   }
   
@@ -472,33 +621,154 @@ export class AnnotationManager {
   }
   
   // Interaction methods
-  private getAnnotationAtPoint(point: AnnotationPoint): Annotation | null {
-    let foundAnnotation: Annotation | null = null
+  private getAnnotationAtPoint(point: AnnotationPoint): { annotation: Annotation, handle?: string } | null {
+    let foundResult: { annotation: Annotation, handle?: string } | null = null
     
-    // Check each annotation container for hit
-    this.annotationGraphics.forEach((container, id) => {
-      if (container.getBounds().contains(point.x, point.y)) {
-        foundAnnotation = this.annotations.get(id) || null
+    // Check each annotation in reverse order (top to bottom)
+    const entries = Array.from(this.annotationGraphics.entries()).reverse()
+    
+    for (const [id, container] of entries) {
+      const annotation = this.annotations.get(id)
+      if (!annotation) continue
+      
+      if (annotation.type === 'callout') {
+        const callout = annotation as Callout
+        
+        // Check text box
+        const textBoxBounds = new Phaser.Geom.Rectangle(
+          callout.textBox.x,
+          callout.textBox.y,
+          callout.textBox.width,
+          callout.textBox.height
+        )
+        if (textBoxBounds.contains(point.x, point.y)) {
+          return { annotation, handle: 'textBox' }
+        }
+        
+        // Check arrow point (first leader point)
+        if (callout.leaderPoints.length > 0) {
+          const arrowPoint = callout.leaderPoints[0]
+          const distance = Math.sqrt(
+            Math.pow(point.x - arrowPoint.x, 2) + 
+            Math.pow(point.y - arrowPoint.y, 2)
+          )
+          if (distance < 10) {
+            return { annotation, handle: 'arrow' }
+          }
+        }
+        
+        // Check leader line
+        for (let i = 0; i < callout.leaderPoints.length - 1; i++) {
+          const p1 = callout.leaderPoints[i]
+          const p2 = callout.leaderPoints[i + 1]
+          const dist = this.pointToLineDistance(point, p1, p2)
+          if (dist < 5) {
+            return { annotation, handle: 'leader' }
+          }
+        }
+      } else if (container.getBounds().contains(point.x, point.y)) {
+        foundResult = { annotation }
       }
-    })
+    }
     
-    return foundAnnotation
+    return foundResult
   }
   
-  private startDragging(annotation: Annotation, point: AnnotationPoint): void {
+  private pointToLineDistance(point: AnnotationPoint, lineStart: AnnotationPoint, lineEnd: AnnotationPoint): number {
+    const A = point.x - lineStart.x
+    const B = point.y - lineStart.y
+    const C = lineEnd.x - lineStart.x
+    const D = lineEnd.y - lineStart.y
+    
+    const dot = A * C + B * D
+    const lenSq = C * C + D * D
+    let param = -1
+    
+    if (lenSq !== 0) {
+      param = dot / lenSq
+    }
+    
+    let xx, yy
+    
+    if (param < 0) {
+      xx = lineStart.x
+      yy = lineStart.y
+    } else if (param > 1) {
+      xx = lineEnd.x
+      yy = lineEnd.y
+    } else {
+      xx = lineStart.x + param * C
+      yy = lineStart.y + param * D
+    }
+    
+    const dx = point.x - xx
+    const dy = point.y - yy
+    
+    return Math.sqrt(dx * dx + dy * dy)
+  }
+  
+  private startDragging(annotation: Annotation, point: AnnotationPoint, handle?: string): void {
     this.activeAnnotation = {
       annotation,
       isDragging: true,
-      startDragPoint: point
+      startDragPoint: point,
+      dragHandle: handle
     }
   }
   
   private updateDraggedAnnotation(point: AnnotationPoint): void {
-    if (!this.activeAnnotation) return
+    if (!this.activeAnnotation || !this.activeAnnotation.startDragPoint) return
     
     const annotation = this.activeAnnotation.annotation
+    const snappedPoint = this.snapToGrid(point)
+    const dx = snappedPoint.x - this.activeAnnotation.startDragPoint.x
+    const dy = snappedPoint.y - this.activeAnnotation.startDragPoint.y
     
-    if (annotation.type === 'ordinate-dimension') {
+    if (annotation.type === 'callout') {
+      const callout = annotation as Callout
+      
+      if (this.activeAnnotation.dragHandle === 'textBox') {
+        // Move text box
+        callout.textBox.x += dx
+        callout.textBox.y += dy
+      } else if (this.activeAnnotation.dragHandle === 'arrow') {
+        // Move arrow point
+        if (callout.leaderPoints.length > 0) {
+          callout.leaderPoints[0] = snappedPoint
+          // Recalculate midpoint
+          if (callout.leaderPoints.length > 1) {
+            const textCenterX = callout.textBox.x + callout.textBox.width / 2
+            const textCenterY = callout.textBox.y + callout.textBox.height / 2
+            const dx = textCenterX - snappedPoint.x
+            const dy = textCenterY - snappedPoint.y
+            
+            if (Math.abs(dx) > Math.abs(dy)) {
+              callout.leaderPoints[1] = {
+                x: snappedPoint.x,
+                y: textCenterY
+              }
+            } else {
+              callout.leaderPoints[1] = {
+                x: textCenterX,
+                y: snappedPoint.y
+              }
+            }
+          }
+        }
+      } else {
+        // Move entire callout
+        callout.textBox.x += dx
+        callout.textBox.y += dy
+        callout.leaderPoints = callout.leaderPoints.map(p => ({
+          x: p.x + dx,
+          y: p.y + dy
+        }))
+      }
+      
+      this.updateAnnotation(annotation.id, callout)
+      this.activeAnnotation.startDragPoint = snappedPoint
+      
+    } else if (annotation.type === 'ordinate-dimension') {
       // Update measure point X position only (keep Y at beam bottom)
       const snappedPoint = this.snapToGrid({ ...point, y: this.beamBottom })
       this.updateAnnotation(annotation.id, {
@@ -624,21 +894,78 @@ export class AnnotationManager {
         break
         
       case 'callout':
-        // Show where callout will be placed
-        this.previewGraphics.fillStyle(0x0066cc, 0.5)
-        this.previewGraphics.fillCircle(currentPoint.x, currentPoint.y, 5)
-        
-        // Show preview of text box
-        const previewBoxX = currentPoint.x + 50
-        const previewBoxY = currentPoint.y - 30
-        this.previewGraphics.lineStyle(1, 0x0066cc, 0.5)
-        this.previewGraphics.strokeRect(previewBoxX, previewBoxY, 100, 40)
-        
-        // Show leader line preview
-        this.previewGraphics.beginPath()
-        this.previewGraphics.moveTo(currentPoint.x, currentPoint.y)
-        this.previewGraphics.lineTo(previewBoxX, previewBoxY + 20)
-        this.previewGraphics.stroke()
+        if (this.creationPoints.length === 0) {
+          // First click preview - show arrow point
+          this.previewGraphics.fillStyle(0xff0000, 0.5)
+          this.previewGraphics.fillCircle(currentPoint.x, currentPoint.y, 5)
+          
+          // Draw arrow indicator
+          this.previewGraphics.lineStyle(2, 0xff0000, 0.5)
+          this.previewGraphics.beginPath()
+          this.previewGraphics.moveTo(currentPoint.x - 10, currentPoint.y)
+          this.previewGraphics.lineTo(currentPoint.x, currentPoint.y)
+          this.previewGraphics.lineTo(currentPoint.x - 5, currentPoint.y - 5)
+          this.previewGraphics.moveTo(currentPoint.x, currentPoint.y)
+          this.previewGraphics.lineTo(currentPoint.x - 5, currentPoint.y + 5)
+          this.previewGraphics.stroke()
+        } else {
+          // Second click preview - show broken leader and text box
+          const arrowPoint = this.creationPoints[0]
+          
+          // Calculate broken leader midpoint
+          const dx = currentPoint.x - arrowPoint.x
+          const dy = currentPoint.y - arrowPoint.y
+          const midPoint = { ...arrowPoint }
+          
+          if (Math.abs(dx) > Math.abs(dy)) {
+            midPoint.x = arrowPoint.x
+            midPoint.y = currentPoint.y
+          } else {
+            midPoint.x = currentPoint.x
+            midPoint.y = arrowPoint.y
+          }
+          
+          // Draw broken leader line
+          this.previewGraphics.lineStyle(2, 0x0066cc, 0.8)
+          this.previewGraphics.beginPath()
+          this.previewGraphics.moveTo(arrowPoint.x, arrowPoint.y)
+          this.previewGraphics.lineTo(midPoint.x, midPoint.y)
+          this.previewGraphics.lineTo(currentPoint.x, currentPoint.y)
+          this.previewGraphics.stroke()
+          
+          // Draw arrow at arrow point
+          const firstAngle = Math.atan2(midPoint.y - arrowPoint.y, midPoint.x - arrowPoint.x)
+          this.previewGraphics.lineStyle(2, 0xff0000, 0.8)
+          this.previewGraphics.beginPath()
+          this.previewGraphics.moveTo(arrowPoint.x, arrowPoint.y)
+          this.previewGraphics.lineTo(
+            arrowPoint.x + Math.cos(firstAngle - Math.PI / 6) * 10,
+            arrowPoint.y + Math.sin(firstAngle - Math.PI / 6) * 10
+          )
+          this.previewGraphics.moveTo(arrowPoint.x, arrowPoint.y)
+          this.previewGraphics.lineTo(
+            arrowPoint.x + Math.cos(firstAngle + Math.PI / 6) * 10,
+            arrowPoint.y + Math.sin(firstAngle + Math.PI / 6) * 10
+          )
+          this.previewGraphics.stroke()
+          
+          // Draw text box preview
+          const textBoxWidth = 120
+          const textBoxHeight = 50
+          let previewBoxX = currentPoint.x - textBoxWidth / 2
+          const previewBoxY = currentPoint.y - textBoxHeight / 2
+          
+          if (dx > 0) {
+            previewBoxX = currentPoint.x - 10
+          } else {
+            previewBoxX = currentPoint.x - textBoxWidth + 10
+          }
+          
+          this.previewGraphics.lineStyle(2, 0x0066cc, 0.5)
+          this.previewGraphics.strokeRect(previewBoxX, previewBoxY, textBoxWidth, textBoxHeight)
+          this.previewGraphics.fillStyle(0x0066cc, 0.1)
+          this.previewGraphics.fillRect(previewBoxX, previewBoxY, textBoxWidth, textBoxHeight)
+        }
         break
     }
   }
@@ -734,9 +1061,27 @@ export class AnnotationManager {
         break
         
       case 'callout':
-        // Show leader indicator
-        this.cursorGraphics.fillStyle(0x0066cc)
-        this.cursorGraphics.fillCircle(point.x, point.y, 3)
+        // Show different indicator based on click count
+        if (this.creationPoints.length === 0) {
+          // First click - show arrow point indicator
+          this.cursorGraphics.fillStyle(0xff0000)
+          this.cursorGraphics.fillCircle(point.x, point.y, 4)
+          this.cursorGraphics.lineStyle(2, 0xff0000)
+          // Draw small arrow symbol
+          this.cursorGraphics.beginPath()
+          this.cursorGraphics.moveTo(point.x - 8, point.y)
+          this.cursorGraphics.lineTo(point.x, point.y)
+          this.cursorGraphics.lineTo(point.x - 4, point.y - 4)
+          this.cursorGraphics.moveTo(point.x, point.y)
+          this.cursorGraphics.lineTo(point.x - 4, point.y + 4)
+          this.cursorGraphics.stroke()
+        } else {
+          // Second click - show text box indicator
+          this.cursorGraphics.lineStyle(2, 0x0066cc)
+          this.cursorGraphics.strokeRect(point.x - 30, point.y - 15, 60, 30)
+          this.cursorGraphics.fillStyle(0x0066cc, 0.2)
+          this.cursorGraphics.fillRect(point.x - 30, point.y - 15, 60, 30)
+        }
         break
     }
   }
@@ -788,5 +1133,127 @@ export class AnnotationManager {
       this.renderAnnotation(saved)
     })
     console.log('Total annotations after restore:', this.annotations.size)
+  }
+  
+  private promptForCalloutText(callout: Callout): void {
+    // Create text input overlay
+    if (!this.textInputContainer) {
+      this.textInputContainer = document.createElement('div')
+      this.textInputContainer.style.cssText = `
+        position: fixed;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        z-index: 10000;
+        background: white;
+        padding: 20px;
+        border-radius: 8px;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+        width: 300px;
+      `
+      
+      this.textInputElement = document.createElement('input')
+      this.textInputElement.type = 'text'
+      this.textInputElement.placeholder = 'Enter callout text...'
+      this.textInputElement.style.cssText = `
+        width: 100%;
+        padding: 8px;
+        font-size: 14px;
+        border: 1px solid #ddd;
+        border-radius: 4px;
+        box-sizing: border-box;
+      `
+      
+      const label = document.createElement('div')
+      label.textContent = 'Callout Text:'
+      label.style.cssText = 'margin-bottom: 8px; font-weight: bold; font-size: 14px;'
+      
+      const buttonContainer = document.createElement('div')
+      buttonContainer.style.cssText = 'margin-top: 12px; display: flex; gap: 8px; justify-content: flex-end;'
+      
+      const okButton = document.createElement('button')
+      okButton.textContent = 'OK'
+      okButton.style.cssText = `
+        padding: 6px 16px;
+        background: #007bff;
+        color: white;
+        border: none;
+        border-radius: 4px;
+        cursor: pointer;
+        font-size: 14px;
+      `
+      
+      const cancelButton = document.createElement('button')
+      cancelButton.textContent = 'Cancel'
+      cancelButton.style.cssText = `
+        padding: 6px 16px;
+        background: #6c757d;
+        color: white;
+        border: none;
+        border-radius: 4px;
+        cursor: pointer;
+        font-size: 14px;
+      `
+      
+      this.textInputContainer.appendChild(label)
+      this.textInputContainer.appendChild(this.textInputElement)
+      buttonContainer.appendChild(cancelButton)
+      buttonContainer.appendChild(okButton)
+      this.textInputContainer.appendChild(buttonContainer)
+    }
+    
+    // Set current text if editing
+    this.textInputElement!.value = callout.textBox.text || ''
+    
+    // Show the container
+    document.body.appendChild(this.textInputContainer!)
+    this.textInputElement!.focus()
+    this.textInputElement!.select()
+    
+    // Handle input
+    const handleOk = () => {
+      const text = this.textInputElement!.value.trim()
+      if (text) {
+        callout.textBox.text = text
+        this.updateAnnotation(callout.id, callout)
+      }
+      cleanup()
+    }
+    
+    const handleCancel = () => {
+      // If this is a new callout with no text, remove it
+      if (!callout.textBox.text) {
+        this.removeAnnotation(callout.id)
+      }
+      cleanup()
+    }
+    
+    const cleanup = () => {
+      if (this.textInputContainer && this.textInputContainer.parentNode) {
+        document.body.removeChild(this.textInputContainer)
+      }
+      this.textInputElement!.removeEventListener('keydown', handleKeydown)
+    }
+    
+    const handleKeydown = (e: KeyboardEvent) => {
+      if (e.key === 'Enter') {
+        handleOk()
+      } else if (e.key === 'Escape') {
+        handleCancel()
+      }
+    }
+    
+    // Find buttons
+    const buttons = this.textInputContainer!.querySelectorAll('button')
+    buttons[0].onclick = handleCancel
+    buttons[1].onclick = handleOk
+    this.textInputElement!.addEventListener('keydown', handleKeydown)
+  }
+  
+  public editAnnotation(annotation: Annotation): void {
+    if (annotation.type === 'callout') {
+      this.promptForCalloutText(annotation as Callout)
+    }
+    // Add other annotation type editing as needed
   }
 }
