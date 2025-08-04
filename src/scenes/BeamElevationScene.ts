@@ -207,7 +207,7 @@ export class BeamElevationScene extends Phaser.Scene {
 
     // Create grid overlay container
     this.gridContainer = this.add.container()
-    if (this.editMode && this.showGrid) {
+    if ((this.editMode || this.appMode === 'annotation') && this.showGrid) {
       this.createGrid(startX, centerY, beamWidth)
       // Update grid cell visibility after creating grid
       this.updateGridCellVisibility()
@@ -937,6 +937,11 @@ export class BeamElevationScene extends Phaser.Scene {
     // Set fill style
     this.lossGraphics.fillStyle(0xFFB3BA, 0.8)
     
+    // In annotation mode, draw with outlines like edit mode
+    if (this.appMode === 'annotation' || this.editMode) {
+      this.lossGraphics.lineStyle(2, 0xFF6B6B)
+    }
+    
     // Fill individual cells with proper edge extension
     flangeCells.forEach(cell => {
       let x = startX + cell.x * this.gridSize
@@ -1484,7 +1489,7 @@ export class BeamElevationScene extends Phaser.Scene {
       
       // Toggle grid visibility
       if (this.gridContainer) {
-        this.gridContainer.setVisible(this.editMode && this.showGrid)
+        this.gridContainer.setVisible((this.editMode || this.appMode === 'annotation') && this.showGrid)
       }
       
       // Redraw section loss with appropriate style
@@ -1510,7 +1515,7 @@ export class BeamElevationScene extends Phaser.Scene {
       
       // Toggle grid visibility
       if (this.gridContainer) {
-        this.gridContainer.setVisible(this.editMode && this.showGrid)
+        this.gridContainer.setVisible((this.editMode || this.appMode === 'annotation') && this.showGrid)
       }
       
       // Redraw section loss with appropriate style
