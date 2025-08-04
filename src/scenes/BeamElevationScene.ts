@@ -1,8 +1,11 @@
 import Phaser from 'phaser'
 import { BeamProfile, GridCell } from '../types/beam'
+import { AppMode } from '../types/mode'
+import { AnnotationType } from '../types/annotations'
 import { marchingSquaresOptimized, MarchingSquaresOptions } from '../utils/marchingSquares'
 import { binaryToScalarField, ScalarFieldMethod } from '../utils/scalarField'
 import { drawBezierContour, EdgeConstraints } from '../utils/phaserBezierPath'
+import { AnnotationManager } from '../annotations/AnnotationManager'
 
 export class BeamElevationScene extends Phaser.Scene {
   private beamProfile: BeamProfile | null = null
@@ -13,6 +16,7 @@ export class BeamElevationScene extends Phaser.Scene {
   private gridOrigin: 'left' | 'right' = 'left'
   private showTopFlange = true
   private elevationView: 'N' | 'S' | 'E' | 'W' = 'N'
+  private appMode: AppMode = 'edit'
   private storedCells: GridCell[] = []
   private selectedCells: Set<string> = new Set()
   private gridCells: Map<string, Phaser.GameObjects.Rectangle> = new Map()
@@ -31,6 +35,8 @@ export class BeamElevationScene extends Phaser.Scene {
   private isMouseDown = false
   private isPainting = false
   private paintMode: 'add' | 'remove' | null = null
+  public annotationManager?: AnnotationManager
+  private currentAnnotationType: AnnotationType = 'linear-dimension'
   private useSmoothCurves = true // Enable smooth organic curves
   // Marching squares alignment offsets
   private contourOffsetX = 0.0 // No offset for proper grid alignment
@@ -102,6 +108,7 @@ export class BeamElevationScene extends Phaser.Scene {
     this.gridOrigin = data.gridOrigin || 'left'
     this.showTopFlange = data.showTopFlange !== undefined ? data.showTopFlange : true
     this.elevationView = data.elevationView || 'N'
+    this.appMode = data.appMode || 'edit'
     this.storedCells = data.gridCells || []
     this.onCellChange = data.onCellChange
     
@@ -130,6 +137,25 @@ export class BeamElevationScene extends Phaser.Scene {
       this.isPainting = false
       this.paintMode = null
     })
+    
+    // Set up keyboard shortcuts for annotation mode
+    if (this.appMode === 'annotation') {
+      this.input.keyboard?.on('keydown-L', () => {
+        this.currentAnnotationType = 'linear-dimension'
+        this.annotationManager?.startCreatingAnnotation('linear-dimension')
+      })
+      this.input.keyboard?.on('keydown-O', () => {
+        this.currentAnnotationType = 'ordinate-dimension'
+        this.annotationManager?.startCreatingAnnotation('ordinate-dimension')
+      })
+      this.input.keyboard?.on('keydown-C', () => {
+        this.currentAnnotationType = 'callout'
+        this.annotationManager?.startCreatingAnnotation('callout')
+      })
+      this.input.keyboard?.on('keydown-ESC', () => {
+        this.annotationManager?.cancelCreation()
+      })
+    }
     
     // Calculate scene dimensions
     const sceneWidth = this.cameras.main.width
@@ -183,6 +209,17 @@ export class BeamElevationScene extends Phaser.Scene {
       this.createGrid(startX, centerY, beamWidth)
       // Update grid cell visibility after creating grid
       this.updateGridCellVisibility()
+    }
+    
+    // Initialize annotation manager for annotation mode
+    if (this.appMode === 'annotation') {
+      this.annotationManager = new AnnotationManager(
+        this,
+        this.gridSize,
+        { x: startX, y: centerY }
+      )
+      // Update snap points based on grid
+      this.updateAnnotationSnapPoints()
     }
 
     // Add dimension lines and labels
@@ -1076,7 +1113,7 @@ export class BeamElevationScene extends Phaser.Scene {
 
   private setupCellInteraction(cell: Phaser.GameObjects.Rectangle) {
     cell.on('pointerdown', () => {
-      if (!this.editMode) return
+      if (!this.editMode || this.appMode === 'annotation') return
       
       const zone = cell.getData('zone') || 'default'
       const key = `${zone}_${cell.getData('col')}_${cell.getData('row')}`
@@ -1387,6 +1424,7 @@ export class BeamElevationScene extends Phaser.Scene {
         showTopFlange: this.showTopFlange,
         gridCells: gridCells || this.storedCells,
         elevationView: elevationView || this.elevationView,
+        appMode: this.appMode,
         onCellChange: this.onCellChange 
       })
       
@@ -1413,6 +1451,7 @@ export class BeamElevationScene extends Phaser.Scene {
         showTopFlange: this.showTopFlange,
         gridCells: gridCells || this.storedCells,
         elevationView: elevationView || this.elevationView,
+        appMode: this.appMode,
         onCellChange: this.onCellChange 
       })
       
@@ -1481,6 +1520,7 @@ export class BeamElevationScene extends Phaser.Scene {
     this.showTopFlange = showTopFlange !== undefined ? showTopFlange : this.showTopFlange
     this.storedCells = gridCells || this.storedCells
     this.elevationView = elevationView || this.elevationView
+    this.appMode = appMode || this.appMode
     this.scene.restart({ 
       beamProfile: profile, 
       beamLength: this.beamLength,
@@ -1490,6 +1530,7 @@ export class BeamElevationScene extends Phaser.Scene {
       showTopFlange: this.showTopFlange,
       gridCells: this.storedCells,
       elevationView: this.elevationView,
+      appMode: this.appMode,
       onCellChange: this.onCellChange 
     })
   }
@@ -1778,5 +1819,34 @@ export class BeamElevationScene extends Phaser.Scene {
       this.cameras.main.centerY,
       this.beamLength * this.gridSize
     )
+  }
+  
+  private updateAnnotationSnapPoints(): void {
+    if (!this.annotationManager) return
+    
+    const cells: { x: number, y: number, width: number, height: number }[] = []
+    
+    // Collect all grid cells for snap points
+    this.gridCells.forEach((cell, key) => {
+      cells.push({
+        x: cell.x,
+        y: cell.y,
+        width: cell.width,
+        height: cell.height
+      })
+    })
+    
+    this.annotationManager.updateSnapPoints(cells)
+  }
+  
+  shutdown(): void {
+    // Clean up annotation manager
+    if (this.annotationManager) {
+      this.annotationManager.destroy()
+      this.annotationManager = undefined
+    }
+    
+    // Call parent shutdown
+    super.shutdown()
   }
 }

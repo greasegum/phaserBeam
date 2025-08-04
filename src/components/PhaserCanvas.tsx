@@ -3,6 +3,9 @@ import Phaser from 'phaser'
 import { BeamElevationScene } from '../scenes/BeamElevationScene'
 import { BeamProfile, GridCell } from '../types/beam'
 import { AdvancedSettings } from './AdvancedSettings'
+import { AppMode } from '../types/mode'
+import { AnnotationType } from '../types/annotations'
+import { AnnotationToolbar } from './AnnotationToolbar'
 
 interface PhaserCanvasProps {
   beamProfile: BeamProfile | null
@@ -14,6 +17,7 @@ interface PhaserCanvasProps {
   showTopFlange?: boolean
   gridCells?: GridCell[]
   elevationView?: 'N' | 'S' | 'E' | 'W'
+  appMode?: AppMode
 }
 
 export const PhaserCanvas: React.FC<PhaserCanvasProps> = ({ 
@@ -25,12 +29,14 @@ export const PhaserCanvas: React.FC<PhaserCanvasProps> = ({
   gridOrigin = 'left',
   showTopFlange = true,
   gridCells = [],
-  elevationView = 'N'
+  elevationView = 'N',
+  appMode = 'edit'
 }) => {
   const gameRef = useRef<Phaser.Game | null>(null)
   const containerRef = useRef<HTMLDivElement>(null)
   const scrollContainerRef = useRef<HTMLDivElement>(null)
   const [currentScene, setCurrentScene] = useState<BeamElevationScene | null>(null)
+  const [selectedAnnotationTool, setSelectedAnnotationTool] = useState<AnnotationType>('linear-dimension')
 
   useEffect(() => {
     if (!containerRef.current) return
@@ -85,7 +91,7 @@ export const PhaserCanvas: React.FC<PhaserCanvasProps> = ({
     if (scene) {
       setCurrentScene(scene)
       if (scene.scene.isActive()) {
-        scene.updateBeamProfile(beamProfile, beamLength, editMode, showGrid, gridOrigin, showTopFlange, gridCells, elevationView)
+        scene.updateBeamProfile(beamProfile, beamLength, editMode, showGrid, gridOrigin, showTopFlange, gridCells, elevationView, appMode)
       } else {
         scene.scene.start('BeamElevationScene', { 
           beamProfile, 
@@ -96,7 +102,8 @@ export const PhaserCanvas: React.FC<PhaserCanvasProps> = ({
           gridOrigin,
           showTopFlange,
           gridCells,
-          elevationView
+          elevationView,
+          appMode
         })
       }
     } else {
@@ -114,12 +121,13 @@ export const PhaserCanvas: React.FC<PhaserCanvasProps> = ({
             gridOrigin,
             showTopFlange,
             gridCells,
-            elevationView
+            elevationView,
+            appMode
           })
         }
       })
     }
-  }, [beamProfile, beamLength, editMode, onCellChange, showGrid, gridOrigin, showTopFlange, gridCells, elevationView])
+  }, [beamProfile, beamLength, editMode, onCellChange, showGrid, gridOrigin, showTopFlange, gridCells, elevationView, appMode])
 
   if (!beamProfile) {
     return (
@@ -158,10 +166,23 @@ export const PhaserCanvas: React.FC<PhaserCanvasProps> = ({
     }
   }, [])
 
+  const handleSelectAnnotationTool = (type: AnnotationType) => {
+    setSelectedAnnotationTool(type)
+    if (currentScene && appMode === 'annotation') {
+      // @ts-ignore - We know annotationManager exists in annotation mode
+      currentScene.annotationManager?.startCreatingAnnotation(type)
+    }
+  }
+
   return (
     <>
-      <div ref={scrollContainerRef} style={{ width: '100%', height: '100%', overflow: 'auto' }}>
+      <div ref={scrollContainerRef} style={{ width: '100%', height: '100%', overflow: 'auto', position: 'relative' }}>
         <div ref={containerRef} style={{ minWidth: '100%', height: '100%' }} />
+        <AnnotationToolbar
+          visible={appMode === 'annotation'}
+          selectedTool={selectedAnnotationTool}
+          onSelectTool={handleSelectAnnotationTool}
+        />
       </div>
       <AdvancedSettings scene={currentScene} />
     </>
