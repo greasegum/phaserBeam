@@ -38,6 +38,9 @@ export class AnnotationManager {
   private creationPoints: AnnotationPoint[] = []
   private previewGraphics: Phaser.GameObjects.Graphics
   private ordinateOriginSide: 'left' | 'right' = 'left'
+  private modeIndicator: Phaser.GameObjects.Container
+  private cursorGraphics: Phaser.GameObjects.Graphics
+  private inputZone: Phaser.GameObjects.Zone
   
   constructor(scene: Phaser.Scene, gridSize: number, gridOrigin: { x: number, y: number }, beamBottom?: number, beamLength?: number) {
     this.scene = scene
@@ -55,22 +58,49 @@ export class AnnotationManager {
     this.previewGraphics = scene.add.graphics()
     this.previewGraphics.setDepth(1000) // Above other elements
     
+    // Create cursor graphics
+    this.cursorGraphics = scene.add.graphics()
+    this.cursorGraphics.setDepth(1001)
+    
+    // Create mode indicator
+    this.modeIndicator = this.createModeIndicator()
+    this.modeIndicator.setVisible(false)
+    
+    // Create a test interactive area to debug input
+    const testRect = scene.add.rectangle(scene.cameras.main.width / 2, 100, 200, 50, 0xff0000, 0.3)
+    testRect.setInteractive()
+    testRect.on('pointerdown', () => {
+      console.log('Test rectangle clicked - input is working!')
+    })
+    
     this.setupEventHandlers()
   }
   
   private setupEventHandlers(): void {
-    this.scene.input.on('pointerdown', this.handlePointerDown, this)
-    this.scene.input.on('pointermove', this.handlePointerMove, this)
-    this.scene.input.on('pointerup', this.handlePointerUp, this)
+    // Create an invisible full-screen interactive zone
+    const { width, height } = this.scene.cameras.main
+    this.inputZone = this.scene.add.zone(width / 2, height / 2, width, height)
+    this.inputZone.setInteractive()
+    this.inputZone.setDepth(999) // High but below UI elements
+    
+    // Attach handlers to the zone instead of scene
+    this.inputZone.on('pointerdown', this.handlePointerDown, this)
+    this.inputZone.on('pointermove', this.handlePointerMove, this)
+    this.inputZone.on('pointerup', this.handlePointerUp, this)
+    
+    console.log('AnnotationManager event handlers set up with input zone:', width, 'x', height)
   }
   
   public destroy(): void {
-    this.scene.input.off('pointerdown', this.handlePointerDown, this)
-    this.scene.input.off('pointermove', this.handlePointerMove, this)
-    this.scene.input.off('pointerup', this.handlePointerUp, this)
+    // Clean up input zone
+    if (this.inputZone) {
+      this.inputZone.destroy()
+    }
     
     // Clean up preview graphics
     this.previewGraphics.destroy()
+    this.cursorGraphics.destroy()
+    this.modeIndicator.destroy()
     
     // Clean up all annotations
     this.annotationGraphics.forEach(container => container.destroy())
@@ -129,12 +159,33 @@ export class AnnotationManager {
     return point
   }
   
+  private findNearestSnapPoint(point: AnnotationPoint): SnapPoint | null {
+    let closestSnap: SnapPoint | null = null
+    let closestDistance = SNAP_THRESHOLD
+    
+    for (const snap of this.snapPoints) {
+      const distance = Math.sqrt(
+        Math.pow(point.x - snap.x, 2) + 
+        Math.pow(point.y - snap.y, 2)
+      )
+      
+      if (distance < closestDistance) {
+        closestDistance = distance
+        closestSnap = snap
+      }
+    }
+    
+    return closestSnap
+  }
+  
   // Annotation creation methods
   public startCreatingAnnotation(type: AnnotationType): void {
     this.isCreating = true
     this.creationType = type
     this.creationPoints = []
-    this.scene.input.setDefaultCursor('crosshair')
+    this.scene.input.setDefaultCursor('none') // Hide default cursor
+    this.updateModeIndicator()
+    this.modeIndicator.setVisible(true)
   }
   
   public cancelCreation(): void {
@@ -142,7 +193,9 @@ export class AnnotationManager {
     this.creationType = null
     this.creationPoints = []
     this.previewGraphics.clear()
+    this.cursorGraphics.clear()
     this.scene.input.setDefaultCursor('default')
+    this.modeIndicator.setVisible(false)
   }
   
   private handlePointerDown(pointer: Phaser.Input.Pointer): void {
@@ -165,6 +218,7 @@ export class AnnotationManager {
         this.createAnnotation()
         this.cancelCreation()
       }
+    
     } else {
       // Check if clicking on an existing annotation
       const annotation = this.getAnnotationAtPoint(point)
@@ -183,6 +237,7 @@ export class AnnotationManager {
     
     if (this.isCreating) {
       this.updatePreview(snappedPoint)
+      this.updateCustomCursor(snappedPoint)
     } else if (this.activeAnnotation && this.activeAnnotation.isDragging) {
       this.updateDraggedAnnotation(snappedPoint)
     }
@@ -511,14 +566,136 @@ export class AnnotationManager {
         break
         
       case 'callout':
-        // Show crosshair at current point
+        // Show where callout will be placed
+        this.previewGraphics.fillStyle(0x0066cc, 0.5)
+        this.previewGraphics.fillCircle(currentPoint.x, currentPoint.y, 5)
+        
+        // Show preview of text box
+        const previewBoxX = currentPoint.x + 50
+        const previewBoxY = currentPoint.y - 30
+        this.previewGraphics.lineStyle(1, 0x0066cc, 0.5)
+        this.previewGraphics.strokeRect(previewBoxX, previewBoxY, 100, 40)
+        
+        // Show leader line preview
         this.previewGraphics.beginPath()
-        this.previewGraphics.moveTo(currentPoint.x - 10, currentPoint.y)
-        this.previewGraphics.lineTo(currentPoint.x + 10, currentPoint.y)
-        this.previewGraphics.moveTo(currentPoint.x, currentPoint.y - 10)
-        this.previewGraphics.lineTo(currentPoint.x, currentPoint.y + 10)
+        this.previewGraphics.moveTo(currentPoint.x, currentPoint.y)
+        this.previewGraphics.lineTo(previewBoxX, previewBoxY + 20)
         this.previewGraphics.stroke()
         break
     }
+  }
+  
+  private createModeIndicator(): Phaser.GameObjects.Container {
+    const container = this.scene.add.container(20, 20)
+    container.setDepth(1002)
+    
+    // Background
+    const bg = this.scene.add.graphics()
+    bg.fillStyle(0x000000, 0.8)
+    bg.fillRoundedRect(0, 0, 200, 40, 5)
+    
+    // Text
+    const text = this.scene.add.text(10, 20, '', {
+      fontSize: '16px',
+      color: '#ffffff',
+      fontFamily: 'Arial'
+    })
+    text.setOrigin(0, 0.5)
+    
+    container.add([bg, text])
+    container.setData('text', text)
+    
+    return container
+  }
+  
+  private updateModeIndicator(): void {
+    const text = this.modeIndicator.getData('text') as Phaser.GameObjects.Text
+    if (!text) return
+    
+    let modeText = ''
+    switch (this.creationType) {
+      case 'linear-dimension':
+        modeText = '📏 Linear Dimension'
+        break
+      case 'ordinate-dimension':
+        modeText = '📐 Ordinate Dimension'
+        break
+      case 'callout':
+        modeText = '💬 Callout'
+        break
+    }
+    
+    text.setText(modeText)
+  }
+  
+  private updateCustomCursor(point: AnnotationPoint): void {
+    this.cursorGraphics.clear()
+    
+    // Check if near a snap point
+    const snapPoint = this.findNearestSnapPoint(point)
+    const isSnapping = snapPoint !== null
+    
+    // Draw custom cursor based on annotation type
+    this.cursorGraphics.lineStyle(2, isSnapping ? 0x00ff00 : 0x0066cc)
+    this.cursorGraphics.strokeCircle(point.x, point.y, isSnapping ? 8 : 5)
+    
+    // Draw crosshairs
+    this.cursorGraphics.lineStyle(1, 0x0066cc)
+    this.cursorGraphics.beginPath()
+    this.cursorGraphics.moveTo(point.x - 15, point.y)
+    this.cursorGraphics.lineTo(point.x - 8, point.y)
+    this.cursorGraphics.moveTo(point.x + 8, point.y)
+    this.cursorGraphics.lineTo(point.x + 15, point.y)
+    this.cursorGraphics.moveTo(point.x, point.y - 15)
+    this.cursorGraphics.lineTo(point.x, point.y - 8)
+    this.cursorGraphics.moveTo(point.x, point.y + 8)
+    this.cursorGraphics.lineTo(point.x, point.y + 15)
+    this.cursorGraphics.stroke()
+    
+    // Add type-specific indicators
+    switch (this.creationType) {
+      case 'linear-dimension':
+        // Show dimension arrows
+        if (this.creationPoints.length === 1) {
+          const start = this.creationPoints[0]
+          const angle = Math.atan2(point.y - start.y, point.x - start.x)
+          this.drawSmallArrow(point.x, point.y, angle)
+        }
+        break
+        
+      case 'ordinate-dimension':
+        // Show vertical line
+        this.cursorGraphics.lineStyle(1, 0x0066cc, 0.5)
+        this.cursorGraphics.beginPath()
+        this.cursorGraphics.moveTo(point.x, point.y - 20)
+        this.cursorGraphics.lineTo(point.x, point.y + 20)
+        this.cursorGraphics.stroke()
+        break
+        
+      case 'callout':
+        // Show leader indicator
+        this.cursorGraphics.fillStyle(0x0066cc)
+        this.cursorGraphics.fillCircle(point.x, point.y, 3)
+        break
+    }
+  }
+  
+  private drawSmallArrow(x: number, y: number, angle: number): void {
+    const arrowLength = 8
+    const arrowAngle = Math.PI / 6
+    
+    this.cursorGraphics.lineStyle(1, 0x0066cc)
+    this.cursorGraphics.beginPath()
+    this.cursorGraphics.moveTo(x, y)
+    this.cursorGraphics.lineTo(
+      x - Math.cos(angle - arrowAngle) * arrowLength,
+      y - Math.sin(angle - arrowAngle) * arrowLength
+    )
+    this.cursorGraphics.moveTo(x, y)
+    this.cursorGraphics.lineTo(
+      x - Math.cos(angle + arrowAngle) * arrowLength,
+      y - Math.sin(angle + arrowAngle) * arrowLength
+    )
+    this.cursorGraphics.stroke()
   }
 }

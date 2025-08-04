@@ -133,9 +133,11 @@ export class BeamElevationScene extends Phaser.Scene {
     
     // Set up global mouse up handler for paint mode
     this.input.on('pointerup', () => {
-      this.isMouseDown = false
-      this.isPainting = false
-      this.paintMode = null
+      if (this.appMode === 'edit') {
+        this.isMouseDown = false
+        this.isPainting = false
+        this.paintMode = null
+      }
     })
     
     // Set up keyboard shortcuts for annotation mode
@@ -213,6 +215,7 @@ export class BeamElevationScene extends Phaser.Scene {
     
     // Initialize annotation manager for annotation mode
     if (this.appMode === 'annotation') {
+      console.log('Initializing AnnotationManager for annotation mode')
       // Calculate beam bottom position
       const totalHeight = this.beamProfile.webHeight + 2 * this.beamProfile.flangeThickness
       const beamBottom = centerY + (totalHeight * this.gridSize) / 2
@@ -226,6 +229,9 @@ export class BeamElevationScene extends Phaser.Scene {
       )
       // Update snap points based on grid
       this.updateAnnotationSnapPoints()
+      console.log('AnnotationManager initialized:', this.annotationManager)
+    } else {
+      console.log('Not in annotation mode, appMode:', this.appMode)
     }
 
     // Add dimension lines and labels
@@ -1516,6 +1522,30 @@ export class BeamElevationScene extends Phaser.Scene {
       
       // Update grid cell visibility
       this.updateGridCellVisibility()
+      
+      return
+    }
+    
+    // Check if we're changing app mode
+    if (profile.id === this.beamProfile?.id && 
+        length === this.beamLength && 
+        appMode !== undefined && 
+        appMode !== this.appMode) {
+      
+      // Need to restart scene to initialize/destroy annotation manager
+      this.appMode = appMode
+      this.scene.restart({ 
+        beamProfile: profile, 
+        beamLength: this.beamLength,
+        editMode: this.editMode,
+        showGrid: this.showGrid,
+        gridOrigin: this.gridOrigin,
+        showTopFlange: this.showTopFlange,
+        gridCells: gridCells || this.storedCells,
+        elevationView: this.elevationView,
+        appMode: this.appMode,
+        onCellChange: this.onCellChange 
+      })
       
       return
     }

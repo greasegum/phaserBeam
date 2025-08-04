@@ -166,10 +166,23 @@ export const PhaserCanvas: React.FC<PhaserCanvasProps> = ({
       }
     }
   }, [])
+  
+  // Handle annotation mode activation
+  useEffect(() => {
+    if (appMode === 'annotation' && currentScene && selectedAnnotationTool) {
+      // Ensure annotation is started when switching to annotation mode
+      setTimeout(() => {
+        console.log('Auto-starting annotation tool after mode switch')
+        currentScene.annotationManager?.startCreatingAnnotation(selectedAnnotationTool)
+      }, 100)
+    }
+  }, [appMode, currentScene])
 
   const handleSelectAnnotationTool = (type: AnnotationType) => {
+    console.log('handleSelectAnnotationTool:', type, 'appMode:', appMode, 'currentScene:', currentScene)
     setSelectedAnnotationTool(type)
     if (currentScene && appMode === 'annotation') {
+      console.log('Starting annotation creation, manager:', currentScene.annotationManager)
       // @ts-ignore - We know annotationManager exists in annotation mode
       currentScene.annotationManager?.startCreatingAnnotation(type)
     }
