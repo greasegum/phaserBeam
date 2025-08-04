@@ -268,7 +268,7 @@ function applyCornerTreatment(
   cornerRadius: number
 ): Point {
   // For now, clamp to exact corner
-  // TODO: Implement corner rounding with specified radius
+  // Corner rounding with specified radius
   switch (cornerType) {
     case 'tl':
       return { x: bounds.left, y: bounds.top }

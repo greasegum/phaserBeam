@@ -68,11 +68,10 @@ export interface MarchingSquaresOptions {
   bufferSize?: number
   bufferValue?: number
   
-  // Edge behavior (deprecated - edge clamping is now mandatory)
+  // Edge behavior
   edgeSnapping?: boolean
   snapDistance?: number
   extendToBoundary?: boolean
-  edgeClamping?: boolean  // Deprecated - always true
   edgeClampDistance?: number
   cornerTreatment?: 'trimmed' | 'flared' | 'square'
   clampToGrid?: boolean  // Legacy compatibility
@@ -136,7 +135,7 @@ const DEFAULT_OPTIONS: Required<MarchingSquaresOptions> = {
   edgeSnapping: true,
   snapDistance: 0.1,
   extendToBoundary: false,
-  edgeClamping: true,  // Always true, maintained for compatibility
+  // Edge clamping is now mandatory
   edgeClampDistance: 0.8,
   cornerTreatment: 'flared',
   clampToGrid: true,  // Legacy compatibility
@@ -951,7 +950,7 @@ function applySmoothingToContours(
     topEdge: 0 - options.bufferSize,
     bottomEdge: gridInfo.rows - options.bufferSize,
     tolerance: 0.1,
-    edgeClamping: options.edgeClamping,
+    // Edge clamping is now mandatory
     edgeClampDistance: options.edgeClampDistance,
     cornerTreatment: options.cornerTreatment,
     strictEdges: activatedEdges || { left: false, right: false, top: false, bottom: false }

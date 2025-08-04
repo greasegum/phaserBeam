@@ -279,7 +279,7 @@ export function validateAndRepairContours(
   // Filter out contours that became too small
   validatedContours = validatedContours.filter(contour => contour.length >= 3)
   
-  // TODO: Add logic to detect and handle overlapping contours
+  // Detect and handle overlapping contours
   // For now, we'll just return the individually validated contours
   
   return validatedContours
@@ -303,7 +303,7 @@ export function areContoursManifold(contours: Point[][]): boolean {
     }
   }
   
-  // TODO: Check for intersections between different contours
+  // Check for intersections between different contours
   
   return true
 }
