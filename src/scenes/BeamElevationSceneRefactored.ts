@@ -5,7 +5,7 @@
 
 import Phaser from 'phaser'
 import { BeamProfile, GridCell } from '../types/beam'
-import { ContourConfig, CONTOUR_PRESETS } from '../types/contourConfig'
+import { ContourConfig } from '../types/contourConfig'
 import { marchingSquares } from '../utils/marchingSquares'
 import { processContours, transformToScreen } from '../utils/contourProcessing'
 
@@ -20,7 +20,12 @@ export class BeamElevationSceneRefactored extends Phaser.Scene {
   private webGrid: number[][] = []
   
   // Configuration
-  private contourConfig: ContourConfig = CONTOUR_PRESETS.default
+  private contourConfig: ContourConfig = {
+    core: { threshold: 0.5, cellSize: 1 },
+    smoothing: { enabled: true, strength: 0.5 },
+    edges: { clampToBeam: true, bufferSize: 1 },
+    separation: { enabled: true, minDistance: 0.5 }
+  }
   
   // Graphics objects
   private beamGraphics: Phaser.GameObjects.Graphics | null = null
@@ -357,14 +362,6 @@ export class BeamElevationSceneRefactored extends Phaser.Scene {
       edges: { ...this.contourConfig.edges, ...config.edges },
       separation: { ...this.contourConfig.separation, ...config.separation }
     }
-    this.render()
-  }
-
-  /**
-   * Set preset configuration
-   */
-  public setPreset(preset: keyof typeof CONTOUR_PRESETS): void {
-    this.contourConfig = CONTOUR_PRESETS[preset]
     this.render()
   }
 

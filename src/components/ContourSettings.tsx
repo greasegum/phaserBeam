@@ -4,7 +4,7 @@
  */
 
 import React, { useState } from 'react'
-import { ContourConfig, ContourPreset, CONTOUR_PRESETS } from '../types/contourConfig'
+import { ContourConfig } from '../types/contourConfig'
 import { BeamElevationSceneRefactored } from '../scenes/BeamElevationSceneRefactored'
 
 interface ContourSettingsProps {
@@ -13,16 +13,13 @@ interface ContourSettingsProps {
 
 export const ContourSettings: React.FC<ContourSettingsProps> = ({ scene }) => {
   const [isOpen, setIsOpen] = useState(false)
-  const [preset, setPreset] = useState<ContourPreset>('default')
-  const [customConfig, setCustomConfig] = useState<ContourConfig>(CONTOUR_PRESETS.default)
-  const [isCustom, setIsCustom] = useState(false)
+  const [customConfig, setCustomConfig] = useState<ContourConfig>({
+    core: { threshold: 0.5, cellSize: 1 },
+    smoothing: { enabled: true, strength: 0.5 },
+    edges: { clampToBeam: true, bufferSize: 1 },
+    separation: { enabled: true, minDistance: 0.5 }
+  })
 
-  const handlePresetChange = (newPreset: ContourPreset) => {
-    setPreset(newPreset)
-    setIsCustom(false)
-    scene?.setPreset(newPreset)
-    setCustomConfig(CONTOUR_PRESETS[newPreset])
-  }
 
   const handleCustomChange = (
     category: keyof ContourConfig,
@@ -38,7 +35,6 @@ export const ContourSettings: React.FC<ContourSettingsProps> = ({ scene }) => {
     }
     
     setCustomConfig(updated)
-    setIsCustom(true)
     scene?.setContourConfig(updated)
   }
 
@@ -62,26 +58,6 @@ export const ContourSettings: React.FC<ContourSettingsProps> = ({ scene }) => {
         <div className="settings-panel">
           <h3>Contour Settings</h3>
           
-          {/* Preset selector */}
-          <div className="setting-group">
-            <label>Preset</label>
-            <select
-              value={isCustom ? 'custom' : preset}
-              onChange={(e) => {
-                const value = e.target.value
-                if (value !== 'custom') {
-                  handlePresetChange(value as ContourPreset)
-                }
-              }}
-            >
-              <option value="default">Default</option>
-              <option value="sharp">Sharp</option>
-              <option value="organic">Organic</option>
-              <option value="technical">Technical</option>
-              {isCustom && <option value="custom">Custom</option>}
-            </select>
-          </div>
-
           {/* Simplified custom controls */}
           <details className="advanced-settings">
             <summary>Fine-tune</summary>

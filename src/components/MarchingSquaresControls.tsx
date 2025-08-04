@@ -4,13 +4,12 @@
  */
 
 import React, { useState, useCallback, useMemo } from 'react'
-import { MarchingSquaresConfig, CONFIG_PRESETS, ConfigBuilder } from '../core/configuration/MarchingSquaresConfig'
+import { MarchingSquaresConfig, ConfigBuilder } from '../core/configuration/MarchingSquaresConfig'
 import './MarchingSquaresControls.css'
 
 interface MarchingSquaresControlsProps {
   config: MarchingSquaresConfig
   onConfigChange: (config: MarchingSquaresConfig) => void
-  onPresetChange?: (preset: string) => void
   showPerformanceMetrics?: boolean
   performanceMetrics?: Record<string, number>
 }
@@ -30,16 +29,13 @@ interface SectionProps {
 export const MarchingSquaresControls: React.FC<MarchingSquaresControlsProps> = ({
   config,
   onConfigChange,
-  onPresetChange,
   showPerformanceMetrics = false,
   performanceMetrics = {}
 }) => {
-  const [expandedSections, setExpandedSections] = useState<Set<string>>(new Set(['presets']))
-  const [activePreset, setActivePreset] = useState<string | null>('default')
+  const [expandedSections, setExpandedSections] = useState<Set<string>>(new Set(['algorithm']))
   
   // Control sections
   const sections: ControlSection[] = useMemo(() => [
-    { id: 'presets', title: 'Presets', icon: '🎨', component: PresetSection },
     { id: 'algorithm', title: 'Algorithm', icon: '⚙️', component: AlgorithmSection },
     { id: 'geometry', title: 'Geometry', icon: '📐', component: GeometrySection },
     { id: 'smoothing', title: 'Smoothing', icon: '〰️', component: SmoothingSection },
@@ -64,18 +60,8 @@ export const MarchingSquaresControls: React.FC<MarchingSquaresControlsProps> = (
   const handleConfigChange = useCallback((partialConfig: Partial<MarchingSquaresConfig>) => {
     const newConfig = { ...config, ...partialConfig }
     onConfigChange(newConfig)
-    setActivePreset(null) // Clear preset when custom changes are made
   }, [config, onConfigChange])
   
-  const handlePresetSelect = useCallback((presetName: string) => {
-    const preset = CONFIG_PRESETS[presetName]
-    if (preset) {
-      const newConfig = ConfigBuilder.create().fromPreset(presetName).build()
-      onConfigChange(newConfig)
-      setActivePreset(presetName)
-      onPresetChange?.(presetName)
-    }
-  }, [onConfigChange, onPresetChange])
   
   return (
     <div className="marching-squares-controls">
@@ -122,23 +108,6 @@ export const MarchingSquaresControls: React.FC<MarchingSquaresControlsProps> = (
 }
 
 // Section Components
-
-const PresetSection: React.FC<SectionProps & { activePreset?: string | null; onPresetSelect?: (preset: string) => void }> = ({ 
-  activePreset, 
-  onPresetSelect 
-}) => (
-  <div className="preset-grid">
-    {Object.keys(CONFIG_PRESETS).map(preset => (
-      <button
-        key={preset}
-        className={`preset-button ${activePreset === preset ? 'active' : ''}`}
-        onClick={() => onPresetSelect?.(preset)}
-      >
-        {preset}
-      </button>
-    ))}
-  </div>
-)
 
 const AlgorithmSection: React.FC<SectionProps> = ({ config, onChange }) => (
   <div className="control-group">
