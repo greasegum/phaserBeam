@@ -16,6 +16,7 @@ export interface EdgeConstraints {
   edgeClamping?: boolean
   edgeClampDistance?: number
   cornerTreatment?: 'trimmed' | 'flared' | 'square'
+  strictEdges?: { left: boolean, right: boolean, top: boolean, bottom: boolean }
 }
 
 function isEdgePoint(point: Point, constraints: EdgeConstraints, tolerance: number = 0.1): boolean {
@@ -30,8 +31,35 @@ function clampToEdges(point: Point, constraints: EdgeConstraints, tolerance: num
   let x = point.x
   let y = point.y
   
-  // Apply strong edge clamping if enabled
-  if (constraints.edgeClamping && constraints.edgeClampDistance !== undefined) {
+  // Mandatory strict edge snapping when edges are activated
+  if (constraints.strictEdges) {
+    const strictTolerance = 0.5 // Snap threshold for strict edges
+    
+    if (constraints.strictEdges.left && constraints.leftEdge !== undefined &&
+        Math.abs(x - constraints.leftEdge) < strictTolerance) {
+      x = constraints.leftEdge
+    }
+    
+    if (constraints.strictEdges.right && constraints.rightEdge !== undefined &&
+        Math.abs(x - constraints.rightEdge) < strictTolerance) {
+      x = constraints.rightEdge
+    }
+    
+    if (constraints.strictEdges.top && constraints.topEdge !== undefined &&
+        Math.abs(y - constraints.topEdge) < strictTolerance) {
+      y = constraints.topEdge
+    }
+    
+    if (constraints.strictEdges.bottom && constraints.bottomEdge !== undefined &&
+        Math.abs(y - constraints.bottomEdge) < strictTolerance) {
+      y = constraints.bottomEdge
+    }
+    
+    return { x, y }
+  }
+  
+  // Fallback to regular edge clamping
+  if (constraints.edgeClampDistance !== undefined) {
     const gridBounds = {
       minX: constraints.leftEdge || 0,
       maxX: constraints.rightEdge || 0,
@@ -137,20 +165,20 @@ function clampToEdges(point: Point, constraints: EdgeConstraints, tolerance: num
         y = gridBounds.maxY - distToBottom * (1.0 - pullStrength * 0.8)
       }
     }
-  } else {
-    // Original simple clamping logic
-    if (constraints.leftEdge !== undefined && Math.abs(x - constraints.leftEdge) < tolerance) {
-      x = constraints.leftEdge
-    }
-    if (constraints.rightEdge !== undefined && Math.abs(x - constraints.rightEdge) < tolerance) {
-      x = constraints.rightEdge
-    }
-    if (constraints.topEdge !== undefined && Math.abs(y - constraints.topEdge) < tolerance) {
-      y = constraints.topEdge
-    }
-    if (constraints.bottomEdge !== undefined && Math.abs(y - constraints.bottomEdge) < tolerance) {
-      y = constraints.bottomEdge
-    }
+  }
+  
+  // Always apply basic edge snapping as final fallback
+  if (constraints.leftEdge !== undefined && Math.abs(x - constraints.leftEdge) < tolerance) {
+    x = constraints.leftEdge
+  }
+  if (constraints.rightEdge !== undefined && Math.abs(x - constraints.rightEdge) < tolerance) {
+    x = constraints.rightEdge
+  }
+  if (constraints.topEdge !== undefined && Math.abs(y - constraints.topEdge) < tolerance) {
+    y = constraints.topEdge
+  }
+  if (constraints.bottomEdge !== undefined && Math.abs(y - constraints.bottomEdge) < tolerance) {
+    y = constraints.bottomEdge
   }
   
   return { x, y }

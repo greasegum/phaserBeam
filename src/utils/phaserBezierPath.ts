@@ -1,10 +1,52 @@
 import Phaser from 'phaser'
 import { Point } from './marchingSquares'
 
+export interface EdgeConstraints {
+  leftEdge?: number
+  rightEdge?: number
+  topEdge?: number
+  bottomEdge?: number
+  strictEdges?: { left: boolean, right: boolean, top: boolean, bottom: boolean }
+}
+
+/**
+ * Apply strict edge clamping to interpolated curve points
+ */
+function applyStrictEdgeClampingToPoint(point: Point, constraints?: EdgeConstraints): Point {
+  if (!constraints || !constraints.strictEdges) return point
+  
+  let { x, y } = point
+  const tolerance = 0.5 // Snap threshold for activated edges
+  
+  // Apply strict snapping for activated edges
+  if (constraints.strictEdges.left && constraints.leftEdge !== undefined &&
+      Math.abs(x - constraints.leftEdge) < tolerance) {
+    x = constraints.leftEdge
+  }
+  
+  if (constraints.strictEdges.right && constraints.rightEdge !== undefined &&
+      Math.abs(x - constraints.rightEdge) < tolerance) {
+    x = constraints.rightEdge
+  }
+  
+  if (constraints.strictEdges.top && constraints.topEdge !== undefined &&
+      Math.abs(y - constraints.topEdge) < tolerance) {
+    y = constraints.topEdge
+  }
+  
+  if (constraints.strictEdges.bottom && constraints.bottomEdge !== undefined &&
+      Math.abs(y - constraints.bottomEdge) < tolerance) {
+    y = constraints.bottomEdge
+  }
+  
+  return { x, y }
+}
+
 export function drawBezierContour(
   graphics: Phaser.GameObjects.Graphics,
   contour: Point[],
-  closed: boolean = true
+  closed: boolean = true,
+  edgeConstraints?: EdgeConstraints
 ): void {
   if (contour.length < 2) return
   
@@ -48,7 +90,9 @@ export function drawBezierContour(
           (-p0.y + 3 * p1.y - 3 * p2.y + p3.y) * t3
         )
         
-        points.push({ x, y })
+        // Apply edge clamping to interpolated point
+        const clampedPoint = applyStrictEdgeClampingToPoint({ x, y }, edgeConstraints)
+        points.push(clampedPoint)
       }
     }
     
@@ -75,7 +119,8 @@ export function drawCatmullRomContour(
   graphics: Phaser.GameObjects.Graphics,
   contour: Point[],
   closed: boolean = true,
-  tension: number = 0.5
+  tension: number = 0.5,
+  edgeConstraints?: EdgeConstraints
 ): void {
   if (contour.length < 3) {
     // Fall back to simple line drawing
@@ -101,7 +146,12 @@ export function drawCatmullRomContour(
   const resolution = Math.max(20, contour.length * 4) // More points for smoother curves
   const pointsOnCurve = curve.getPoints(resolution)
   
-  pointsOnCurve.forEach((point, index) => {
+  // Apply edge clamping to all curve points
+  const clampedPoints = pointsOnCurve.map(point =>
+    applyStrictEdgeClampingToPoint(point, edgeConstraints)
+  )
+  
+  clampedPoints.forEach((point, index) => {
     if (index === 0) {
       graphics.moveTo(point.x, point.y)
     } else {

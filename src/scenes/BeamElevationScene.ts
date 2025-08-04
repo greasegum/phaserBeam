@@ -2,7 +2,7 @@ import Phaser from 'phaser'
 import { BeamProfile, GridCell } from '../types/beam'
 import { marchingSquaresOptimized, MarchingSquaresOptions } from '../utils/marchingSquares'
 import { binaryToScalarField, ScalarFieldMethod } from '../utils/scalarField'
-import { drawBezierContour } from '../utils/phaserBezierPath'
+import { drawBezierContour, EdgeConstraints } from '../utils/phaserBezierPath'
 
 export class BeamElevationScene extends Phaser.Scene {
   private beamProfile: BeamProfile | null = null
@@ -33,17 +33,25 @@ export class BeamElevationScene extends Phaser.Scene {
   private paintMode: 'add' | 'remove' | null = null
   private useSmoothCurves = true // Enable smooth organic curves
   // Marching squares alignment offsets
-  private contourOffsetX = 0 // Cell offset removed - use global offset
-  private contourOffsetY = 0 // Cell offset removed - use global offset
-  private contourGlobalOffsetX = -0.5 // Default -0.5 to center contours on cells
-  private contourGlobalOffsetY = -0.5 // Default -0.5 to center contours on cells
+  private contourOffsetX = 0.0 // No offset for proper grid alignment
+  private contourOffsetY = 0.0 // No offset for proper grid alignment
+  private contourGlobalOffsetX = 0 // Default 0 for proper grid alignment
+  private contourGlobalOffsetY = 0 // Default 0 for proper grid alignment
   // Marching squares buffer configuration
-  private contourBufferSize = 1 // Default buffer of 1 for proper edge handling
+  private contourBufferSize = 0 // No buffer for proper grid alignment
   private contourBufferValue = 0 // Default buffer value
   // Smoothing options
-  private smoothingMethod: 'basic' | 'laplacian' | 'chaikin' | 'bilateral' | 'savitzky-golay' | 'catmull-rom' | 'edge-aware' | 'intelligent' = 'edge-aware'
+  private smoothingMethod: 'basic' | 'laplacian' | 'chaikin' | 'bilateral' | 'savitzky-golay' | 'catmull-rom' | 'edge-aware' | 'intelligent' | 'selective' | 'intelligent-selective' = 'edge-aware'
   private smoothingIterations = 1
   private smoothingStrength = 0.3
+  
+  // Selective smoothing options
+  private edgeBufferDistance = 2.0 // Distance from edge where smoothing is disabled
+  private preserveEdgeSegments = true // Whether to keep edge segments exactly as-is
+  private transitionBlending = true // Whether to blend between smoothed and edge segments
+  private curvatureThreshold = 0.1 // Curvature threshold for preserving segments
+  private preserveStraightSegments = true // Whether to preserve straight segments
+  private useInterpolationWithSelective = false // Whether to use interpolation with selective smoothing
   // Collision avoidance options
   private collisionAvoidance = false // Default to disabled for simpler behavior
   private collisionMinDistance = 0.5
@@ -55,9 +63,13 @@ export class BeamElevationScene extends Phaser.Scene {
   private showBlurredField = false // Show blurred field visualization
   // Marching Squares Algorithm Properties
   private interpolationMethod: 'linear' | 'cubic' | 'none' = 'linear'
-  private scalarFieldMethod: ScalarFieldMethod = 'gaussian'
+  private scalarFieldMethod: ScalarFieldMethod = 'edge-preserving'
   private scalarFieldRadius = 2
   private saddlePointResolution: 'center' | 'gradient' | 'majority' = 'center'
+  
+  // Edge detection parameters
+  private edgeDetectionThreshold = 0.1 // Separate threshold for edge detection
+  private edgeDetectionEnabled = true // Whether to use edge detection for clamping
   private threshold = 0.5
   private alignmentMode: 'edges' | 'vertices' | 'center' = 'edges'
   private clampToGrid = true
@@ -327,8 +339,10 @@ export class BeamElevationScene extends Phaser.Scene {
       // Apply marching squares
       const marchingOptions: MarchingSquaresOptions = {
         threshold: this.threshold,
-        interpolationMethod: this.interpolationMethod,
+        interpolationMethod: (this.smoothingMethod === 'selective' || this.smoothingMethod === 'intelligent-selective') && !this.useInterpolationWithSelective ? 'none' : this.interpolationMethod,
         saddlePointResolution: this.saddlePointResolution,
+        edgeDetectionThreshold: this.edgeDetectionThreshold,
+        edgeDetectionEnabled: this.edgeDetectionEnabled,
         smoothing: !this.showRawMarchingSquares,
         edgeSnapping: true,
         snapDistance: this.snapDistance,
@@ -341,6 +355,11 @@ export class BeamElevationScene extends Phaser.Scene {
         smoothingMethod: this.smoothingMethod,
         smoothingIterations: this.smoothingIterations,
         smoothingStrength: this.smoothingStrength,
+        edgeBufferDistance: this.edgeBufferDistance,
+        preserveEdgeSegments: this.preserveEdgeSegments,
+        transitionBlending: this.transitionBlending,
+        curvatureThreshold: this.curvatureThreshold,
+        preserveStraightSegments: this.preserveStraightSegments,
         collisionAvoidance: this.collisionAvoidance,
         collisionMinDistance: this.collisionMinDistance,
         collisionMethod: this.collisionMethod,
@@ -365,15 +384,24 @@ export class BeamElevationScene extends Phaser.Scene {
             y: webTop + pt.y * this.gridSize
           }))
           
-          if (this.useSmoothCurves && !this.showRawMarchingSquares && screenContour.length > 4) {
-            drawBezierContour(this.lossGraphics, screenContour, true)
-          } else {
+          // Create edge constraints for bezier curves
+          const edgeConstraints: EdgeConstraints = {
+            leftEdge: startX,
+            rightEdge: startX + this.beamLength * this.gridSize,
+            topEdge: webTop,
+            bottomEdge: webTop + webHeight * this.gridSize,
+            strictEdges: { left: true, right: true, top: true, bottom: true }
+          }
+          
+          if (this.useSmoothCurves && !this.showRawMarchingSquares && screenContour.length > 4 && this.lossGraphics) {
+            drawBezierContour(this.lossGraphics, screenContour, true, edgeConstraints)
+          } else if (this.lossGraphics) {
             this.lossGraphics.beginPath()
             screenContour.forEach((point, index) => {
               if (index === 0) {
-                this.lossGraphics.moveTo(point.x, point.y)
+                this.lossGraphics!.moveTo(point.x, point.y)
               } else {
-                this.lossGraphics.lineTo(point.x, point.y)
+                this.lossGraphics!.lineTo(point.x, point.y)
               }
             })
             this.lossGraphics.closePath()
@@ -521,6 +549,11 @@ export class BeamElevationScene extends Phaser.Scene {
         smoothingMethod: this.smoothingMethod,
         smoothingIterations: this.smoothingIterations,
         smoothingStrength: this.smoothingStrength,
+        edgeBufferDistance: this.edgeBufferDistance,
+        preserveEdgeSegments: this.preserveEdgeSegments,
+        transitionBlending: this.transitionBlending,
+        curvatureThreshold: this.curvatureThreshold,
+        preserveStraightSegments: this.preserveStraightSegments,
         collisionAvoidance: this.collisionAvoidance,
         collisionMinDistance: this.collisionMinDistance,
         collisionMethod: this.collisionMethod,
@@ -581,24 +614,31 @@ export class BeamElevationScene extends Phaser.Scene {
     
     // Apply marching squares
     const marchingOptions: MarchingSquaresOptions = {
-      threshold: this.threshold,
-      interpolationMethod: this.interpolationMethod,
-      saddlePointResolution: this.saddlePointResolution,
-      alignmentMode: this.alignmentMode,
-      smoothing: !this.showRawMarchingSquares && !this.editMode,
-      edgeSnapping: this.clampToGrid,
-      extendToBoundary: this.extendToBoundary,
-      snapDistance: this.snapDistance,
-      offsetX: this.contourOffsetX,
-      offsetY: this.contourOffsetY,
-      globalOffsetX: this.contourGlobalOffsetX,
-      globalOffsetY: this.contourGlobalOffsetY,
-      bufferSize: this.contourBufferSize,
-      bufferValue: this.contourBufferValue,
-      smoothingMethod: this.smoothingMethod,
-      smoothingIterations: this.smoothingIterations,
-      smoothingStrength: this.smoothingStrength,
-      collisionAvoidance: this.collisionAvoidance,
+              threshold: this.threshold,
+        interpolationMethod: (this.smoothingMethod === 'selective' || this.smoothingMethod === 'intelligent-selective') && !this.useInterpolationWithSelective ? 'none' : this.interpolationMethod,
+        saddlePointResolution: this.saddlePointResolution,
+        edgeDetectionThreshold: this.edgeDetectionThreshold,
+        edgeDetectionEnabled: this.edgeDetectionEnabled,
+        alignmentMode: this.alignmentMode,
+        smoothing: !this.showRawMarchingSquares && !this.editMode,
+        edgeSnapping: this.clampToGrid,
+        extendToBoundary: this.extendToBoundary,
+        snapDistance: this.snapDistance,
+        offsetX: this.contourOffsetX,
+        offsetY: this.contourOffsetY,
+        globalOffsetX: this.contourGlobalOffsetX,
+        globalOffsetY: this.contourGlobalOffsetY,
+        bufferSize: this.contourBufferSize,
+        bufferValue: this.contourBufferValue,
+        smoothingMethod: this.smoothingMethod,
+        smoothingIterations: this.smoothingIterations,
+        smoothingStrength: this.smoothingStrength,
+        edgeBufferDistance: this.edgeBufferDistance,
+        preserveEdgeSegments: this.preserveEdgeSegments,
+        transitionBlending: this.transitionBlending,
+        curvatureThreshold: this.curvatureThreshold,
+        preserveStraightSegments: this.preserveStraightSegments,
+        collisionAvoidance: this.collisionAvoidance,
       collisionMinDistance: this.collisionMinDistance,
       collisionMethod: this.collisionMethod,
       collisionIterations: this.collisionIterations,
@@ -656,7 +696,15 @@ export class BeamElevationScene extends Phaser.Scene {
       } else {
         // View mode with smoothing
         if (this.useSmoothCurves && screenContour.length > 4) {
-          drawBezierContour(this.lossGraphics, screenContour, true)
+          // Create edge constraints for bezier curves
+          const edgeConstraints: EdgeConstraints = {
+            leftEdge: startX,
+            rightEdge: startX + this.beamLength * this.gridSize,
+            topEdge: webTop,
+            bottomEdge: webBottom,
+            strictEdges: { left: true, right: true, top: true, bottom: true }
+          }
+          drawBezierContour(this.lossGraphics, screenContour, true, edgeConstraints)
         } else {
           this.lossGraphics.beginPath()
           screenContour.forEach((point, index) => {

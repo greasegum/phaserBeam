@@ -35,7 +35,7 @@ export const AdvancedSettings: React.FC<AdvancedSettingsProps> = ({ scene }) => 
   const [collisionMethod, setCollisionMethod] = useState<'push' | 'shrink' | 'hybrid'>('hybrid')
   const [collisionIterations, setCollisionIterations] = useState(10)
   // Scalar Field settings
-  const [scalarFieldMethod, setScalarFieldMethod] = useState<'gaussian' | 'distance' | 'box' | 'none'>('gaussian')
+  const [scalarFieldMethod, setScalarFieldMethod] = useState<'gaussian' | 'distance' | 'box' | 'none' | 'edge-preserving' | 'adaptive-edge-preserving'>('edge-preserving')
   const [scalarFieldRadius, setScalarFieldRadius] = useState(2)
   // Edge clamping settings
   const [edgeClamping, setEdgeClamping] = useState(true)  // Enable by default
@@ -63,9 +63,8 @@ export const AdvancedSettings: React.FC<AdvancedSettingsProps> = ({ scene }) => 
       // Get offsets
       const offsets = scene.getContourOffsets?.()
       if (offsets) {
-        // Convert from internal offset (2.0 internal = 0 in UI)
-        setGlobalOffsetX(2.0 - offsets.globalX)
-        setGlobalOffsetY(2.0 - offsets.globalY)
+        setGlobalOffsetX(offsets.globalX)
+        setGlobalOffsetY(offsets.globalY)
       }
       
       // Get buffer
@@ -106,15 +105,12 @@ export const AdvancedSettings: React.FC<AdvancedSettingsProps> = ({ scene }) => 
   const handleGlobalOffsetChange = (axis: 'x' | 'y', value: number) => {
     if (!scene) return
     
-    // Convert UI value to internal offset (0 in UI = 2.0 internal)
-    const internalValue = 2.0 - value
-    
     if (axis === 'x') {
       setGlobalOffsetX(value)
-      scene.setContourGlobalOffsets(internalValue, 2.0 - globalOffsetY)
+      scene.setContourGlobalOffsets(value, globalOffsetY)
     } else {
       setGlobalOffsetY(value)
-      scene.setContourGlobalOffsets(2.0 - globalOffsetX, internalValue)
+      scene.setContourGlobalOffsets(globalOffsetX, value)
     }
   }
 
@@ -179,15 +175,15 @@ export const AdvancedSettings: React.FC<AdvancedSettingsProps> = ({ scene }) => 
     scene?.setThreshold?.(0.5)
     // Geometry
     setAlignmentMode('edges')
-    setGlobalOffsetX(0.0) // 0 in UI = 2.0 internal
-    setGlobalOffsetY(0.0) // 0 in UI = 2.0 internal
+    setGlobalOffsetX(0.0) // 0 = centered alignment
+    setGlobalOffsetY(0.0) // 0 = centered alignment
     setBufferSize(1)
     setBufferValue(0)
     setClampToGrid(true)
     setExtendToBoundary(false)
     setSnapDistance(0.1)
     scene?.setAlignmentMode?.('edges')
-    scene?.setContourGlobalOffsets(2.0, 2.0)
+    scene?.setContourGlobalOffsets(0.0, 0.0)
     scene?.setContourBuffer(1, 0)
     scene?.setClampToGrid?.(true)
     scene?.setExtendToBoundary?.(false)
@@ -431,12 +427,12 @@ export const AdvancedSettings: React.FC<AdvancedSettingsProps> = ({ scene }) => 
                     <select
                       value={scalarFieldMethod}
                       onChange={(e) => {
-                        const method = e.target.value as 'gaussian' | 'distance' | 'box' | 'none'
+                        const method = e.target.value as 'gaussian' | 'distance' | 'box' | 'none' | 'edge-preserving' | 'adaptive-edge-preserving'
                         setScalarFieldMethod(method)
                         scene?.setScalarFieldMethod?.(method)
                       }}
                       onInput={(e) => {
-                        const method = (e.target as HTMLSelectElement).value as 'gaussian' | 'distance' | 'box' | 'none'
+                        const method = (e.target as HTMLSelectElement).value as 'gaussian' | 'distance' | 'box' | 'none' | 'edge-preserving' | 'adaptive-edge-preserving'
                         setScalarFieldMethod(method)
                         scene?.setScalarFieldMethod?.(method)
                       }}
@@ -451,6 +447,8 @@ export const AdvancedSettings: React.FC<AdvancedSettingsProps> = ({ scene }) => 
                       }}
                     >
                       <option value="gaussian">Gaussian Blur</option>
+                      <option value="edge-preserving">Edge-Preserving Blur</option>
+                      <option value="adaptive-edge-preserving">Adaptive Edge-Preserving Blur</option>
                       <option value="distance">Distance Field</option>
                       <option value="box">Box Blur</option>
                     </select>

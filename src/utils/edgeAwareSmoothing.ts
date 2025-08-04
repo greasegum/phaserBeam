@@ -13,6 +13,7 @@ export interface GridBounds {
   right: number
   top: number
   bottom: number
+  strictEdges?: { left: boolean, right: boolean, top: boolean, bottom: boolean }
 }
 
 interface PointClassification {
@@ -24,13 +25,113 @@ interface PointClassification {
 }
 
 /**
- * Classify a point based on its position relative to grid bounds
+ * Enhanced point classification for interpolated coordinates
+ * Handles the fact that interpolation can move points slightly away from exact grid boundaries
  */
-function classifyPoint(point: Point, bounds: GridBounds, tolerance: number = 0.1): PointClassification {
+function classifyInterpolatedPoint(point: Point, bounds: GridBounds, tolerance: number = 0.3): PointClassification {
+  // For interpolated coordinates, we need to be more lenient with edge detection
+  // since interpolation can move points slightly away from exact boundaries
+  
   const nearLeft = Math.abs(point.x - bounds.left) < tolerance
   const nearRight = Math.abs(point.x - bounds.right) < tolerance
   const nearTop = Math.abs(point.y - bounds.top) < tolerance
   const nearBottom = Math.abs(point.y - bounds.bottom) < tolerance
+  
+  // Check corners first
+  if (nearLeft && nearTop) {
+    return {
+      isCorner: true,
+      isEdge: true,
+      cornerType: 'tl',
+      distanceToEdge: 0
+    }
+  }
+  if (nearRight && nearTop) {
+    return {
+      isCorner: true,
+      isEdge: true,
+      cornerType: 'tr',
+      distanceToEdge: 0
+    }
+  }
+  if (nearLeft && nearBottom) {
+    return {
+      isCorner: true,
+      isEdge: true,
+      cornerType: 'bl',
+      distanceToEdge: 0
+    }
+  }
+  if (nearRight && nearBottom) {
+    return {
+      isCorner: true,
+      isEdge: true,
+      cornerType: 'br',
+      distanceToEdge: 0
+    }
+  }
+  
+  // Check edges with more lenient detection
+  if (nearLeft) {
+    return {
+      isCorner: false,
+      isEdge: true,
+      edgeType: 'left',
+      distanceToEdge: Math.abs(point.x - bounds.left)
+    }
+  }
+  if (nearRight) {
+    return {
+      isCorner: false,
+      isEdge: true,
+      edgeType: 'right',
+      distanceToEdge: Math.abs(point.x - bounds.right)
+    }
+  }
+  if (nearTop) {
+    return {
+      isCorner: false,
+      isEdge: true,
+      edgeType: 'top',
+      distanceToEdge: Math.abs(point.y - bounds.top)
+    }
+  }
+  if (nearBottom) {
+    return {
+      isCorner: false,
+      isEdge: true,
+      edgeType: 'bottom',
+      distanceToEdge: Math.abs(point.y - bounds.bottom)
+    }
+  }
+  
+  // Interior point - calculate distance to nearest edge
+  const distances = [
+    Math.abs(point.x - bounds.left),
+    Math.abs(point.x - bounds.right),
+    Math.abs(point.y - bounds.top),
+    Math.abs(point.y - bounds.bottom)
+  ]
+  
+  return {
+    isCorner: false,
+    isEdge: false,
+    distanceToEdge: Math.min(...distances)
+  }
+}
+
+/**
+ * Classify a point based on its position relative to grid bounds
+ * Uses stricter tolerance for activated edges
+ */
+function classifyPoint(point: Point, bounds: GridBounds, tolerance: number = 0.1): PointClassification {
+  // Use stricter tolerance for activated edges
+  const strictTolerance = bounds.strictEdges ? 0.5 : tolerance
+  
+  const nearLeft = Math.abs(point.x - bounds.left) < (bounds.strictEdges?.left ? strictTolerance : tolerance)
+  const nearRight = Math.abs(point.x - bounds.right) < (bounds.strictEdges?.right ? strictTolerance : tolerance)
+  const nearTop = Math.abs(point.y - bounds.top) < (bounds.strictEdges?.top ? strictTolerance : tolerance)
+  const nearBottom = Math.abs(point.y - bounds.bottom) < (bounds.strictEdges?.bottom ? strictTolerance : tolerance)
   
   // Check corners first
   if (nearLeft && nearTop) {
@@ -184,6 +285,7 @@ function applyCornerTreatment(
 
 /**
  * Apply edge treatment with curve-to-straight transition
+ * Enforces mandatory strict clamping for activated edges
  */
 function applyEdgeTransition(
   point: Point,
@@ -192,13 +294,16 @@ function applyEdgeTransition(
   transitionZone: number,
   bounds: GridBounds
 ): Point {
-  if (!classification.isEdge && classification.distanceToEdge > transitionZone) {
-    // Far from edge - use full smoothing
-    return smoothedPoint
-  }
+  // Check if this edge is strictly activated
+  const isStrictEdge = bounds.strictEdges && (
+    (classification.edgeType === 'left' && bounds.strictEdges.left) ||
+    (classification.edgeType === 'right' && bounds.strictEdges.right) ||
+    (classification.edgeType === 'top' && bounds.strictEdges.top) ||
+    (classification.edgeType === 'bottom' && bounds.strictEdges.bottom)
+  )
   
-  if (classification.isEdge) {
-    // On edge - constrain to edge
+  if (classification.isEdge || isStrictEdge) {
+    // On edge or strict edge - constrain exactly to boundary (mandatory)
     let x = smoothedPoint.x
     let y = smoothedPoint.y
     
@@ -218,6 +323,11 @@ function applyEdgeTransition(
     }
     
     return { x, y }
+  }
+  
+  if (!classification.isEdge && classification.distanceToEdge > transitionZone) {
+    // Far from edge - use full smoothing
+    return smoothedPoint
   }
   
   // In transition zone - blend between smoothed and straight
@@ -386,7 +496,7 @@ export function intelligentEdgeSmoothing(
         y: curr.y + weight * (prev.y + next.y - 2 * curr.y) / 2
       }
       
-      // Constrain to edges if needed
+      // Mandatory edge constraint for all edge points
       if (classification.isEdge) {
         switch (classification.edgeType) {
           case 'left':
@@ -402,6 +512,295 @@ export function intelligentEdgeSmoothing(
             smoothedPoint.y = bounds.bottom
             break
         }
+      }
+      
+      // Also check for strict edge enforcement
+      if (bounds.strictEdges) {
+        if (bounds.strictEdges.left && Math.abs(smoothedPoint.x - bounds.left) < 0.5) {
+          smoothedPoint.x = bounds.left
+        }
+        if (bounds.strictEdges.right && Math.abs(smoothedPoint.x - bounds.right) < 0.5) {
+          smoothedPoint.x = bounds.right
+        }
+        if (bounds.strictEdges.top && Math.abs(smoothedPoint.y - bounds.top) < 0.5) {
+          smoothedPoint.y = bounds.top
+        }
+        if (bounds.strictEdges.bottom && Math.abs(smoothedPoint.y - bounds.bottom) < 0.5) {
+          smoothedPoint.y = bounds.bottom
+        }
+      }
+      
+      newContour.push(smoothedPoint)
+    }
+    
+    smoothed = newContour
+  }
+  
+  return smoothed
+}
+
+/**
+ * Selective smoothing that only processes segments away from edges
+ * This provides predictable edge clamping while allowing interior smoothing
+ * Updated to work with interpolated coordinates
+ */
+export function selectiveEdgeSmoothing(
+  contour: Point[],
+  bounds: GridBounds,
+  options: EdgeAwareSmoothingOptions & {
+    edgeBufferDistance?: number // Distance from edge where smoothing is disabled
+    preserveEdgeSegments?: boolean // Whether to keep edge segments exactly as-is
+    transitionBlending?: boolean // Whether to blend between smoothed and edge segments
+  } = {}
+): Point[] {
+  const {
+    iterations = 2,
+    strength = 0.5,
+    edgeTransitionZone = 1.0,
+    cornerRadius = 0.1,
+    preserveCorners = true,
+    edgeBufferDistance = 2.0, // Default 2 grid cells from edge
+    preserveEdgeSegments = true,
+    transitionBlending = true
+  } = options
+  
+  if (contour.length < 3) return contour
+  
+  // Classify each point based on distance to edges
+  // Use specialized classification for interpolated coordinates
+  const pointClassifications = contour.map(point => {
+    const classification = classifyInterpolatedPoint(point, bounds, 0.3)
+    const distanceToEdge = classification.distanceToEdge
+    
+    return {
+      point,
+      classification,
+      segmentType: distanceToEdge <= edgeBufferDistance ? 'EDGE_SEGMENT' : 'INTERIOR_SEGMENT',
+      distanceToEdge
+    }
+  })
+  
+  let smoothed = [...contour]
+  
+  for (let iter = 0; iter < iterations; iter++) {
+    const newContour: Point[] = []
+    
+    for (let i = 0; i < smoothed.length; i++) {
+      const curr = smoothed[i]
+      const pointInfo = pointClassifications[i]
+      
+      // Handle edge segments - preserve exact positioning
+      if (pointInfo.segmentType === 'EDGE_SEGMENT' && preserveEdgeSegments) {
+        // For edge segments, maintain exact edge alignment
+        if (pointInfo.classification.isEdge) {
+          // On exact edge - constrain to boundary
+          let x = curr.x
+          let y = curr.y
+          
+          switch (pointInfo.classification.edgeType) {
+            case 'left':
+              x = bounds.left
+              break
+            case 'right':
+              x = bounds.right
+              break
+            case 'top':
+              y = bounds.top
+              break
+            case 'bottom':
+              y = bounds.bottom
+              break
+          }
+          
+          newContour.push({ x, y })
+          continue
+        }
+        
+        // Near edge but not exactly on it - apply edge transition
+        const prev = smoothed[(i - 1 + smoothed.length) % smoothed.length]
+        const next = smoothed[(i + 1) % smoothed.length]
+        
+        const smoothedPoint = {
+          x: curr.x + strength * (prev.x + next.x - 2 * curr.x) / 2,
+          y: curr.y + strength * (prev.y + next.y - 2 * curr.y) / 2
+        }
+        
+        const finalPoint = applyEdgeTransition(
+          curr,
+          smoothedPoint,
+          pointInfo.classification,
+          edgeTransitionZone,
+          bounds
+        )
+        
+        newContour.push(finalPoint)
+        continue
+      }
+      
+      // Handle interior segments - apply full smoothing
+      if (pointInfo.segmentType === 'INTERIOR_SEGMENT') {
+        const prev = smoothed[(i - 1 + smoothed.length) % smoothed.length]
+        const next = smoothed[(i + 1) % smoothed.length]
+        
+        const smoothedPoint = {
+          x: curr.x + strength * (prev.x + next.x - 2 * curr.x) / 2,
+          y: curr.y + strength * (prev.y + next.y - 2 * curr.y) / 2
+        }
+        
+        newContour.push(smoothedPoint)
+        continue
+      }
+      
+      // Handle transition zones - blend between edge and interior behavior
+      if (transitionBlending) {
+        const prev = smoothed[(i - 1 + smoothed.length) % smoothed.length]
+        const next = smoothed[(i + 1) % smoothed.length]
+        
+        const smoothedPoint = {
+          x: curr.x + strength * (prev.x + next.x - 2 * curr.x) / 2,
+          y: curr.y + strength * (prev.y + next.y - 2 * curr.y) / 2
+        }
+        
+        // Blend factor based on distance from edge
+        const blendFactor = Math.max(0, Math.min(1, pointInfo.distanceToEdge / edgeBufferDistance))
+        
+        const finalPoint = {
+          x: curr.x * (1 - blendFactor) + smoothedPoint.x * blendFactor,
+          y: curr.y * (1 - blendFactor) + smoothedPoint.y * blendFactor
+        }
+        
+        newContour.push(finalPoint)
+      } else {
+        // No blending - keep original
+        newContour.push(curr)
+      }
+    }
+    
+    smoothed = newContour
+  }
+  
+  return smoothed
+}
+
+/**
+ * Advanced selective smoothing with intelligent segment detection
+ * Automatically detects which segments should be preserved vs smoothed
+ * Updated to work with interpolated coordinates
+ */
+export function intelligentSelectiveSmoothing(
+  contour: Point[],
+  bounds: GridBounds,
+  options: EdgeAwareSmoothingOptions & {
+    edgeBufferDistance?: number
+    curvatureThreshold?: number // Curvature threshold for preserving segments
+    preserveStraightSegments?: boolean // Whether to preserve straight segments
+  } = {}
+): Point[] {
+  const {
+    iterations = 2,
+    strength = 0.5,
+    edgeBufferDistance = 2.0,
+    curvatureThreshold = 0.1,
+    preserveStraightSegments = true
+  } = options
+  
+  if (contour.length < 3) return contour
+  
+  // Detect straight segments that should be preserved
+  const straightSegments = detectStraightSegments(contour, curvatureThreshold)
+  
+  // Classify points with multiple criteria
+  // Use specialized classification for interpolated coordinates
+  const pointClassifications = contour.map((point, index) => {
+    const classification = classifyInterpolatedPoint(point, bounds, 0.3)
+    const distanceToEdge = classification.distanceToEdge
+    const isStraight = straightSegments[index]
+    
+    let segmentType: 'EDGE_SEGMENT' | 'INTERIOR_SEGMENT' | 'STRAIGHT_SEGMENT' = 'INTERIOR_SEGMENT'
+    
+    if (distanceToEdge <= edgeBufferDistance) {
+      segmentType = 'EDGE_SEGMENT'
+    } else if (isStraight && preserveStraightSegments) {
+      segmentType = 'STRAIGHT_SEGMENT'
+    }
+    
+    return {
+      point,
+      classification,
+      segmentType,
+      distanceToEdge,
+      isStraight
+    }
+  })
+  
+  let smoothed = [...contour]
+  
+  for (let iter = 0; iter < iterations; iter++) {
+    const newContour: Point[] = []
+    
+    for (let i = 0; i < smoothed.length; i++) {
+      const curr = smoothed[i]
+      const pointInfo = pointClassifications[i]
+      
+      // Preserve edge segments exactly
+      if (pointInfo.segmentType === 'EDGE_SEGMENT') {
+        if (pointInfo.classification.isEdge) {
+          // Exact edge constraint
+          let x = curr.x
+          let y = curr.y
+          
+          switch (pointInfo.classification.edgeType) {
+            case 'left':
+              x = bounds.left
+              break
+            case 'right':
+              x = bounds.right
+              break
+            case 'top':
+              y = bounds.top
+              break
+            case 'bottom':
+              y = bounds.bottom
+              break
+          }
+          
+          newContour.push({ x, y })
+        } else {
+          // Near edge - apply edge transition
+          const prev = smoothed[(i - 1 + smoothed.length) % smoothed.length]
+          const next = smoothed[(i + 1) % smoothed.length]
+          
+          const smoothedPoint = {
+            x: curr.x + strength * (prev.x + next.x - 2 * curr.x) / 2,
+            y: curr.y + strength * (prev.y + next.y - 2 * curr.y) / 2
+          }
+          
+          const finalPoint = applyEdgeTransition(
+            curr,
+            smoothedPoint,
+            pointInfo.classification,
+            edgeBufferDistance,
+            bounds
+          )
+          
+          newContour.push(finalPoint)
+        }
+        continue
+      }
+      
+      // Preserve straight segments
+      if (pointInfo.segmentType === 'STRAIGHT_SEGMENT') {
+        newContour.push(curr)
+        continue
+      }
+      
+      // Apply full smoothing to interior segments
+      const prev = smoothed[(i - 1 + smoothed.length) % smoothed.length]
+      const next = smoothed[(i + 1) % smoothed.length]
+      
+      const smoothedPoint = {
+        x: curr.x + strength * (prev.x + next.x - 2 * curr.x) / 2,
+        y: curr.y + strength * (prev.y + next.y - 2 * curr.y) / 2
       }
       
       newContour.push(smoothedPoint)

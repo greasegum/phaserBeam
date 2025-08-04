@@ -24,6 +24,8 @@ import {
 import {
   edgeAwareSmoothing,
   intelligentEdgeSmoothing,
+  selectiveEdgeSmoothing,
+  intelligentSelectiveSmoothing,
   GridBounds
 } from './edgeAwareSmoothing'
 
@@ -52,6 +54,11 @@ export interface MarchingSquaresOptions {
   interpolationMethod?: 'linear' | 'cubic' | 'none'
   saddlePointResolution?: 'center' | 'gradient' | 'majority'
   alignmentMode?: 'edges' | 'vertices' | 'center'
+  scalarFieldMethod?: 'gaussian' | 'distance' | 'box' | 'none' | 'edge-preserving' | 'adaptive-edge-preserving'
+  
+  // Edge detection parameters (separate from contour threshold)
+  edgeDetectionThreshold?: number // Threshold for detecting activated edges (default: 0.1)
+  edgeDetectionEnabled?: boolean // Whether to use edge detection for clamping (default: true)
   
   // Grid positioning and buffering
   offsetX?: number
@@ -61,22 +68,29 @@ export interface MarchingSquaresOptions {
   bufferSize?: number
   bufferValue?: number
   
-  // Edge behavior
+  // Edge behavior (deprecated - edge clamping is now mandatory)
   edgeSnapping?: boolean
   snapDistance?: number
   extendToBoundary?: boolean
-  edgeClamping?: boolean
+  edgeClamping?: boolean  // Deprecated - always true
   edgeClampDistance?: number
   cornerTreatment?: 'trimmed' | 'flared' | 'square'
   clampToGrid?: boolean  // Legacy compatibility
   
   // Smoothing configuration
   smoothing?: boolean
-  smoothingMethod?: 'basic' | 'laplacian' | 'chaikin' | 'bilateral' | 'savitzky-golay' | 'catmull-rom' | 'edge-aware' | 'intelligent'
+  smoothingMethod?: 'basic' | 'laplacian' | 'chaikin' | 'bilateral' | 'savitzky-golay' | 'catmull-rom' | 'edge-aware' | 'intelligent' | 'selective' | 'intelligent-selective'
   smoothingIterations?: number
   smoothingStrength?: number
   edgeTransitionZone?: number
   preserveCorners?: boolean
+  
+  // Selective smoothing options
+  edgeBufferDistance?: number // Distance from edge where smoothing is disabled
+  preserveEdgeSegments?: boolean // Whether to keep edge segments exactly as-is
+  transitionBlending?: boolean // Whether to blend between smoothed and edge segments
+  curvatureThreshold?: number // Curvature threshold for preserving segments
+  preserveStraightSegments?: boolean // Whether to preserve straight segments
   
   // Collision avoidance
   collisionAvoidance?: boolean
@@ -104,20 +118,25 @@ const DEFAULT_OPTIONS: Required<MarchingSquaresOptions> = {
   interpolationMethod: 'linear',
   saddlePointResolution: 'center',
   alignmentMode: 'edges',
+  scalarFieldMethod: 'gaussian',
+  
+  // Edge detection parameters
+  edgeDetectionThreshold: 0.1,
+  edgeDetectionEnabled: true,
   
   // Grid positioning
-  offsetX: 0,
-  offsetY: 0,
-  globalOffsetX: -0.5,
-  globalOffsetY: -0.5,
+  offsetX: 0.5, // Center on edges for proper grid alignment
+  offsetY: 0.5, // Center on edges for proper grid alignment
+  globalOffsetX: 0,
+  globalOffsetY: 0,
   bufferSize: 1,
   bufferValue: 0,
   
-  // Edge behavior
+  // Edge behavior (clamping is now mandatory)
   edgeSnapping: true,
   snapDistance: 0.1,
   extendToBoundary: false,
-  edgeClamping: true,
+  edgeClamping: true,  // Always true, maintained for compatibility
   edgeClampDistance: 0.8,
   cornerTreatment: 'flared',
   clampToGrid: true,  // Legacy compatibility
@@ -129,6 +148,13 @@ const DEFAULT_OPTIONS: Required<MarchingSquaresOptions> = {
   smoothingStrength: 0.5,
   edgeTransitionZone: 1.0,
   preserveCorners: true,
+  
+  // Selective smoothing options
+  edgeBufferDistance: 2.0,
+  preserveEdgeSegments: true,
+  transitionBlending: true,
+  curvatureThreshold: 0.1,
+  preserveStraightSegments: true,
   
   // Collision avoidance
   collisionAvoidance: false,
@@ -193,6 +219,9 @@ function executeAlgorithm(grid: number[][], options: Required<MarchingSquaresOpt
     if (rows < 2 || cols < 2) return []
   }
   
+  // Detect activated edges for strict clamping
+  const activatedEdges = detectActivatedEdges(processGrid, options.edgeDetectionThreshold, options)
+  
   // Edge lookup table
   const EDGE_TABLE: number[][] = [
     [],           // 0: 0000 (all outside)
@@ -228,20 +257,18 @@ function executeAlgorithm(grid: number[][], options: Required<MarchingSquaresOpt
         row, col, processGrid, options, EDGE_TABLE, edgeCache
       )
       
-      // Apply edge clamping to segments if enabled
-      if (options.edgeClamping) {
-        const gridBounds = {
-          minX: 0,
-          maxX: cols - 1,
-          minY: 0,
-          maxY: rows - 1
-        }
-        
-        cellSegments.forEach(segment => {
-          segment.p1 = applyEdgeClamping(segment.p1, gridBounds, options)
-          segment.p2 = applyEdgeClamping(segment.p2, gridBounds, options)
-        })
+      // Always apply strict edge clamping to segments - this is mandatory behavior
+      const gridBounds = {
+        minX: 0,
+        maxX: cols - 1,
+        minY: 0,
+        maxY: rows - 1
       }
+      
+      cellSegments.forEach(segment => {
+        segment.p1 = applyStrictEdgeClamping(segment.p1, gridBounds, activatedEdges, options)
+        segment.p2 = applyStrictEdgeClamping(segment.p2, gridBounds, activatedEdges, options)
+      })
       
       segments.push(...cellSegments)
     }
@@ -250,8 +277,8 @@ function executeAlgorithm(grid: number[][], options: Required<MarchingSquaresOpt
   // Connect segments into contours
   const contours = connectSegments(segments)
   
-  // Apply post-processing
-  return applyPostProcessing(contours, options, { rows, cols })
+  // Apply post-processing with edge constraints
+  return applyPostProcessing(contours, options, { rows, cols }, activatedEdges)
 }
 
 /**
@@ -554,65 +581,165 @@ function interpolate(v1: number, v2: number, threshold: number, method: string =
 }
 
 /**
- * Apply edge clamping to a point
+ * Detect if edge cells are activated and create strict boundary constraints
+ * Uses separate edge detection threshold to prevent contour threshold from overriding edge clamping
+ * Enhanced to be more robust and less dependent on contour threshold
+ * Fixed asymmetric edge detection for consistent behavior across all edges
  */
-function applyEdgeClamping(
-  point: Point, 
+function detectActivatedEdges(
+  grid: number[][],
+  edgeDetectionThreshold: number,
+  options: Required<MarchingSquaresOptions>
+): { left: boolean, right: boolean, top: boolean, bottom: boolean } {
+  const rows = grid.length
+  const cols = grid[0].length
+  
+  let leftEdgeActive = false
+  let rightEdgeActive = false
+  let topEdgeActive = false
+  let bottomEdgeActive = false
+  
+  // Enhanced edge detection: check for any activity near edges, not just exact edge cells
+  const edgeSensitivity = 0.01 // Even lower threshold for more sensitive edge detection
+  
+  // Check left edge (column 0 and nearby)
+  for (let row = 0; row < rows; row++) {
+    // Check exact edge and nearby cells
+    if (grid[row][0] >= edgeSensitivity || 
+        (cols > 1 && grid[row][1] >= edgeSensitivity)) {
+      leftEdgeActive = true
+      break
+    }
+  }
+  
+  // Check right edge (last column and nearby)
+  for (let row = 0; row < rows; row++) {
+    if (grid[row][cols - 1] >= edgeSensitivity || 
+        (cols > 1 && grid[row][cols - 2] >= edgeSensitivity)) {
+      rightEdgeActive = true
+      break
+    }
+  }
+  
+  // Check top edge (row 0 and nearby)
+  for (let col = 0; col < cols; col++) {
+    if (grid[0][col] >= edgeSensitivity || 
+        (rows > 1 && grid[1][col] >= edgeSensitivity)) {
+      topEdgeActive = true
+      break
+    }
+  }
+  
+  // Check bottom edge (last row and nearby)
+  for (let col = 0; col < cols; col++) {
+    if (grid[rows - 1][col] >= edgeSensitivity || 
+        (rows > 1 && grid[rows - 2][col] >= edgeSensitivity)) {
+      bottomEdgeActive = true
+      break
+    }
+  }
+  
+  // Enhanced fallback: if ANY edge has activity, activate ALL edges
+  // This ensures consistent edge clamping regardless of threshold
+  let anyEdgeActivity = false
+  
+  // Check all edge cells for any activity
+  for (let row = 0; row < rows; row++) {
+    if (grid[row][0] > 0.01 || grid[row][cols - 1] > 0.01) {
+      anyEdgeActivity = true
+      break
+    }
+  }
+  for (let col = 0; col < cols; col++) {
+    if (grid[0][col] > 0.01 || grid[rows - 1][col] > 0.01) {
+      anyEdgeActivity = true
+      break
+    }
+  }
+  
+  // If there's any edge activity at all, activate all edges for consistent clamping
+  if (anyEdgeActivity) {
+    leftEdgeActive = true
+    rightEdgeActive = true
+    topEdgeActive = true
+    bottomEdgeActive = true
+  }
+  
+  // Additional safety: if the grid has any data at all, ensure edge clamping is enabled
+  // This prevents edge clamping from being disabled when threshold changes
+  let hasAnyData = false
+  for (let row = 0; row < rows; row++) {
+    for (let col = 0; col < cols; col++) {
+      if (grid[row][col] > 0.01) {
+        hasAnyData = true
+        break
+      }
+    }
+    if (hasAnyData) break
+  }
+  
+  // If there's any data in the grid, ensure edge clamping is enabled
+  if (hasAnyData) {
+    leftEdgeActive = true
+    rightEdgeActive = true
+    topEdgeActive = true
+    bottomEdgeActive = true
+  }
+  
+  return { left: leftEdgeActive, right: rightEdgeActive, top: topEdgeActive, bottom: bottomEdgeActive }
+}
+
+/**
+ * Apply strict edge clamping - always snap exactly to boundaries when edge cells are active
+ * This is mandatory behavior for proper structural beam section loss visualization
+ * Enhanced to work regardless of contour threshold
+ */
+function applyStrictEdgeClamping(
+  point: Point,
   gridBounds: { minX: number, maxX: number, minY: number, maxY: number },
+  activatedEdges: { left: boolean, right: boolean, top: boolean, bottom: boolean },
   options: Required<MarchingSquaresOptions>
 ): Point {
-  if (!options.edgeClamping) return point
-  
   const { minX, maxX, minY, maxY } = gridBounds
   let { x, y } = point
   
-  const distToLeft = x - minX
-  const distToRight = maxX - x
-  const distToTop = y - minY
-  const distToBottom = maxY - y
+  // Enhanced edge clamping that works regardless of contour threshold
+  // Check if point is near any edge and apply clamping based on edge activation
   
-  const nearLeft = distToLeft < options.edgeClampDistance
-  const nearRight = distToRight < options.edgeClampDistance
-  const nearTop = distToTop < options.edgeClampDistance
-  const nearBottom = distToBottom < options.edgeClampDistance
+  // Left edge clamping
+  if (activatedEdges.left && Math.abs(x - minX) < options.edgeClampDistance) {
+    x = minX
+  }
   
-  const inCorner = (nearLeft || nearRight) && (nearTop || nearBottom)
+  // Right edge clamping
+  if (activatedEdges.right && Math.abs(x - maxX) < options.edgeClampDistance) {
+    x = maxX
+  }
   
-  if (inCorner) {
-    switch (options.cornerTreatment) {
-      case 'trimmed':
-        if (nearLeft && nearTop) {
-          const minDist = Math.min(distToLeft, distToTop)
-          if (minDist < options.edgeClampDistance * 0.5) {
-            x = minX + options.edgeClampDistance * 0.5
-            y = minY + options.edgeClampDistance * 0.5
-          }
-        }
-        // ... other corner cases
-        break
-        
-      case 'flared':
-        if (nearLeft) {
-          const pullStrength = Math.min(1.0, options.edgeClampDistance / Math.max(0.1, distToLeft))
-          x = minX + distToLeft * (1.0 - pullStrength * 0.8)
-        }
-        // ... similar for other edges
-        break
-        
-      case 'square':
-        if (nearLeft && distToLeft < options.edgeClampDistance * 0.3) x = minX
-        if (nearRight && distToRight < options.edgeClampDistance * 0.3) x = maxX
-        if (nearTop && distToTop < options.edgeClampDistance * 0.3) y = minY
-        if (nearBottom && distToBottom < options.edgeClampDistance * 0.3) y = maxY
-        break
-    }
-  } else {
-    // Standard edge clamping for non-corner areas
-    if (nearLeft && distToLeft < options.edgeClampDistance * 0.6) {
-      const pullStrength = Math.min(1.0, (options.edgeClampDistance * 0.6) / Math.max(0.05, distToLeft))
-      x = minX + distToLeft * (1.0 - pullStrength * 0.7)
-    }
-    // ... similar for other edges
+  // Top edge clamping
+  if (activatedEdges.top && Math.abs(y - minY) < options.edgeClampDistance) {
+    y = minY
+  }
+  
+  // Bottom edge clamping
+  if (activatedEdges.bottom && Math.abs(y - maxY) < options.edgeClampDistance) {
+    y = maxY
+  }
+  
+  // Additional edge preservation: if point is exactly on an edge boundary,
+  // preserve it regardless of threshold
+  const edgeTolerance = 0.1
+  if (Math.abs(x - minX) < edgeTolerance && activatedEdges.left) {
+    x = minX
+  }
+  if (Math.abs(x - maxX) < edgeTolerance && activatedEdges.right) {
+    x = maxX
+  }
+  if (Math.abs(y - minY) < edgeTolerance && activatedEdges.top) {
+    y = minY
+  }
+  if (Math.abs(y - maxY) < edgeTolerance && activatedEdges.bottom) {
+    y = maxY
   }
   
   return { x, y }
@@ -708,12 +835,14 @@ function buildContour(
 }
 
 /**
- * Apply post-processing (smoothing, collision avoidance, validation, etc.)
+ * Apply post-processing with enhanced edge preservation
+ * Ensures edge clamping is maintained regardless of contour threshold
  */
 function applyPostProcessing(
-  contours: Point[][], 
+  contours: Point[][],
   options: Required<MarchingSquaresOptions>,
-  gridInfo: { rows: number, cols: number }
+  gridInfo: { rows: number, cols: number },
+  activatedEdges?: { left: boolean, right: boolean, top: boolean, bottom: boolean }
 ): Point[][] {
   let finalContours = contours
   
@@ -728,7 +857,7 @@ function applyPostProcessing(
   
   // Apply smoothing if requested
   if (options.smoothing) {
-    finalContours = applySmoothingToContours(finalContours, options, gridInfo)
+    finalContours = applySmoothingToContours(finalContours, options, gridInfo, activatedEdges)
   }
   
   // Apply collision avoidance if requested
@@ -741,6 +870,41 @@ function applyPostProcessing(
     finalContours = finalContours
       .map(contour => simplifyContour(contour, options.simplificationTolerance))
       .filter(contour => contour.length >= 3)
+  }
+  
+  // Enhanced edge preservation: ensure edge points are preserved regardless of threshold
+  if (activatedEdges) {
+    const gridBounds = {
+      minX: 0 - options.bufferSize,
+      maxX: gridInfo.cols - options.bufferSize,
+      minY: 0 - options.bufferSize,
+      maxY: gridInfo.rows - options.bufferSize
+    }
+    
+    finalContours = finalContours.map(contour => 
+      contour.map(point => {
+        // Apply additional edge preservation at contour level
+        let x = point.x
+        let y = point.y
+        
+        // Check if point is near an edge and preserve it
+        const edgeTolerance = 0.2
+        if (activatedEdges.left && Math.abs(x - gridBounds.minX) < edgeTolerance) {
+          x = gridBounds.minX
+        }
+        if (activatedEdges.right && Math.abs(x - gridBounds.maxX) < edgeTolerance) {
+          x = gridBounds.maxX
+        }
+        if (activatedEdges.top && Math.abs(y - gridBounds.minY) < edgeTolerance) {
+          y = gridBounds.minY
+        }
+        if (activatedEdges.bottom && Math.abs(y - gridBounds.maxY) < edgeTolerance) {
+          y = gridBounds.maxY
+        }
+        
+        return { x, y }
+      })
+    )
   }
   
   // Apply global offsets
@@ -773,12 +937,13 @@ function applyPostProcessing(
 }
 
 /**
- * Apply smoothing to contours
+ * Apply smoothing to contours with edge constraints
  */
 function applySmoothingToContours(
   contours: Point[][],
   options: Required<MarchingSquaresOptions>,
-  gridInfo: { rows: number, cols: number }
+  gridInfo: { rows: number, cols: number },
+  activatedEdges?: { left: boolean, right: boolean, top: boolean, bottom: boolean }
 ): Point[][] {
   const edgeConstraints: EdgeConstraints = {
     leftEdge: 0 - options.bufferSize,
@@ -788,7 +953,8 @@ function applySmoothingToContours(
     tolerance: 0.1,
     edgeClamping: options.edgeClamping,
     edgeClampDistance: options.edgeClampDistance,
-    cornerTreatment: options.cornerTreatment
+    cornerTreatment: options.cornerTreatment,
+    strictEdges: activatedEdges || { left: false, right: false, top: false, bottom: false }
   }
   
   switch (options.smoothingMethod) {
@@ -839,9 +1005,10 @@ function applySmoothingToContours(
           left: 0 - options.bufferSize,
           right: gridInfo.cols - options.bufferSize,
           top: 0 - options.bufferSize,
-          bottom: gridInfo.rows - options.bufferSize
+          bottom: gridInfo.rows - options.bufferSize,
+          strictEdges: activatedEdges
         }
-        return contours.map(contour => 
+        return contours.map(contour =>
           edgeAwareSmoothing(contour, gridBounds, {
             iterations: options.smoothingIterations,
             strength: options.smoothingStrength,
@@ -857,14 +1024,59 @@ function applySmoothingToContours(
           left: 0 - options.bufferSize,
           right: gridInfo.cols - options.bufferSize,
           top: 0 - options.bufferSize,
-          bottom: gridInfo.rows - options.bufferSize
+          bottom: gridInfo.rows - options.bufferSize,
+          strictEdges: activatedEdges
         }
-        return contours.map(contour => 
+        return contours.map(contour =>
           intelligentEdgeSmoothing(contour, gridBounds, {
             iterations: options.smoothingIterations,
             strength: options.smoothingStrength,
             edgeTransitionZone: options.edgeTransitionZone,
             preserveCorners: options.preserveCorners
+          })
+        )
+      }
+      
+    case 'selective':
+      {
+        const gridBounds: GridBounds = {
+          left: 0 - options.bufferSize,
+          right: gridInfo.cols - options.bufferSize,
+          top: 0 - options.bufferSize,
+          bottom: gridInfo.rows - options.bufferSize,
+          strictEdges: activatedEdges
+        }
+        return contours.map(contour =>
+          selectiveEdgeSmoothing(contour, gridBounds, {
+            iterations: options.smoothingIterations,
+            strength: options.smoothingStrength,
+            edgeTransitionZone: options.edgeTransitionZone,
+            preserveCorners: options.preserveCorners,
+            edgeBufferDistance: options.edgeBufferDistance,
+            preserveEdgeSegments: options.preserveEdgeSegments,
+            transitionBlending: options.transitionBlending
+          })
+        )
+      }
+      
+    case 'intelligent-selective':
+      {
+        const gridBounds: GridBounds = {
+          left: 0 - options.bufferSize,
+          right: gridInfo.cols - options.bufferSize,
+          top: 0 - options.bufferSize,
+          bottom: gridInfo.rows - options.bufferSize,
+          strictEdges: activatedEdges
+        }
+        return contours.map(contour =>
+          intelligentSelectiveSmoothing(contour, gridBounds, {
+            iterations: options.smoothingIterations,
+            strength: options.smoothingStrength,
+            edgeTransitionZone: options.edgeTransitionZone,
+            preserveCorners: options.preserveCorners,
+            edgeBufferDistance: options.edgeBufferDistance,
+            curvatureThreshold: options.curvatureThreshold,
+            preserveStraightSegments: options.preserveStraightSegments
           })
         )
       }
