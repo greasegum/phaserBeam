@@ -544,7 +544,7 @@ export const AdvancedSettings: React.FC<AdvancedSettingsProps> = ({ scene }) => 
                 }}>
                   <span style={{ display: 'flex', alignItems: 'center' }}>
                     Global Offset X
-                    <HelpTooltip text="Shifts the entire contour horizontally in grid units. 0 is the default position." />
+                    <HelpTooltip text="Shifts the entire contour horizontally in grid units. 0 = no offset." />
                   </span>
                   <span style={{ fontWeight: 'bold', color: '#333' }}>{globalOffsetX.toFixed(2)}</span>
                 </label>
@@ -569,7 +569,7 @@ export const AdvancedSettings: React.FC<AdvancedSettingsProps> = ({ scene }) => 
                 }}>
                   <span style={{ display: 'flex', alignItems: 'center' }}>
                     Global Offset Y
-                    <HelpTooltip text="Shifts the entire contour vertically in grid units. 0 is the default position." />
+                    <HelpTooltip text="Shifts the entire contour vertically in grid units. 0 = no offset." />
                   </span>
                   <span style={{ fontWeight: 'bold', color: '#333' }}>{globalOffsetY.toFixed(2)}</span>
                 </label>
