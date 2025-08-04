@@ -13,13 +13,41 @@ export class CalloutRenderer {
     
     const graphics = this.scene.add.graphics()
     
+    // Create text first to measure it
+    let displayText = textBox.text
+    // Format decimal reading if present
+    if (textBox.decimalReading !== undefined) {
+      displayText = textBox.decimalReading.toFixed(3) + '"'
+    }
+    
+    const textObj = this.scene.add.text(
+      textBox.x + textBox.padding,
+      textBox.y + textBox.padding,
+      displayText,
+      {
+        fontSize: `${style.fontSize}px`,
+        fontFamily: style.fontFamily,
+        color: style.textColor,
+        wordWrap: { width: textBox.width - textBox.padding * 2 }
+      }
+    )
+    
+    // Auto-fit text box around text
+    const textBounds = textObj.getBounds()
+    const tightWidth = textBounds.width + textBox.padding * 2
+    const tightHeight = textBounds.height + textBox.padding * 2
+    
+    // Update text box dimensions
+    textBox.width = tightWidth
+    textBox.height = tightHeight
+    
     // Draw text box background if border is shown
     if (textBox.showBorder) {
       graphics.lineStyle(style.lineWidth, style.borderColor ? parseInt(style.borderColor.replace('#', ''), 16) : style.color)
       graphics.strokeRect(textBox.x, textBox.y, textBox.width, textBox.height)
       
       if (style.backgroundColor) {
-        graphics.fillStyle(parseInt(style.backgroundColor.replace('#', ''), 16))
+        graphics.fillStyle(parseInt(style.backgroundColor.replace('#', ''), 16), 0.9)
         graphics.fillRect(textBox.x, textBox.y, textBox.width, textBox.height)
       }
     }
@@ -59,31 +87,28 @@ export class CalloutRenderer {
         connectionY = textBox.y
       }
       
-      // Draw leader based on style
-      if (leaderStyle === 'straight' && leaderPoints.length === 1) {
+      // Draw diagonal-horizontal leader
+      if (leaderPoints.length >= 1) {
+        const arrowPoint = leaderPoints[0]
+        
+        // Calculate the horizontal extension point
+        const horizontalY = connectionY
+        const horizontalX = arrowPoint.x + (connectionX - arrowPoint.x) * 0.7 // 70% of the way
+        
+        // Draw the leader line
         graphics.beginPath()
-        graphics.moveTo(leaderPoints[0].x, leaderPoints[0].y)
+        graphics.moveTo(arrowPoint.x, arrowPoint.y)
+        
+        // Diagonal segment
+        graphics.lineTo(horizontalX, horizontalY)
+        
+        // Horizontal segment to text box
         graphics.lineTo(connectionX, connectionY)
+        
         graphics.stroke()
         
-        // Draw end style at leader point
-        this.drawEndStyle(graphics, leaderPoints[0], connectionX, connectionY, endStyle, style)
-        
-      } else if (leaderStyle === 'polyline' || leaderPoints.length > 1) {
-        graphics.beginPath()
-        graphics.moveTo(leaderPoints[0].x, leaderPoints[0].y)
-        
-        for (let i = 1; i < leaderPoints.length; i++) {
-          graphics.lineTo(leaderPoints[i].x, leaderPoints[i].y)
-        }
-        
-        graphics.lineTo(connectionX, connectionY)
-        graphics.stroke()
-        
-        // Draw end style at first leader point
-        if (leaderPoints.length > 1) {
-          this.drawEndStyle(graphics, leaderPoints[0], leaderPoints[1].x, leaderPoints[1].y, endStyle, style)
-        }
+        // Draw improved arrow head at leader point
+        this.drawEndStyle(graphics, arrowPoint, horizontalX, horizontalY, endStyle, style)
         
       } else if (leaderStyle === 'curved') {
         // Simple bezier curve
@@ -120,32 +145,42 @@ export class CalloutRenderer {
       }
     }
     
-    // Add text
-    let displayText = textBox.text
-    // Format decimal reading if present
-    if (textBox.decimalReading !== undefined) {
-      displayText = textBox.decimalReading.toFixed(3) + '"'
-    }
-    
-    const textObj = this.scene.add.text(
-      textBox.x + textBox.padding,
-      textBox.y + textBox.padding,
-      displayText,
-      {
-        fontSize: `${style.fontSize}px`,
-        fontFamily: style.fontFamily,
-        color: style.textColor,
-        wordWrap: { width: textBox.width - textBox.padding * 2 }
-      }
-    )
-    
     container.add([graphics, textObj])
     
-    // Make text box draggable
-    const hitArea = new Phaser.Geom.Rectangle(
+    // Create interactive areas with hover effects
+    
+    // Text box hit area for dragging the whole callout
+    const textBoxHitArea = new Phaser.Geom.Rectangle(
       textBox.x, textBox.y, textBox.width, textBox.height
     )
-    container.setInteractive(hitArea, Phaser.Geom.Rectangle.Contains)
+    const textBoxZone = this.scene.add.zone(textBox.x + textBox.width/2, textBox.y + textBox.height/2, textBox.width, textBox.height)
+    textBoxZone.setInteractive({ useHandCursor: false })
+    
+    // Arrow point hit area
+    if (leaderPoints.length > 0) {
+      const arrowZone = this.scene.add.zone(leaderPoints[0].x, leaderPoints[0].y, 20, 20)
+      arrowZone.setInteractive({ useHandCursor: true })
+      arrowZone.setData('handle', 'arrow')
+      container.add(arrowZone)
+    }
+    
+    // Add hover effects
+    textBoxZone.on('pointerover', () => {
+      graphics.lineStyle(style.lineWidth + 1, 0x0099ff)
+      graphics.strokeRect(textBox.x - 1, textBox.y - 1, textBox.width + 2, textBox.height + 2)
+      this.scene.input.setDefaultCursor('text')
+    })
+    
+    textBoxZone.on('pointerout', () => {
+      graphics.clear()
+      this.render(callout, container) // Re-render to clear highlight
+      this.scene.input.setDefaultCursor('default')
+    })
+    
+    textBoxZone.setData('handle', 'textbox')
+    container.add(textBoxZone)
+    
+    container.setData('annotation', callout)
   }
   
   private drawEndStyle(
@@ -158,21 +193,27 @@ export class CalloutRenderer {
   ): void {
     if (endStyle === 'arrow') {
       const angle = Math.atan2(towardY - point.y, towardX - point.x)
-      const arrowLength = 10
-      const arrowAngle = Math.PI / 6
+      const arrowLength = 12
+      const arrowAngle = Math.PI / 5 // Slightly wider angle for better visibility
       
+      // Draw filled arrow head
+      graphics.fillStyle(style.color)
       graphics.beginPath()
       graphics.moveTo(point.x, point.y)
       graphics.lineTo(
         point.x + Math.cos(angle - arrowAngle) * arrowLength,
         point.y + Math.sin(angle - arrowAngle) * arrowLength
       )
-      graphics.moveTo(point.x, point.y)
+      graphics.lineTo(
+        point.x + Math.cos(angle) * arrowLength * 0.7,
+        point.y + Math.sin(angle) * arrowLength * 0.7
+      )
       graphics.lineTo(
         point.x + Math.cos(angle + arrowAngle) * arrowLength,
         point.y + Math.sin(angle + arrowAngle) * arrowLength
       )
-      graphics.stroke()
+      graphics.closePath()
+      graphics.fill()
       
     } else if (endStyle === 'dot') {
       graphics.fillStyle(style.color)

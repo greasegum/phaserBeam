@@ -411,20 +411,10 @@ export class AnnotationManager {
   private createCallout(id: string): Callout {
     const [arrowPoint, textPoint] = this.creationPoints
     
-    // Calculate broken leader midpoint
-    // Create a horizontal/vertical elbow based on positions
+    // For diagonal-horizontal leader, we only need the arrow point
+    // The renderer will calculate the diagonal-horizontal path
     const dx = textPoint.x - arrowPoint.x
     const dy = textPoint.y - arrowPoint.y
-    const midPoint = { ...arrowPoint }
-    
-    // If more horizontal than vertical, break vertically first
-    if (Math.abs(dx) > Math.abs(dy)) {
-      midPoint.x = arrowPoint.x
-      midPoint.y = textPoint.y
-    } else {
-      midPoint.x = textPoint.x
-      midPoint.y = arrowPoint.y
-    }
     
     // Calculate text box position relative to text point
     const textBoxWidth = 120
@@ -445,7 +435,7 @@ export class AnnotationManager {
       visible: true,
       locked: false,
       style: { ...DEFAULT_ANNOTATION_STYLE },
-      leaderPoints: [arrowPoint, midPoint], // Broken leader
+      leaderPoints: [arrowPoint], // Only store the arrow point
       textBox: {
         x: textBoxX,
         y: textBoxY,
@@ -455,7 +445,7 @@ export class AnnotationManager {
         showBorder: true,
         padding: 8
       },
-      leaderStyle: 'polyline', // Use polyline for broken leader
+      leaderStyle: 'diagonal', // Use diagonal-horizontal leader
       endStyle: 'arrow'
     }
     
@@ -551,29 +541,8 @@ export class AnnotationManager {
             targetCallout.textBox.x += nudgeX
             targetCallout.textBox.y += nudgeY
             
-            // Update leader line connection if needed
-            if (targetCallout.leaderPoints.length > 1) {
-              const lastIdx = targetCallout.leaderPoints.length - 1
-              const textCenterX = targetCallout.textBox.x + targetCallout.textBox.width / 2
-              const textCenterY = targetCallout.textBox.y + targetCallout.textBox.height / 2
-              const arrowPoint = targetCallout.leaderPoints[0]
-              
-              // Recalculate midpoint for broken leader
-              const dx = textCenterX - arrowPoint.x
-              const dy = textCenterY - arrowPoint.y
-              
-              if (Math.abs(dx) > Math.abs(dy)) {
-                targetCallout.leaderPoints[1] = {
-                  x: arrowPoint.x,
-                  y: textCenterY
-                }
-              } else {
-                targetCallout.leaderPoints[1] = {
-                  x: textCenterX,
-                  y: arrowPoint.y
-                }
-              }
-            }
+            // No need to update leader points for diagonal-horizontal leader
+            // The renderer calculates the path dynamically
           }
         }
       })
@@ -909,45 +878,41 @@ export class AnnotationManager {
           this.previewGraphics.lineTo(currentPoint.x - 5, currentPoint.y + 5)
           this.previewGraphics.stroke()
         } else {
-          // Second click preview - show broken leader and text box
+          // Second click preview - show diagonal-horizontal leader and text box
           const arrowPoint = this.creationPoints[0]
           
-          // Calculate broken leader midpoint
+          // Calculate diagonal-horizontal path
           const dx = currentPoint.x - arrowPoint.x
-          const dy = currentPoint.y - arrowPoint.y
-          const midPoint = { ...arrowPoint }
+          const horizontalY = currentPoint.y
+          const horizontalX = arrowPoint.x + dx * 0.7
           
-          if (Math.abs(dx) > Math.abs(dy)) {
-            midPoint.x = arrowPoint.x
-            midPoint.y = currentPoint.y
-          } else {
-            midPoint.x = currentPoint.x
-            midPoint.y = arrowPoint.y
-          }
-          
-          // Draw broken leader line
+          // Draw diagonal-horizontal leader line
           this.previewGraphics.lineStyle(2, 0x0066cc, 0.8)
           this.previewGraphics.beginPath()
           this.previewGraphics.moveTo(arrowPoint.x, arrowPoint.y)
-          this.previewGraphics.lineTo(midPoint.x, midPoint.y)
+          this.previewGraphics.lineTo(horizontalX, horizontalY)
           this.previewGraphics.lineTo(currentPoint.x, currentPoint.y)
           this.previewGraphics.stroke()
           
-          // Draw arrow at arrow point
-          const firstAngle = Math.atan2(midPoint.y - arrowPoint.y, midPoint.x - arrowPoint.x)
-          this.previewGraphics.lineStyle(2, 0xff0000, 0.8)
+          // Draw improved arrow head
+          const firstAngle = Math.atan2(horizontalY - arrowPoint.y, horizontalX - arrowPoint.x)
+          this.previewGraphics.fillStyle(0x0066cc, 0.8)
           this.previewGraphics.beginPath()
           this.previewGraphics.moveTo(arrowPoint.x, arrowPoint.y)
           this.previewGraphics.lineTo(
-            arrowPoint.x + Math.cos(firstAngle - Math.PI / 6) * 10,
-            arrowPoint.y + Math.sin(firstAngle - Math.PI / 6) * 10
+            arrowPoint.x + Math.cos(firstAngle - Math.PI / 5) * 12,
+            arrowPoint.y + Math.sin(firstAngle - Math.PI / 5) * 12
           )
-          this.previewGraphics.moveTo(arrowPoint.x, arrowPoint.y)
           this.previewGraphics.lineTo(
-            arrowPoint.x + Math.cos(firstAngle + Math.PI / 6) * 10,
-            arrowPoint.y + Math.sin(firstAngle + Math.PI / 6) * 10
+            arrowPoint.x + Math.cos(firstAngle) * 8,
+            arrowPoint.y + Math.sin(firstAngle) * 8
           )
-          this.previewGraphics.stroke()
+          this.previewGraphics.lineTo(
+            arrowPoint.x + Math.cos(firstAngle + Math.PI / 5) * 12,
+            arrowPoint.y + Math.sin(firstAngle + Math.PI / 5) * 12
+          )
+          this.previewGraphics.closePath()
+          this.previewGraphics.fill()
           
           // Draw text box preview
           const textBoxWidth = 120
