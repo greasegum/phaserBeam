@@ -126,6 +126,7 @@ export class BeamElevationScene extends Phaser.Scene {
     console.log('Scene init complete:', {
       appMode: this.appMode,
       editMode: this.editMode,
+      savedAnnotations: this.savedAnnotations?.length || 0,
       showGrid: this.showGrid,
       dataAppMode: data.appMode,
       dataShowGrid: data.showGrid
@@ -239,29 +240,12 @@ export class BeamElevationScene extends Phaser.Scene {
       // Update grid cell visibility after creating grid
       this.updateGridCellVisibility()
       
-      // Add debug indicator to show grid was created
-      const gridDebug = this.add.text(10, 40, `Grid created with ${this.gridCells.size} cells | Container visible: ${this.gridContainer?.visible}`, {
-        fontSize: '14px',
-        color: '#00ff00',
-        backgroundColor: '#000000',
-        padding: { x: 5, y: 3 }
-      })
-      gridDebug.setDepth(2001)
-      
       // Force grid container to be visible
       if (this.gridContainer) {
         this.gridContainer.setVisible(true)
         console.log('Forced grid container visible:', this.gridContainer.visible)
       }
     } else {
-      // Add debug indicator to show why grid wasn't created
-      const gridDebug = this.add.text(10, 40, `Grid NOT created - editMode: ${this.editMode}, appMode: ${this.appMode}, showGrid: ${this.showGrid}`, {
-        fontSize: '14px',
-        color: '#ff0000',
-        backgroundColor: '#000000',
-        padding: { x: 5, y: 3 }
-      })
-      gridDebug.setDepth(2001)
     }
     
     // Always initialize annotation manager to display annotations in all modes
@@ -285,26 +269,10 @@ export class BeamElevationScene extends Phaser.Scene {
       // Update snap points based on grid
       this.updateAnnotationSnapPoints()
       
-      // Add a visual indicator that we're in annotation mode
-      const debugText = this.add.text(10, 10, 'ANNOTATION MODE ACTIVE', {
-        fontSize: '20px',
-        color: '#ff0000',
-        backgroundColor: '#ffff00',
-        padding: { x: 10, y: 5 }
-      })
-      debugText.setDepth(2000)
     } else {
       console.log('Not in annotation mode - annotations read-only')
       this.annotationManager.setInteractive(false)
       
-      // Add debug text for other modes
-      const debugText = this.add.text(10, 10, `MODE: ${this.appMode} | Annotations: Read-Only`, {
-        fontSize: '16px',
-        color: '#0000ff',
-        backgroundColor: '#ffffff',
-        padding: { x: 10, y: 5 }
-      })
-      debugText.setDepth(2000)
     }
     
     // Restore saved annotations if any
@@ -1506,9 +1474,15 @@ export class BeamElevationScene extends Phaser.Scene {
   }
 
   private getCurrentAnnotations(): any[] {
+    // Always save current annotations before getting them
     if (this.annotationManager) {
-      return this.annotationManager.getAnnotations()
+      const annotations = this.annotationManager.getAnnotations()
+      console.log('Getting current annotations from manager:', annotations.length)
+      // Update savedAnnotations with current state
+      this.savedAnnotations = annotations
+      return annotations
     }
+    console.log('No annotation manager, returning saved annotations:', this.savedAnnotations?.length || 0)
     return this.savedAnnotations || []
   }
 

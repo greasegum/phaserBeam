@@ -68,13 +68,6 @@ export class AnnotationManager {
     this.modeIndicator = this.createModeIndicator()
     this.modeIndicator.setVisible(false)
     
-    // Create a test interactive area to debug input
-    const testRect = scene.add.rectangle(scene.cameras.main.width / 2, 100, 200, 50, 0xff0000, 0.3)
-    testRect.setInteractive()
-    testRect.on('pointerdown', () => {
-      console.log('Test rectangle clicked - input is working!')
-    })
-    
     this.setupEventHandlers()
   }
   
@@ -508,7 +501,9 @@ export class AnnotationManager {
   
   // Public API
   public getAnnotations(): Annotation[] {
-    return Array.from(this.annotations.values())
+    const annotations = Array.from(this.annotations.values())
+    console.log('AnnotationManager.getAnnotations returning', annotations.length, 'annotations')
+    return annotations
   }
   
   public setSelectedAnnotation(id: string | null): void {
@@ -790,10 +785,13 @@ export class AnnotationManager {
   }
   
   public restoreAnnotations(savedAnnotations: any[]): void {
+    console.log('AnnotationManager.restoreAnnotations called with', savedAnnotations.length, 'annotations')
     savedAnnotations.forEach(saved => {
       // Recreate the annotation with the same properties
+      console.log('Restoring annotation:', saved.id, saved.type)
       this.annotations.set(saved.id, saved)
       this.renderAnnotation(saved)
     })
+    console.log('Total annotations after restore:', this.annotations.size)
   }
 }

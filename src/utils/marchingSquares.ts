@@ -257,11 +257,12 @@ function executeAlgorithm(grid: number[][], options: Required<MarchingSquaresOpt
       )
       
       // Always apply strict edge clamping to segments - this is mandatory behavior
+      // When buffer is applied, the actual content starts at bufferSize and ends at cols/rows - bufferSize
       const gridBounds = {
-        minX: 0,
-        maxX: cols - 1,
-        minY: 0,
-        maxY: rows - 1
+        minX: options.bufferSize,
+        maxX: cols - 1 - options.bufferSize,
+        minY: options.bufferSize,
+        maxY: rows - 1 - options.bufferSize
       }
       
       cellSegments.forEach(segment => {
@@ -874,10 +875,10 @@ function applyPostProcessing(
   // Enhanced edge preservation: ensure edge points are preserved regardless of threshold
   if (activatedEdges) {
     const gridBounds = {
-      minX: 0 - options.bufferSize,
-      maxX: gridInfo.cols - options.bufferSize,
-      minY: 0 - options.bufferSize,
-      maxY: gridInfo.rows - options.bufferSize
+      minX: 0,
+      maxX: gridInfo.cols - 1,
+      minY: 0,
+      maxY: gridInfo.rows - 1
     }
     
     finalContours = finalContours.map(contour => 
@@ -907,8 +908,9 @@ function applyPostProcessing(
   }
   
   // Apply global offsets
-  const adjustX = options.globalOffsetX - (options.bufferSize > 0 ? options.bufferSize : 0)
-  const adjustY = options.globalOffsetY - (options.bufferSize > 0 ? options.bufferSize : 0)
+  // The coordinates are already in the original grid space after clamping
+  const adjustX = options.globalOffsetX
+  const adjustY = options.globalOffsetY
   
   if (adjustX !== 0 || adjustY !== 0) {
     finalContours = finalContours.map(contour => 
@@ -945,10 +947,10 @@ function applySmoothingToContours(
   activatedEdges?: { left: boolean, right: boolean, top: boolean, bottom: boolean }
 ): Point[][] {
   const edgeConstraints: EdgeConstraints = {
-    leftEdge: 0 - options.bufferSize,
-    rightEdge: gridInfo.cols - options.bufferSize,
-    topEdge: 0 - options.bufferSize,
-    bottomEdge: gridInfo.rows - options.bufferSize,
+    leftEdge: 0,
+    rightEdge: gridInfo.cols - 1,
+    topEdge: 0,
+    bottomEdge: gridInfo.rows - 1,
     tolerance: 0.1,
     // Edge clamping is now mandatory
     edgeClampDistance: options.edgeClampDistance,
@@ -1001,10 +1003,10 @@ function applySmoothingToContours(
     case 'edge-aware':
       {
         const gridBounds: GridBounds = {
-          left: 0 - options.bufferSize,
-          right: gridInfo.cols - options.bufferSize,
-          top: 0 - options.bufferSize,
-          bottom: gridInfo.rows - options.bufferSize,
+          left: 0,
+          right: gridInfo.cols - 1,
+          top: 0,
+          bottom: gridInfo.rows - 1,
           strictEdges: activatedEdges
         }
         return contours.map(contour =>
@@ -1020,10 +1022,10 @@ function applySmoothingToContours(
     case 'intelligent':
       {
         const gridBounds: GridBounds = {
-          left: 0 - options.bufferSize,
-          right: gridInfo.cols - options.bufferSize,
-          top: 0 - options.bufferSize,
-          bottom: gridInfo.rows - options.bufferSize,
+          left: 0,
+          right: gridInfo.cols - 1,
+          top: 0,
+          bottom: gridInfo.rows - 1,
           strictEdges: activatedEdges
         }
         return contours.map(contour =>
@@ -1039,10 +1041,10 @@ function applySmoothingToContours(
     case 'selective':
       {
         const gridBounds: GridBounds = {
-          left: 0 - options.bufferSize,
-          right: gridInfo.cols - options.bufferSize,
-          top: 0 - options.bufferSize,
-          bottom: gridInfo.rows - options.bufferSize,
+          left: 0,
+          right: gridInfo.cols - 1,
+          top: 0,
+          bottom: gridInfo.rows - 1,
           strictEdges: activatedEdges
         }
         return contours.map(contour =>
@@ -1061,10 +1063,10 @@ function applySmoothingToContours(
     case 'intelligent-selective':
       {
         const gridBounds: GridBounds = {
-          left: 0 - options.bufferSize,
-          right: gridInfo.cols - options.bufferSize,
-          top: 0 - options.bufferSize,
-          bottom: gridInfo.rows - options.bufferSize,
+          left: 0,
+          right: gridInfo.cols - 1,
+          top: 0,
+          bottom: gridInfo.rows - 1,
           strictEdges: activatedEdges
         }
         return contours.map(contour =>
