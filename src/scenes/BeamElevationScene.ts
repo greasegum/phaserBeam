@@ -52,7 +52,7 @@ export class BeamElevationScene extends Phaser.Scene {
   private contourGlobalOffsetX = 0 // Default 0 for proper grid alignment
   private contourGlobalOffsetY = 0 // Default 0 for proper grid alignment
   // Marching squares buffer configuration
-  private contourBufferSize = 0 // No buffer for proper grid alignment
+  private contourBufferSize = 1 // Default buffer size of 1 for proper grid alignment
   private contourBufferValue = 0 // Default buffer value
   // Smoothing options
   private smoothingMethod: 'basic' | 'laplacian' | 'chaikin' | 'bilateral' | 'savitzky-golay' | 'catmull-rom' | 'edge-aware' | 'intelligent' | 'selective' | 'intelligent-selective' = 'edge-aware'
