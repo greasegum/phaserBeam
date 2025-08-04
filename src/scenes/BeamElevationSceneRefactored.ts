@@ -204,8 +204,13 @@ export class BeamElevationSceneRefactored extends Phaser.Scene {
   private drawSectionLoss(centerX: number, centerY: number): void {
     if (!this.lossGraphics || !this.beamProfile || this.webGrid.length === 0) return
     
-    // Run marching squares
-    const result = marchingSquares(this.webGrid, this.contourConfig.core.threshold)
+    // Run marching squares with proper options
+    const result = marchingSquares(this.webGrid, this.contourConfig.core.threshold, {
+      interpolationMethod: 'none',
+      offsetX: 0,
+      offsetY: 0,
+      bufferSize: 0
+    })
     
     // Process contours
     const processed = processContours(
