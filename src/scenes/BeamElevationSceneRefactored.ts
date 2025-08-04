@@ -214,12 +214,12 @@ export class BeamElevationSceneRefactored extends Phaser.Scene {
       bufferSize: 0,
       bufferValue: 0,
       
-      // Edge clamping settings
+      // Edge clamping settings - aggressive for perfect alignment
       clampToGrid: true,
       edgeSnapping: true,
       edgeDetectionEnabled: true,
-      edgeDetectionThreshold: 0.1,
-      edgeClampDistance: 0.8,
+      edgeDetectionThreshold: 0.01,  // Very sensitive edge detection
+      edgeClampDistance: 1.0,  // Clamp points within 1 grid unit of edge
       
       // Disable smoothing for now
       smoothing: false,

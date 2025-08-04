@@ -227,6 +227,12 @@ export class AnnotationManager {
   
   // Annotation creation methods
   public startCreatingAnnotation(type: AnnotationType): void {
+    // If already creating, reset state for the new tool
+    if (this.isCreating && this.creationType !== type) {
+      this.creationPoints = []
+      this.previewGraphics.clear()
+    }
+    
     this.isCreating = true
     this.creationType = type
     this.creationPoints = []
@@ -265,7 +271,10 @@ export class AnnotationManager {
       if (this.shouldCreateAnnotation()) {
         console.log('Creating annotation...')
         this.createAnnotation()
-        this.cancelCreation()
+        // Reset points but keep the tool active for repeatability
+        this.creationPoints = []
+        this.previewGraphics.clear()
+        // Don't call cancelCreation() to keep the tool active
       }
     
     } else {
