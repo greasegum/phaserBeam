@@ -23,6 +23,7 @@ export class AnnotationManager {
   private lastClickAnnotation?: string
   private scene: Phaser.Scene
   private annotations: Map<string, Annotation> = new Map()
+  private systemAnnotations: Map<string, Annotation> = new Map()
   private annotationGraphics: Map<string, Phaser.GameObjects.Container> = new Map()
   private snapPoints: SnapPoint[] = []
   private activeAnnotation: AnnotationInteraction | null = null
@@ -58,7 +59,7 @@ export class AnnotationManager {
     // Initialize renderers
     this.linearDimensionRenderer = new LinearDimensionRenderer(scene, gridSize)
     this.ordinateDimensionRenderer = new OrdinateDimensionRenderer(scene, gridSize)
-    this.calloutRenderer = new CalloutRenderer(scene)
+    this.calloutRenderer = new CalloutRenderer(scene, this.beamBottom)
     
     // Create preview graphics layer
     this.previewGraphics = scene.add.graphics()
@@ -551,7 +552,7 @@ export class AnnotationManager {
     }
   }
   
-  private renderAnnotation(annotation: Annotation): void {
+  private renderAnnotation(annotation: Annotation, isSystemGenerated: boolean = false): void {
     console.log('Rendering annotation:', annotation.type, annotation.id)
     
     // Remove existing graphics
@@ -571,7 +572,7 @@ export class AnnotationManager {
           this.linearDimensionRenderer.render(annotation, container)
           break
         case 'ordinate-dimension':
-          this.ordinateDimensionRenderer.render(annotation, container)
+          this.ordinateDimensionRenderer.render(annotation, container, isSystemGenerated)
           break
         case 'callout':
           this.calloutRenderer.render(annotation, container)
@@ -1220,5 +1221,171 @@ export class AnnotationManager {
       this.promptForCalloutText(annotation as Callout)
     }
     // Add other annotation type editing as needed
+  }
+  
+  /**
+   * Create system-generated beam end dimensions
+   */
+  public createBeamEndDimensions(beamProfile: any, beamLength: number, centerX: number, centerY: number): void {
+    const { webHeight, flangeThickness } = beamProfile
+    const totalHeight = webHeight + 2 * flangeThickness
+    const topY = centerY - (totalHeight * this.gridSize) / 2
+    const bottomY = centerY + (totalHeight * this.gridSize) / 2
+    const webTop = centerY - (webHeight * this.gridSize) / 2
+    const webBottom = centerY + (webHeight * this.gridSize) / 2
+    
+    // Create dimension for top flange
+    const topFlangeDim: LinearDimension = {
+      id: 'system-top-flange',
+      type: 'linear-dimension',
+      visible: true,
+      locked: true,
+      style: { ...DEFAULT_ANNOTATION_STYLE, color: 0x666666, textColor: '#666666' },
+      startPoint: { x: centerX - 40, y: topY },
+      endPoint: { x: centerX - 40, y: webTop },
+      text: `${flangeThickness.toFixed(3)}"`,
+      unit: 'inches',
+      witnessLineStart: 10,
+      witnessLineEnd: 10,
+      dimensionOffset: 25,
+      autoText: false,
+      showArrows: true,
+      orientation: 'vertical'
+    }
+    
+    // Create dimension for web height
+    const webHeightDim: LinearDimension = {
+      id: 'system-web-height',
+      type: 'linear-dimension',
+      visible: true,
+      locked: true,
+      style: { ...DEFAULT_ANNOTATION_STYLE, color: 0x666666, textColor: '#666666' },
+      startPoint: { x: centerX - 55, y: webTop },
+      endPoint: { x: centerX - 55, y: webBottom },
+      text: `${webHeight.toFixed(3)}"`,
+      unit: 'inches',
+      witnessLineStart: 10,
+      witnessLineEnd: 10,
+      dimensionOffset: 25,
+      autoText: false,
+      showArrows: true,
+      orientation: 'vertical'
+    }
+    
+    // Create dimension for bottom flange
+    const bottomFlangeDim: LinearDimension = {
+      id: 'system-bottom-flange',
+      type: 'linear-dimension',
+      visible: true,
+      locked: true,
+      style: { ...DEFAULT_ANNOTATION_STYLE, color: 0x666666, textColor: '#666666' },
+      startPoint: { x: centerX - 40, y: webBottom },
+      endPoint: { x: centerX - 40, y: bottomY },
+      text: `${flangeThickness.toFixed(3)}"`,
+      unit: 'inches',
+      witnessLineStart: 10,
+      witnessLineEnd: 10,
+      dimensionOffset: 25,
+      autoText: false,
+      showArrows: true,
+      orientation: 'vertical'
+    }
+    
+    // Create overall height dimension
+    const overallHeightDim: LinearDimension = {
+      id: 'system-overall-height',
+      type: 'linear-dimension',
+      visible: true,
+      locked: true,
+      style: { ...DEFAULT_ANNOTATION_STYLE, color: 0x333333, textColor: '#333333', fontSize: 13 },
+      startPoint: { x: centerX - 70, y: topY },
+      endPoint: { x: centerX - 70, y: bottomY },
+      text: `${totalHeight.toFixed(3)}"`,
+      unit: 'inches',
+      witnessLineStart: 10,
+      witnessLineEnd: 10,
+      dimensionOffset: 25,
+      autoText: false,
+      showArrows: true,
+      orientation: 'vertical'
+    }
+    
+    // Add all system dimensions
+    this.systemAnnotations.set(topFlangeDim.id, topFlangeDim)
+    this.systemAnnotations.set(webHeightDim.id, webHeightDim)
+    this.systemAnnotations.set(bottomFlangeDim.id, bottomFlangeDim)
+    this.systemAnnotations.set(overallHeightDim.id, overallHeightDim)
+    
+    // Render them
+    this.renderAnnotation(topFlangeDim, true)
+    this.renderAnnotation(webHeightDim, true)
+    this.renderAnnotation(bottomFlangeDim, true)
+    this.renderAnnotation(overallHeightDim, true)
+  }
+  
+  /**
+   * Create system-generated bottom ordinate dimensions
+   */
+  public createBottomOrdinateDimensions(beamLength: number, centerX: number, bottomY: number): void {
+    // Create ordinate dimensions every 12 inches
+    for (let i = 0; i <= beamLength; i += 12) {
+      const x = centerX + i * this.gridSize
+      const dimId = `system-ordinate-${i}`
+      
+      const ordinateDim: OrdinateDimension = {
+        id: dimId,
+        type: 'ordinate-dimension',
+        visible: true,
+        locked: true,
+        style: { ...DEFAULT_ANNOTATION_STYLE, color: 0x888888, textColor: '#888888' },
+        measurePoint: { x, y: bottomY, gridX: i },
+        originSide: this.originSide,
+        jogOffset: 40,
+        beamLength,
+        beamBottom: bottomY,
+        text: `${i}"`,
+        unit: 'inches',
+        autoText: false,
+        showArrow: true,
+        witnessLineHeight: 10
+      }
+      
+      this.systemAnnotations.set(dimId, ordinateDim)
+      this.renderAnnotation(ordinateDim, true)
+    }
+  }
+  
+  /**
+   * Toggle visibility of system dimensions
+   */
+  public toggleSystemDimensions(type: 'beamEnd' | 'bottomOrdinate', visible: boolean): void {
+    this.systemAnnotations.forEach((annotation, id) => {
+      if (type === 'beamEnd' && id.startsWith('system-') && !id.includes('ordinate')) {
+        annotation.visible = visible
+        const container = this.annotationGraphics.get(id)
+        if (container) {
+          container.setVisible(visible)
+        }
+      } else if (type === 'bottomOrdinate' && id.includes('ordinate')) {
+        annotation.visible = visible
+        const container = this.annotationGraphics.get(id)
+        if (container) {
+          container.setVisible(visible)
+        }
+      }
+    })
+  }
+  
+  /**
+   * Clear all system dimensions
+   */
+  public clearSystemDimensions(): void {
+    this.systemAnnotations.forEach((_, id) => {
+      const container = this.annotationGraphics.get(id)
+      if (container) {
+        container.destroy()
+      }
+    })
+    this.systemAnnotations.clear()
   }
 }

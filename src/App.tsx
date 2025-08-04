@@ -3,6 +3,8 @@ import { SetupPopup } from './components/SetupPopup'
 import { PhaserCanvas } from './components/PhaserCanvas'
 import { BeamProfile, GridCell } from './types/beam'
 import { AppMode, MODE_CONFIGS } from './types/mode'
+import { AnnotationType } from './types/annotations'
+import { AnnotationToolband } from './components/AnnotationToolband'
 
 export default function App() {
   const [selectedBeam, setSelectedBeam] = useState<BeamProfile | null>(null)
@@ -14,6 +16,10 @@ export default function App() {
   const [showTopFlange, setShowTopFlange] = useState<boolean>(true)
   const [elevationView, setElevationView] = useState<'N' | 'S' | 'E' | 'W'>('N')
   const [isMobile, setIsMobile] = useState(false)
+  const [selectedAnnotationTool, setSelectedAnnotationTool] = useState<AnnotationType>('linear-dimension')
+  const [ordinateOriginSide, setOrdinateOriginSide] = useState<'left' | 'right'>('left')
+  const [showBeamEndDimensions, setShowBeamEndDimensions] = useState(true)
+  const [showBottomOrdinate, setShowBottomOrdinate] = useState(true)
   
   useEffect(() => {
     const checkMobile = () => {
@@ -90,20 +96,6 @@ export default function App() {
             <option value="annotation">Annotation Mode</option>
           </select>
           <button
-            onClick={() => setGridOrigin(gridOrigin === 'left' ? 'right' : 'left')}
-            style={{
-              padding: '6px 12px',
-              backgroundColor: '#2196F3',
-              color: 'white',
-              border: 'none',
-              borderRadius: '4px',
-              cursor: 'pointer',
-              fontSize: '14px'
-            }}
-          >
-            Origin: {gridOrigin === 'left' ? 'Left' : 'Right'}
-          </button>
-          <button
             onClick={() => setShowTopFlange(!showTopFlange)}
             disabled={appMode === 'view'}
             style={{
@@ -149,6 +141,19 @@ export default function App() {
           </button>
         </div>
       </header>
+      
+      {/* Annotation toolbar band */}
+      <AnnotationToolband
+        visible={appMode === 'annotation'}
+        selectedTool={selectedAnnotationTool}
+        onSelectTool={setSelectedAnnotationTool}
+        ordinateOriginSide={gridOrigin}
+        onToggleOrdinateOrigin={() => setGridOrigin(gridOrigin === 'left' ? 'right' : 'left')}
+        showBeamEndDimensions={showBeamEndDimensions}
+        showBottomOrdinate={showBottomOrdinate}
+        onToggleBeamEndDimensions={() => setShowBeamEndDimensions(!showBeamEndDimensions)}
+        onToggleBottomOrdinate={() => setShowBottomOrdinate(!showBottomOrdinate)}
+      />
 
       {/* Main canvas area */}
       <main style={{ 
@@ -168,6 +173,12 @@ export default function App() {
             gridCells={gridCells}
             elevationView={elevationView}
             appMode={appMode}
+            selectedAnnotationTool={selectedAnnotationTool}
+            onSelectAnnotationTool={setSelectedAnnotationTool}
+            ordinateOriginSide={ordinateOriginSide}
+            onToggleOrdinateOrigin={() => setOrdinateOriginSide(ordinateOriginSide === 'left' ? 'right' : 'left')}
+            showBeamEndDimensions={showBeamEndDimensions}
+            showBottomOrdinate={showBottomOrdinate}
           />
         </div>
       </main>

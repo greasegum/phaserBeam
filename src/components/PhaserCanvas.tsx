@@ -5,7 +5,6 @@ import { BeamProfile, GridCell } from '../types/beam'
 import { AdvancedSettings } from './AdvancedSettings'
 import { AppMode } from '../types/mode'
 import { AnnotationType } from '../types/annotations'
-import { AnnotationToolbar } from './AnnotationToolbar'
 
 interface PhaserCanvasProps {
   beamProfile: BeamProfile | null
@@ -18,6 +17,12 @@ interface PhaserCanvasProps {
   gridCells?: GridCell[]
   elevationView?: 'N' | 'S' | 'E' | 'W'
   appMode?: AppMode
+  selectedAnnotationTool?: AnnotationType
+  onSelectAnnotationTool?: (tool: AnnotationType) => void
+  ordinateOriginSide?: 'left' | 'right'
+  onToggleOrdinateOrigin?: () => void
+  showBeamEndDimensions?: boolean
+  showBottomOrdinate?: boolean
 }
 
 export const PhaserCanvas: React.FC<PhaserCanvasProps> = ({ 
@@ -30,15 +35,19 @@ export const PhaserCanvas: React.FC<PhaserCanvasProps> = ({
   showTopFlange = true,
   gridCells = [],
   elevationView = 'N',
-  appMode = 'edit'
+  appMode = 'edit',
+  selectedAnnotationTool = 'linear-dimension',
+  onSelectAnnotationTool,
+  ordinateOriginSide = 'left',
+  onToggleOrdinateOrigin,
+  showBeamEndDimensions = true,
+  showBottomOrdinate = true
 }) => {
   console.log('PhaserCanvas render - appMode:', appMode, 'editMode:', editMode, 'showGrid:', showGrid)
   const gameRef = useRef<Phaser.Game | null>(null)
   const containerRef = useRef<HTMLDivElement>(null)
   const scrollContainerRef = useRef<HTMLDivElement>(null)
   const [currentScene, setCurrentScene] = useState<BeamElevationScene | null>(null)
-  const [selectedAnnotationTool, setSelectedAnnotationTool] = useState<AnnotationType>('linear-dimension')
-  const [ordinateOriginSide, setOrdinateOriginSide] = useState<'left' | 'right'>('left')
 
   useEffect(() => {
     if (!containerRef.current) return
@@ -181,7 +190,7 @@ export const PhaserCanvas: React.FC<PhaserCanvasProps> = ({
 
   const handleSelectAnnotationTool = (type: AnnotationType) => {
     console.log('handleSelectAnnotationTool:', type, 'appMode:', appMode, 'currentScene:', currentScene)
-    setSelectedAnnotationTool(type)
+    onSelectAnnotationTool?.(type)
     if (currentScene && appMode === 'annotation') {
       console.log('Starting annotation creation, manager:', currentScene.annotationManager)
       // @ts-ignore - We know annotationManager exists in annotation mode
@@ -193,20 +202,6 @@ export const PhaserCanvas: React.FC<PhaserCanvasProps> = ({
     <>
       <div ref={scrollContainerRef} style={{ width: '100%', height: '100%', overflow: 'auto', position: 'relative' }}>
         <div ref={containerRef} style={{ minWidth: '100%', height: '100%' }} />
-        <AnnotationToolbar
-          visible={appMode === 'annotation'}
-          selectedTool={selectedAnnotationTool}
-          onSelectTool={handleSelectAnnotationTool}
-          ordinateOriginSide={ordinateOriginSide}
-          onToggleOrdinateOrigin={() => {
-            const newSide = ordinateOriginSide === 'left' ? 'right' : 'left'
-            setOrdinateOriginSide(newSide)
-            if (currentScene && appMode === 'annotation') {
-              // @ts-ignore
-              currentScene.annotationManager?.setOrdinateOriginSide(newSide)
-            }
-          }}
-        />
       </div>
       <AdvancedSettings scene={currentScene} />
     </>

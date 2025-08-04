@@ -511,7 +511,7 @@ export const AdvancedSettings: React.FC<AdvancedSettingsProps> = ({ scene }) => 
                   marginBottom: '4px'
                 }}>
                   Alignment Mode
-                  <HelpTooltip text="Controls contour placement. Edges: smooth contours along cell edges (default). Vertices: pixelated/stepped contours following grid lines. Center: contours pulled toward cell centers for smoother appearance." />
+                  <HelpTooltip text="Edge alignment produces smooth contours along cell edges for the best visual results." />
                 </label>
                 <select
                   value={alignmentMode}
@@ -536,8 +536,6 @@ export const AdvancedSettings: React.FC<AdvancedSettingsProps> = ({ scene }) => 
                   }}
                 >
                   <option value="edges">Edge Aligned</option>
-                  <option value="vertices">Vertex Aligned</option>
-                  <option value="center">Center Aligned</option>
                 </select>
               </div>
             </div>

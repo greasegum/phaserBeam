@@ -3,9 +3,11 @@ import { Callout, TEXT_PADDING } from '../types/annotations'
 
 export class CalloutRenderer {
   private scene: Phaser.Scene
+  private beamBottom: number = 0
   
-  constructor(scene: Phaser.Scene) {
+  constructor(scene: Phaser.Scene, beamBottom: number = 0) {
     this.scene = scene
+    this.beamBottom = beamBottom
   }
   
   render(callout: Callout, container: Phaser.GameObjects.Container): void {
@@ -87,28 +89,45 @@ export class CalloutRenderer {
         connectionY = textBox.y
       }
       
-      // Draw diagonal-horizontal leader
+      // Check if this is a bottom flange callout
+      const isBottomFlange = leaderPoints.length > 0 && Math.abs(leaderPoints[0].y - this.beamBottom) < 5
+      
+      // Draw leader based on type
       if (leaderPoints.length >= 1) {
         const arrowPoint = leaderPoints[0]
         
-        // Calculate the horizontal extension point
-        const horizontalY = connectionY
-        const horizontalX = arrowPoint.x + (connectionX - arrowPoint.x) * 0.7 // 70% of the way
+        if (isBottomFlange) {
+          // Special angled arrow for bottom flange
+          graphics.beginPath()
+          graphics.moveTo(arrowPoint.x, arrowPoint.y)
+          
+          // Draw angled line upward to text
+          const angleToText = Math.atan2(connectionY - arrowPoint.y, connectionX - arrowPoint.x)
+          graphics.lineTo(connectionX, connectionY)
+          graphics.stroke()
+          
+          // Draw improved arrow head at leader point
+          this.drawEndStyle(graphics, arrowPoint, connectionX, connectionY, endStyle, style)
+        } else {
+          // Standard diagonal-horizontal leader
+          const horizontalY = connectionY
+          const horizontalX = arrowPoint.x + (connectionX - arrowPoint.x) * 0.7 // 70% of the way
         
-        // Draw the leader line
-        graphics.beginPath()
-        graphics.moveTo(arrowPoint.x, arrowPoint.y)
-        
-        // Diagonal segment
-        graphics.lineTo(horizontalX, horizontalY)
-        
-        // Horizontal segment to text box
-        graphics.lineTo(connectionX, connectionY)
-        
-        graphics.stroke()
-        
-        // Draw improved arrow head at leader point
-        this.drawEndStyle(graphics, arrowPoint, horizontalX, horizontalY, endStyle, style)
+          // Draw the leader line
+          graphics.beginPath()
+          graphics.moveTo(arrowPoint.x, arrowPoint.y)
+          
+          // Diagonal segment
+          graphics.lineTo(horizontalX, horizontalY)
+          
+          // Horizontal segment to text box
+          graphics.lineTo(connectionX, connectionY)
+          
+          graphics.stroke()
+          
+          // Draw improved arrow head at leader point
+          this.drawEndStyle(graphics, arrowPoint, horizontalX, horizontalY, endStyle, style)
+        }
         
       } else if (leaderStyle === 'curved') {
         // Simple bezier curve

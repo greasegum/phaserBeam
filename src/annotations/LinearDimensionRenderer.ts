@@ -143,6 +143,24 @@ export class LinearDimensionRenderer {
     const textAngle = angle > Math.PI / 2 || angle < -Math.PI / 2 ? angle + Math.PI : angle
     textObj.setRotation(textAngle)
     
+    // Make text draggable for witness line adjustment
+    textObj.setInteractive({ useHandCursor: true })
+    textObj.setData('isDraggable', true)
+    textObj.setData('dragType', 'dimension-text')
+    textObj.setData('dimensionAngle', angle)
+    textObj.setData('perpAngle', perpAngle)
+    
+    // Add hover effect
+    textObj.on('pointerover', () => {
+      textObj.setBackgroundColor('#ffff99')
+      this.scene.input.setDefaultCursor('move')
+    })
+    
+    textObj.on('pointerout', () => {
+      textObj.setBackgroundColor('#ffffff')
+      this.scene.input.setDefaultCursor('default')
+    })
+    
     container.add([graphics, textObj])
   }
   
