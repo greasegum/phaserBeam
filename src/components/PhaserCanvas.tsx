@@ -177,26 +177,18 @@ export const PhaserCanvas: React.FC<PhaserCanvasProps> = ({
     }
   }, [])
   
-  // Handle annotation mode activation
+  // Handle annotation mode activation and tool switching
   useEffect(() => {
     if (appMode === 'annotation' && currentScene && selectedAnnotationTool) {
-      // Ensure annotation is started when switching to annotation mode
+      // Start/switch annotation tool when mode changes OR tool changes
       setTimeout(() => {
-        console.log('Auto-starting annotation tool after mode switch')
+        console.log('Starting annotation tool:', selectedAnnotationTool)
         currentScene.annotationManager?.startCreatingAnnotation(selectedAnnotationTool)
       }, 100)
     }
-  }, [appMode, currentScene])
+  }, [appMode, currentScene, selectedAnnotationTool])
 
-  const handleSelectAnnotationTool = (type: AnnotationType) => {
-    console.log('handleSelectAnnotationTool:', type, 'appMode:', appMode, 'currentScene:', currentScene)
-    onSelectAnnotationTool?.(type)
-    if (currentScene && appMode === 'annotation') {
-      console.log('Starting annotation creation, manager:', currentScene.annotationManager)
-      // @ts-ignore - We know annotationManager exists in annotation mode
-      currentScene.annotationManager?.startCreatingAnnotation(type)
-    }
-  }
+  // Tool switching is now handled by the useEffect above
 
   return (
     <>

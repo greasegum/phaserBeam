@@ -15,6 +15,7 @@ import {
 import { LinearDimensionRenderer } from './LinearDimensionRenderer'
 import { OrdinateDimensionRenderer } from './OrdinateDimensionRenderer'
 import { CalloutRenderer } from './CalloutRenderer'
+import { EnhancedAnnotationEffects } from './EnhancedAnnotationEffects'
 
 export class AnnotationManager {
   private textInputElement?: HTMLInputElement
@@ -38,6 +39,7 @@ export class AnnotationManager {
   private linearDimensionRenderer: LinearDimensionRenderer
   private ordinateDimensionRenderer: OrdinateDimensionRenderer
   private calloutRenderer: CalloutRenderer
+  private enhancedEffects: EnhancedAnnotationEffects
   
   // Annotation creation state
   private isCreating: boolean = false
@@ -60,6 +62,7 @@ export class AnnotationManager {
     this.linearDimensionRenderer = new LinearDimensionRenderer(scene, gridSize)
     this.ordinateDimensionRenderer = new OrdinateDimensionRenderer(scene, gridSize)
     this.calloutRenderer = new CalloutRenderer(scene, this.beamBottom)
+    this.enhancedEffects = new EnhancedAnnotationEffects(scene)
     
     // Create preview graphics layer
     this.previewGraphics = scene.add.graphics()
@@ -89,6 +92,23 @@ export class AnnotationManager {
     this.inputZone.on('pointerup', this.handlePointerUp, this)
     
     console.log('AnnotationManager event handlers set up with input zone:', width, 'x', height)
+  }
+  
+  public update(): void {
+    // Update enhanced effects
+    this.enhancedEffects.update()
+    
+    // Apply magnetic attraction to annotations near cursor if enabled
+    if (this.scene.input.activePointer) {
+      const pointer = this.scene.input.activePointer
+      const worldPoint = this.scene.cameras.main.getWorldPoint(pointer.x, pointer.y)
+      
+      this.annotationGraphics.forEach((container, id) => {
+        if (!this.systemAnnotations.has(id)) { // Don't apply to system annotations
+          this.enhancedEffects.applyMagneticAttraction(container, worldPoint.x, worldPoint.y, 0.05)
+        }
+      })
+    }
   }
   
   public destroy(): void {
@@ -251,6 +271,10 @@ export class AnnotationManager {
     this.modeIndicator.setVisible(false)
   }
   
+  public isDragging(): boolean {
+    return this.activeAnnotation?.isDragging || false
+  }
+  
   private handlePointerDown(pointer: Phaser.Input.Pointer): void {
     if (!this.isInteractive) return
     
@@ -260,6 +284,8 @@ export class AnnotationManager {
     }
     
     console.log('AnnotationManager handlePointerDown:', point, 'isCreating:', this.isCreating, 'type:', this.creationType)
+    
+    // Event handled - no need to disable camera as scene already checks isCreatingAnnotation()
     
     if (this.isCreating) {
       const snappedPoint = this.snapToGrid(point)
@@ -564,10 +590,11 @@ export class AnnotationManager {
   private renderAnnotation(annotation: Annotation, isSystemGenerated: boolean = false): void {
     console.log('Rendering annotation:', annotation.type, annotation.id)
     
-    // Remove existing graphics
+    // Remove existing graphics and effects
     const existingContainer = this.annotationGraphics.get(annotation.id)
     if (existingContainer) {
       existingContainer.destroy()
+      this.enhancedEffects.cleanup(annotation.id)
     }
     
     // Create new container
@@ -590,6 +617,35 @@ export class AnnotationManager {
       console.log('Rendered successfully, container children:', container.length)
     } catch (error) {
       console.error('Error rendering annotation:', error)
+    }
+    
+    // Apply enhanced effects
+    if (!isSystemGenerated) {
+      // Apply pulse effect for newly created annotations
+      this.enhancedEffects.startPulseEffect(container, annotation.id)
+      
+      // Add hover effects
+      container.on('pointerover', () => {
+        const graphics = this.scene.add.graphics()
+        const bounds = container.getBounds()
+        this.enhancedEffects.createHoverGlow(
+          graphics, 
+          bounds.centerX, 
+          bounds.centerY, 
+          Math.max(bounds.width, bounds.height) / 2,
+          annotation.style?.color || DEFAULT_ANNOTATION_STYLE.color
+        )
+        container.add(graphics)
+        container.setData('hoverGraphics', graphics)
+      })
+      
+      container.on('pointerout', () => {
+        const hoverGraphics = container.getData('hoverGraphics')
+        if (hoverGraphics) {
+          hoverGraphics.destroy()
+          container.setData('hoverGraphics', null)
+        }
+      })
     }
     
     // Make interactive

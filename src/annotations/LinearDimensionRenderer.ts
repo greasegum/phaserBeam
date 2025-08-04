@@ -41,6 +41,18 @@ export class LinearDimensionRenderer {
       }
     })
     
+    // Add subtle shadow effect for depth
+    const shadowGraphics = this.scene.add.graphics()
+    shadowGraphics.setDefaultStyles({
+      lineStyle: {
+        width: DIMENSION_LINE_WEIGHT + 1,
+        color: 0x000000,
+        alpha: 0.2
+      }
+    })
+    shadowGraphics.setPosition(1, 1) // Offset shadow
+    container.add(shadowGraphics)
+    
     // Draw witness lines (extension lines)
     if (dimension.showWitnessLines) {
       graphics.lineStyle(WITNESS_LINE_WEIGHT, style.color, 0.8)
@@ -68,6 +80,16 @@ export class LinearDimensionRenderer {
       graphics.lineTo(witnessEndX, witnessEndY)
       graphics.stroke()
     }
+    
+    // Draw shadow dimension line first
+    shadowGraphics.beginPath()
+    shadowGraphics.moveTo(dimStartX, dimStartY)
+    shadowGraphics.lineTo(dimEndX, dimEndY)
+    shadowGraphics.stroke()
+    
+    // Draw shadow arrows
+    this.drawArrow(shadowGraphics, dimStartX, dimStartY, angle + Math.PI, { ...style, color: 0x000000 })
+    this.drawArrow(shadowGraphics, dimEndX, dimEndY, angle, { ...style, color: 0x000000 })
     
     // Draw dimension line with proper weight
     graphics.lineStyle(DIMENSION_LINE_WEIGHT, style.color, 1)

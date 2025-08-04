@@ -79,6 +79,7 @@ export class BeamElevationScene extends Phaser.Scene {
   private interpolationMethod: 'linear' | 'cubic' | 'none' = 'linear'
   private scalarFieldMethod: ScalarFieldMethod = 'edge-preserving'
   private scalarFieldRadius = 2
+  private edgeClampStrength = 0.95
   private saddlePointResolution: 'center' | 'gradient' | 'majority' = 'center'
   
   // Edge detection parameters
@@ -96,6 +97,13 @@ export class BeamElevationScene extends Phaser.Scene {
 
   constructor() {
     super({ key: 'BeamElevationScene' })
+  }
+
+  update() {
+    // Update annotation manager effects
+    if (this.annotationManager) {
+      this.annotationManager.update()
+    }
   }
 
   init(data: { 
@@ -433,7 +441,7 @@ export class BeamElevationScene extends Phaser.Scene {
     } else {
       // View mode - show filled regions with marching squares
       // Convert binary grid to scalar field for interpolation
-      const scalarGrid = binaryToScalarField(grid, this.scalarFieldMethod, this.scalarFieldRadius)
+      const scalarGrid = binaryToScalarField(grid, this.scalarFieldMethod, this.scalarFieldRadius, this.edgeClampStrength)
       
       // Apply marching squares
       const marchingOptions: MarchingSquaresOptions = {
@@ -1945,6 +1953,19 @@ export class BeamElevationScene extends Phaser.Scene {
     )
   }
   
+  public getEdgeClampStrength(): number {
+    return this.edgeClampStrength
+  }
+  
+  public setEdgeClampStrength(strength: number): void {
+    this.edgeClampStrength = strength
+    this.drawSectionLoss(
+      100,
+      this.cameras.main.centerY,
+      this.beamLength * this.gridSize
+    )
+  }
+  
   private updateAnnotationSnapPoints(): void {
     if (!this.annotationManager) return
     
@@ -1969,7 +1990,13 @@ export class BeamElevationScene extends Phaser.Scene {
     
     // Pan support
     this.input.on('pointerdown', (pointer: Phaser.Input.Pointer) => {
-      if (this.appMode === 'view' || (this.appMode === 'annotation' && !this.annotationManager?.isCreatingAnnotation)) {
+      // Only allow panning in view mode, or annotation mode when not interacting with annotations
+      const allowPanning = this.appMode === 'view' || 
+        (this.appMode === 'annotation' && 
+         !this.annotationManager?.isCreatingAnnotation && 
+         !this.annotationManager?.isDragging())
+      
+      if (allowPanning) {
         this.isPanning = true
         this.panStartX = pointer.x
         this.panStartY = pointer.y

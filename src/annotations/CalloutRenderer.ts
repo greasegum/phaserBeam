@@ -15,6 +15,12 @@ export class CalloutRenderer {
     
     const graphics = this.scene.add.graphics()
     
+    // Create shadow graphics for depth effect
+    const shadowGraphics = this.scene.add.graphics()
+    shadowGraphics.setAlpha(0.15)
+    shadowGraphics.setPosition(2, 2)
+    container.add(shadowGraphics)
+    
     // Create text first to measure it
     let displayText = textBox.text
     // Format decimal reading if present
@@ -43,15 +49,34 @@ export class CalloutRenderer {
     textBox.width = tightWidth
     textBox.height = tightHeight
     
+    // Draw text box shadow first
+    if (textBox.showBorder) {
+      shadowGraphics.fillStyle(0x000000)
+      shadowGraphics.fillRect(textBox.x, textBox.y, textBox.width, textBox.height)
+    }
+    
     // Draw text box background if border is shown
     if (textBox.showBorder) {
+      // Fill background with gradient effect
+      if (style.backgroundColor) {
+        // Create gradient-like effect with multiple rectangles
+        const gradientSteps = 5
+        for (let i = 0; i < gradientSteps; i++) {
+          const alpha = 0.85 + (0.1 * i / gradientSteps)
+          graphics.fillStyle(parseInt(style.backgroundColor.replace('#', ''), 16), alpha)
+          const inset = i * 0.5
+          graphics.fillRect(
+            textBox.x + inset, 
+            textBox.y + inset, 
+            textBox.width - inset * 2, 
+            textBox.height - inset * 2
+          )
+        }
+      }
+      
+      // Draw border with modern styling
       graphics.lineStyle(style.lineWidth, style.borderColor ? parseInt(style.borderColor.replace('#', ''), 16) : style.color)
       graphics.strokeRect(textBox.x, textBox.y, textBox.width, textBox.height)
-      
-      if (style.backgroundColor) {
-        graphics.fillStyle(parseInt(style.backgroundColor.replace('#', ''), 16), 0.9)
-        graphics.fillRect(textBox.x, textBox.y, textBox.width, textBox.height)
-      }
     }
     
     // Draw leader line(s)

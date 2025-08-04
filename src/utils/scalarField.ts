@@ -491,7 +491,8 @@ export type ScalarFieldMethod = 'gaussian' | 'distance' | 'box' | 'none' | 'edge
 export function binaryToScalarField(
   grid: number[][], 
   method: ScalarFieldMethod = 'gaussian',
-  radius: number = 2
+  radius: number = 2,
+  edgeClampStrength: number = 0.95
 ): number[][] {
   switch (method) {
     case 'gaussian':
@@ -505,7 +506,7 @@ export function binaryToScalarField(
     case 'adaptive-edge-preserving':
       return adaptiveEdgePreservingBlur(grid, radius, 0.8)
     case 'edge-clamping':
-      return edgeClampingBlur(grid, radius, 0.95)
+      return edgeClampingBlur(grid, radius, edgeClampStrength)
     case 'none':
     default:
       return grid

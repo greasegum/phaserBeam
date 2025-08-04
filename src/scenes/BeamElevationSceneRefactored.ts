@@ -30,7 +30,7 @@ export class BeamElevationSceneRefactored extends Phaser.Scene {
   
   // Scalar field configuration for edge-aware blurring
   private scalarFieldMethod: ScalarFieldMethod = 'edge-clamping'
-  private scalarFieldRadius = 2
+  private scalarFieldRadius = 1
   
   // Graphics objects
   private beamGraphics: Phaser.GameObjects.Graphics | null = null
@@ -210,7 +210,7 @@ export class BeamElevationSceneRefactored extends Phaser.Scene {
     if (!this.lossGraphics || !this.beamProfile || this.webGrid.length === 0) return
     
     // Convert binary grid to scalar field using edge-aware blurring
-    const scalarGrid = binaryToScalarField(this.webGrid, this.scalarFieldMethod, this.scalarFieldRadius)
+    const scalarGrid = binaryToScalarField(this.webGrid, this.scalarFieldMethod, this.scalarFieldRadius, 0.95)
     
     // Run marching squares with proper options to ensure grid alignment
     const contours = marchingSquares(scalarGrid, {
