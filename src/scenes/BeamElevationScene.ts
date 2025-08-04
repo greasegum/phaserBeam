@@ -47,12 +47,12 @@ export class BeamElevationScene extends Phaser.Scene {
   private currentAnnotationType: AnnotationType = 'linear-dimension'
   private useSmoothCurves = true // Enable smooth organic curves
   // Marching squares alignment offsets
-  private contourOffsetX = 0.0 // No offset for proper grid alignment
-  private contourOffsetY = 0.0 // No offset for proper grid alignment
+  private contourOffsetX = 0.5 // Center on edges for proper grid alignment
+  private contourOffsetY = 0.5 // Center on edges for proper grid alignment
   private contourGlobalOffsetX = 0 // Default 0 for proper grid alignment
   private contourGlobalOffsetY = 0 // Default 0 for proper grid alignment
   // Marching squares buffer configuration
-  private contourBufferSize = 1 // Default buffer size of 1 for proper grid alignment
+  private contourBufferSize = 0 // No buffer to prevent coordinate offset
   private contourBufferValue = 0 // Default buffer value
   // Smoothing options
   private smoothingMethod: 'basic' | 'laplacian' | 'chaikin' | 'bilateral' | 'savitzky-golay' | 'catmull-rom' | 'edge-aware' | 'intelligent' | 'selective' | 'intelligent-selective' = 'edge-aware'
@@ -85,7 +85,7 @@ export class BeamElevationScene extends Phaser.Scene {
   private edgeDetectionThreshold = 0.1 // Separate threshold for edge detection
   private edgeDetectionEnabled = true // Whether to use edge detection for clamping
   private threshold = 0.5
-  private alignmentMode: 'edges' | 'vertices' | 'center' = 'edges'
+  private alignmentMode: 'edges' | 'vertices' | 'center' = 'edges' // Default to edges for smooth contours
   private clampToGrid = true
   private extendToBoundary = false
   private snapDistance = 0.1

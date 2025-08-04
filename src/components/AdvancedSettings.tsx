@@ -17,7 +17,7 @@ export const AdvancedSettings: React.FC<AdvancedSettingsProps> = ({ scene }) => 
   const [alignmentMode, setAlignmentMode] = useState<'edges' | 'vertices' | 'center'>('edges')
   const [globalOffsetX, setGlobalOffsetX] = useState(0.0)
   const [globalOffsetY, setGlobalOffsetY] = useState(0.0)
-  const [bufferSize, setBufferSize] = useState(1)
+  const [bufferSize, setBufferSize] = useState(0)
   const [bufferValue, setBufferValue] = useState(0)
   const [clampToGrid, setClampToGrid] = useState(true)
   const [extendToBoundary, setExtendToBoundary] = useState(false)
@@ -177,7 +177,7 @@ export const AdvancedSettings: React.FC<AdvancedSettingsProps> = ({ scene }) => 
     setAlignmentMode('edges')
     setGlobalOffsetX(0.0) // 0 = centered alignment
     setGlobalOffsetY(0.0) // 0 = centered alignment
-    setBufferSize(1)
+    setBufferSize(0)
     setBufferValue(0)
     setClampToGrid(true)
     setExtendToBoundary(false)
