@@ -1,0 +1,169 @@
+import React, { useEffect, useRef, useState } from 'react'
+import Phaser from 'phaser'
+import { BeamElevationScene } from '../scenes/BeamElevationScene'
+import { BeamProfile, GridCell } from '../types/beam'
+import { AdvancedSettings } from './AdvancedSettings'
+
+interface PhaserCanvasProps {
+  beamProfile: BeamProfile | null
+  onCellChange: (cells: GridCell[]) => void
+  editMode: boolean
+  beamLength: number
+  showGrid?: boolean
+  gridOrigin?: 'left' | 'right'
+  showTopFlange?: boolean
+  gridCells?: GridCell[]
+  elevationView?: 'N' | 'S' | 'E' | 'W'
+}
+
+export const PhaserCanvas: React.FC<PhaserCanvasProps> = ({ 
+  beamProfile, 
+  onCellChange, 
+  editMode,
+  beamLength,
+  showGrid = true,
+  gridOrigin = 'left',
+  showTopFlange = true,
+  gridCells = [],
+  elevationView = 'N'
+}) => {
+  const gameRef = useRef<Phaser.Game | null>(null)
+  const containerRef = useRef<HTMLDivElement>(null)
+  const scrollContainerRef = useRef<HTMLDivElement>(null)
+  const [currentScene, setCurrentScene] = useState<BeamElevationScene | null>(null)
+
+  useEffect(() => {
+    if (!containerRef.current) return
+
+    const config: Phaser.Types.Core.GameConfig = {
+      type: Phaser.AUTO,
+      width: window.innerWidth,
+      height: window.innerHeight - 100, // Account for header and footer
+      parent: containerRef.current,
+      backgroundColor: '#f0f0f0',
+      scene: [BeamElevationScene],
+      physics: {
+        default: 'arcade',
+        arcade: {
+          gravity: { x: 0, y: 0 }
+        }
+      },
+      scale: {
+        mode: Phaser.Scale.NONE,
+        autoCenter: Phaser.Scale.NO_CENTER
+      }
+    }
+
+    gameRef.current = new Phaser.Game(config)
+
+    return () => {
+      gameRef.current?.destroy(true)
+    }
+  }, [])
+
+  useEffect(() => {
+    if (!gameRef.current || !beamProfile) return
+    
+    // Calculate required canvas width based on beam length
+    const padding = 100
+    const gridSize = 40 // Match the max grid size from BeamElevationScene
+    const requiredWidth = beamLength * gridSize + padding * 2
+    const canvasWidth = Math.max(window.innerWidth, requiredWidth)
+    
+    // Resize the game canvas if needed
+    if (gameRef.current.scale.width !== canvasWidth) {
+      gameRef.current.scale.resize(canvasWidth, window.innerHeight - 100)
+    }
+    
+    // Update container div width to enable scrolling
+    if (containerRef.current && containerRef.current.parentElement) {
+      containerRef.current.style.width = `${canvasWidth}px`
+    }
+    
+    // Start or restart scene with new data
+    const scene = gameRef.current.scene.getScene('BeamElevationScene') as BeamElevationScene
+    if (scene) {
+      setCurrentScene(scene)
+      if (scene.scene.isActive()) {
+        scene.updateBeamProfile(beamProfile, beamLength, editMode, showGrid, gridOrigin, showTopFlange, gridCells, elevationView)
+      } else {
+        scene.scene.start('BeamElevationScene', { 
+          beamProfile, 
+          beamLength,
+          editMode,
+          onCellChange,
+          showGrid,
+          gridOrigin,
+          showTopFlange,
+          gridCells,
+          elevationView
+        })
+      }
+    } else {
+      // Wait for scene to be ready
+      gameRef.current.events.once('ready', () => {
+        const readyScene = gameRef.current?.scene.getScene('BeamElevationScene') as BeamElevationScene
+        if (readyScene) {
+          setCurrentScene(readyScene)
+          readyScene.scene.start('BeamElevationScene', { 
+            beamProfile, 
+            beamLength,
+            editMode,
+            onCellChange,
+            showGrid,
+            gridOrigin,
+            showTopFlange,
+            gridCells,
+            elevationView
+          })
+        }
+      })
+    }
+  }, [beamProfile, beamLength, editMode, onCellChange, showGrid, gridOrigin, showTopFlange, gridCells, elevationView])
+
+  if (!beamProfile) {
+    return (
+      <div style={{ 
+        width: '100%', 
+        height: '100%', 
+        display: 'flex', 
+        alignItems: 'center', 
+        justifyContent: 'center',
+        backgroundColor: '#f0f0f0',
+        fontSize: '18px',
+        color: '#666'
+      }}>
+        <p>Please select a beam profile to begin</p>
+      </div>
+    )
+  }
+
+  // Add mouse wheel handler for horizontal scrolling
+  useEffect(() => {
+    const handleWheel = (e: WheelEvent) => {
+      if (scrollContainerRef.current) {
+        e.preventDefault()
+        // Convert vertical scroll to horizontal
+        scrollContainerRef.current.scrollLeft += e.deltaY
+      }
+    }
+
+    const container = scrollContainerRef.current
+    if (container) {
+      container.addEventListener('wheel', handleWheel, { passive: false })
+      
+      return () => {
+        container.removeEventListener('wheel', handleWheel)
+      }
+    }
+  }, [])
+
+  return (
+    <>
+      <div ref={scrollContainerRef} style={{ width: '100%', height: '100%', overflow: 'auto' }}>
+        <div ref={containerRef} style={{ minWidth: '100%', height: '100%' }} />
+      </div>
+      <AdvancedSettings scene={currentScene} />
+    </>
+  )
+}

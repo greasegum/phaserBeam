@@ -1,0 +1,295 @@
+/**
+ * Professional styling for marching squares controls
+ */
+
+.marching-squares-controls {
+  width: 320px;
+  background: #ffffff;
+  border: 1px solid #e0e0e0;
+  border-radius: 8px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  font-size: 14px;
+  color: #333;
+  overflow: hidden;
+}
+
+.controls-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 16px;
+  background: #f8f9fa;
+  border-bottom: 1px solid #e0e0e0;
+}
+
+.controls-header h3 {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.performance-badge {
+  background: #007bff;
+  color: white;
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.controls-sections {
+  max-height: 600px;
+  overflow-y: auto;
+}
+
+.control-section {
+  border-bottom: 1px solid #e0e0e0;
+}
+
+.control-section:last-child {
+  border-bottom: none;
+}
+
+.section-header {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  padding: 12px 16px;
+  background: none;
+  border: none;
+  cursor: pointer;
+  text-align: left;
+  transition: background-color 0.2s;
+}
+
+.section-header:hover {
+  background-color: #f8f9fa;
+}
+
+.section-icon {
+  margin-right: 8px;
+  font-size: 16px;
+}
+
+.section-title {
+  flex: 1;
+  font-weight: 500;
+}
+
+.section-toggle {
+  font-size: 18px;
+  color: #6c757d;
+}
+
+.section-content {
+  padding: 16px;
+  animation: slideDown 0.2s ease-out;
+}
+
+@keyframes slideDown {
+  from {
+    opacity: 0;
+    transform: translateY(-8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Preset Section */
+
+.preset-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.preset-button {
+  padding: 8px 12px;
+  background: #f8f9fa;
+  border: 1px solid #dee2e6;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 13px;
+  transition: all 0.2s;
+  text-transform: capitalize;
+}
+
+.preset-button:hover {
+  background: #e9ecef;
+  border-color: #adb5bd;
+}
+
+.preset-button.active {
+  background: #007bff;
+  border-color: #007bff;
+  color: white;
+}
+
+/* Control Groups */
+
+.control-group {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.control-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.control-row label {
+  flex: 0 0 120px;
+  font-size: 13px;
+  color: #495057;
+}
+
+.control-row input[type="range"] {
+  flex: 1;
+  height: 4px;
+  background: #dee2e6;
+  border-radius: 2px;
+  outline: none;
+  -webkit-appearance: none;
+}
+
+.control-row input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 16px;
+  height: 16px;
+  background: #007bff;
+  border-radius: 50%;
+  cursor: pointer;
+  transition: transform 0.2s;
+}
+
+.control-row input[type="range"]::-webkit-slider-thumb:hover {
+  transform: scale(1.2);
+}
+
+.control-row input[type="number"] {
+  flex: 1;
+  padding: 4px 8px;
+  border: 1px solid #ced4da;
+  border-radius: 4px;
+  font-size: 13px;
+}
+
+.control-row select {
+  flex: 1;
+  padding: 4px 8px;
+  border: 1px solid #ced4da;
+  border-radius: 4px;
+  font-size: 13px;
+  background: white;
+  cursor: pointer;
+}
+
+.control-row input[type="checkbox"] {
+  margin-right: 8px;
+  cursor: pointer;
+}
+
+.control-row .value {
+  flex: 0 0 50px;
+  text-align: right;
+  font-weight: 500;
+  color: #007bff;
+}
+
+/* Fieldsets */
+
+fieldset {
+  margin: 0;
+  padding: 12px;
+  border: 1px solid #e0e0e0;
+  border-radius: 4px;
+}
+
+fieldset legend {
+  padding: 0 8px;
+  font-size: 12px;
+  font-weight: 600;
+  color: #6c757d;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+fieldset .control-row:first-of-type {
+  margin-top: 8px;
+}
+
+/* Responsive */
+
+@media (max-width: 640px) {
+  .marching-squares-controls {
+    width: 100%;
+    border-radius: 0;
+  }
+  
+  .control-row {
+    flex-wrap: wrap;
+  }
+  
+  .control-row label {
+    flex: 0 0 100%;
+    margin-bottom: 4px;
+  }
+}
+
+/* Dark mode support */
+
+@media (prefers-color-scheme: dark) {
+  .marching-squares-controls {
+    background: #1a1a1a;
+    border-color: #333;
+    color: #e0e0e0;
+  }
+  
+  .controls-header {
+    background: #242424;
+    border-color: #333;
+  }
+  
+  .section-header:hover {
+    background-color: #2a2a2a;
+  }
+  
+  .control-section {
+    border-color: #333;
+  }
+  
+  .preset-button {
+    background: #242424;
+    border-color: #333;
+    color: #e0e0e0;
+  }
+  
+  .preset-button:hover {
+    background: #2a2a2a;
+    border-color: #444;
+  }
+  
+  .control-row input[type="range"] {
+    background: #333;
+  }
+  
+  .control-row input[type="number"],
+  .control-row select {
+    background: #242424;
+    border-color: #333;
+    color: #e0e0e0;
+  }
+  
+  fieldset {
+    border-color: #333;
+  }
+  
+  fieldset legend {
+    color: #adb5bd;
+  }
+}
