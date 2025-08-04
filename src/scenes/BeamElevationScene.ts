@@ -21,6 +21,13 @@ export class BeamElevationScene extends Phaser.Scene {
   private selectedCells: Set<string> = new Set()
   private gridCells: Map<string, Phaser.GameObjects.Rectangle> = new Map()
   private onCellChange?: (cells: GridCell[]) => void
+  
+  // Touch/pan support
+  private isPanning: boolean = false
+  private panStartX: number = 0
+  private panStartY: number = 0
+  private cameraStartX: number = 0
+  private cameraStartY: number = 0
   private beamGraphics?: Phaser.GameObjects.Graphics
   private topFlangeGraphics?: Phaser.GameObjects.Graphics
   private lossGraphics?: Phaser.GameObjects.Graphics
@@ -36,6 +43,7 @@ export class BeamElevationScene extends Phaser.Scene {
   private isPainting = false
   private paintMode: 'add' | 'remove' | null = null
   public annotationManager?: AnnotationManager
+  private savedAnnotations: any[] = [] // Store annotations when switching modes
   private currentAnnotationType: AnnotationType = 'linear-dimension'
   private useSmoothCurves = true // Enable smooth organic curves
   // Marching squares alignment offsets
@@ -254,26 +262,29 @@ export class BeamElevationScene extends Phaser.Scene {
       gridDebug.setDepth(2001)
     }
     
-    // Initialize annotation manager for annotation mode
+    // Always initialize annotation manager to display annotations in all modes
+    console.log('Initializing AnnotationManager for all modes')
+    // Calculate beam bottom position
+    const totalHeight = this.beamProfile.webHeight + 2 * this.beamProfile.flangeThickness
+    const beamBottom = centerY + (totalHeight * this.gridSize) / 2
+    
+    this.annotationManager = new AnnotationManager(
+      this,
+      this.gridSize,
+      { x: startX, y: centerY },
+      beamBottom,
+      this.beamLength
+    )
+    
+    // Only enable annotation creation in annotation mode
     if (this.appMode === 'annotation') {
-      console.log('Initializing AnnotationManager for annotation mode')
-      // Calculate beam bottom position
-      const totalHeight = this.beamProfile.webHeight + 2 * this.beamProfile.flangeThickness
-      const beamBottom = centerY + (totalHeight * this.gridSize) / 2
-      
-      this.annotationManager = new AnnotationManager(
-        this,
-        this.gridSize,
-        { x: startX, y: centerY },
-        beamBottom,
-        this.beamLength
-      )
+      console.log('Annotation mode - enabling annotation creation')
+      this.annotationManager.setInteractive(true)
       // Update snap points based on grid
       this.updateAnnotationSnapPoints()
-      console.log('AnnotationManager initialized:', this.annotationManager)
       
       // Add a visual indicator that we're in annotation mode
-      const debugText = this.add.text(10, 10, 'ANNOTATION MODE ACTIVE - Grid should be visible', {
+      const debugText = this.add.text(10, 10, 'ANNOTATION MODE ACTIVE', {
         fontSize: '20px',
         color: '#ff0000',
         backgroundColor: '#ffff00',
@@ -281,16 +292,23 @@ export class BeamElevationScene extends Phaser.Scene {
       })
       debugText.setDepth(2000)
     } else {
-      console.log('Not in annotation mode, appMode:', this.appMode)
+      console.log('Not in annotation mode - annotations read-only')
+      this.annotationManager.setInteractive(false)
       
       // Add debug text for other modes
-      const debugText = this.add.text(10, 10, `MODE: ${this.appMode} | EditMode: ${this.editMode} | ShowGrid: ${this.showGrid}`, {
+      const debugText = this.add.text(10, 10, `MODE: ${this.appMode} | Annotations: Read-Only`, {
         fontSize: '16px',
         color: '#0000ff',
         backgroundColor: '#ffffff',
         padding: { x: 10, y: 5 }
       })
       debugText.setDepth(2000)
+    }
+    
+    // Restore saved annotations if any
+    if (this.savedAnnotations && this.savedAnnotations.length > 0) {
+      console.log('Restoring', this.savedAnnotations.length, 'saved annotations')
+      this.annotationManager.restoreAnnotations(this.savedAnnotations)
     }
 
     // Add dimension lines and labels
@@ -349,6 +367,9 @@ export class BeamElevationScene extends Phaser.Scene {
       color: '#333',
       fontWeight: 'bold'
     }).setOrigin(0.5)
+    
+    // Setup touch controls for mobile
+    this.setupTouchControls()
   }
 
   private drawBeamProfile(startX: number, centerY: number, width: number) {
@@ -1954,9 +1975,66 @@ export class BeamElevationScene extends Phaser.Scene {
     this.annotationManager.updateSnapPoints(cells)
   }
   
+  private setupTouchControls(): void {
+    // Enable multi-touch
+    this.input.addPointer(2)
+    
+    // Pan support
+    this.input.on('pointerdown', (pointer: Phaser.Input.Pointer) => {
+      if (this.appMode === 'view' || (this.appMode === 'annotation' && !this.annotationManager?.isCreatingAnnotation)) {
+        this.isPanning = true
+        this.panStartX = pointer.x
+        this.panStartY = pointer.y
+        this.cameraStartX = this.cameras.main.scrollX
+        this.cameraStartY = this.cameras.main.scrollY
+      }
+    })
+    
+    this.input.on('pointermove', (pointer: Phaser.Input.Pointer) => {
+      if (this.isPanning && pointer.isDown) {
+        const deltaX = this.panStartX - pointer.x
+        const deltaY = this.panStartY - pointer.y
+        this.cameras.main.scrollX = this.cameraStartX + deltaX
+        this.cameras.main.scrollY = this.cameraStartY + deltaY
+      }
+    })
+    
+    this.input.on('pointerup', () => {
+      this.isPanning = false
+    })
+    
+    // Pinch to zoom
+    let lastPinchDistance = 0
+    
+    this.input.on('pointermove', (pointer: Phaser.Input.Pointer) => {
+      if (this.input.pointer1.isDown && this.input.pointer2.isDown) {
+        const distance = Phaser.Math.Distance.Between(
+          this.input.pointer1.x,
+          this.input.pointer1.y,
+          this.input.pointer2.x,
+          this.input.pointer2.y
+        )
+        
+        if (lastPinchDistance > 0) {
+          const delta = distance - lastPinchDistance
+          const zoomFactor = 1 + (delta * 0.01)
+          const currentZoom = this.cameras.main.zoom
+          const newZoom = Phaser.Math.Clamp(currentZoom * zoomFactor, 0.5, 2)
+          this.cameras.main.setZoom(newZoom)
+        }
+        
+        lastPinchDistance = distance
+      } else {
+        lastPinchDistance = 0
+      }
+    })
+  }
+  
   shutdown(): void {
-    // Clean up annotation manager
+    // Save annotations before destroying
     if (this.annotationManager) {
+      this.savedAnnotations = this.annotationManager.getAnnotations()
+      console.log('Saving', this.savedAnnotations.length, 'annotations before shutdown')
       this.annotationManager.destroy()
       this.annotationManager = undefined
     }

@@ -90,14 +90,15 @@ export interface SnapPoint {
 }
 
 export const DEFAULT_ANNOTATION_STYLE: AnnotationStyle = {
-  color: 0x333333,
-  lineWidth: 1,
-  fontSize: 12,
-  fontFamily: 'Arial',
-  textColor: '#333333',
+  color: 0x000000,  // Black for engineering drawings
+  lineWidth: 1.5,   // Slightly thicker for clarity
+  fontSize: 14,     // Standard engineering text size
+  fontFamily: 'Arial, sans-serif',
+  textColor: '#000000',
   arrowStyle: 'arrow'
 }
 
-export const SNAP_THRESHOLD = 10 // pixels
+export const SNAP_THRESHOLD = 20 // pixels for more aggressive snapping
+export const GRID_SNAP_PRIORITY = 10 // pixels - always snap to grid within this distance
 export const COLLISION_BUFFER = 5 // pixels
 export const TEXT_PADDING = 8 // pixels

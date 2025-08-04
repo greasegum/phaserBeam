@@ -5,6 +5,7 @@ import {
   AnnotationPoint, 
   SnapPoint, 
   SNAP_THRESHOLD,
+  GRID_SNAP_PRIORITY,
   AnnotationInteraction,
   LinearDimension,
   OrdinateDimension,
@@ -26,6 +27,7 @@ export class AnnotationManager {
   private gridOrigin: { x: number, y: number }
   private beamBottom: number = 0
   private beamLength: number = 0
+  private isInteractive: boolean = true
   
   // Renderers for different annotation types
   private linearDimensionRenderer: LinearDimensionRenderer
@@ -50,7 +52,7 @@ export class AnnotationManager {
     this.beamLength = beamLength || 0
     
     // Initialize renderers
-    this.linearDimensionRenderer = new LinearDimensionRenderer(scene)
+    this.linearDimensionRenderer = new LinearDimensionRenderer(scene, gridSize)
     this.ordinateDimensionRenderer = new OrdinateDimensionRenderer(scene, gridSize)
     this.calloutRenderer = new CalloutRenderer(scene)
     
@@ -132,6 +134,28 @@ export class AnnotationManager {
   }
   
   private snapToGrid(point: AnnotationPoint): AnnotationPoint {
+    // First, always try to snap to exact grid positions
+    const gridX = Math.round((point.x - this.gridOrigin.x) / this.gridSize)
+    const gridY = Math.round((point.y - this.gridOrigin.y) / this.gridSize)
+    const gridSnapX = this.gridOrigin.x + gridX * this.gridSize
+    const gridSnapY = this.gridOrigin.y + gridY * this.gridSize
+    
+    const gridDistance = Math.sqrt(
+      Math.pow(point.x - gridSnapX, 2) + 
+      Math.pow(point.y - gridSnapY, 2)
+    )
+    
+    // Always snap to grid if within priority threshold
+    if (gridDistance < GRID_SNAP_PRIORITY) {
+      return {
+        x: gridSnapX,
+        y: gridSnapY,
+        gridX: gridX,
+        gridY: gridY
+      }
+    }
+    
+    // Otherwise check for feature snap points
     let closestSnap: SnapPoint | null = null
     let closestDistance = SNAP_THRESHOLD
     
@@ -153,6 +177,16 @@ export class AnnotationManager {
         y: closestSnap.y,
         gridX: Math.round((closestSnap.x - this.gridOrigin.x) / this.gridSize),
         gridY: Math.round((closestSnap.y - this.gridOrigin.y) / this.gridSize)
+      }
+    }
+    
+    // If no snap point found but within general grid snap distance, snap to grid
+    if (gridDistance < SNAP_THRESHOLD) {
+      return {
+        x: gridSnapX,
+        y: gridSnapY,
+        gridX: gridX,
+        gridY: gridY
       }
     }
     
@@ -199,6 +233,8 @@ export class AnnotationManager {
   }
   
   private handlePointerDown(pointer: Phaser.Input.Pointer): void {
+    if (!this.isInteractive) return
+    
     const point: AnnotationPoint = {
       x: pointer.worldX,
       y: pointer.worldY
@@ -234,6 +270,8 @@ export class AnnotationManager {
       y: pointer.worldY
     }
     const snappedPoint = this.snapToGrid(point)
+    
+    if (!this.isInteractive) return
     
     if (this.isCreating) {
       this.updatePreview(snappedPoint)
@@ -499,9 +537,9 @@ export class AnnotationManager {
     
     if (!this.creationType || this.creationPoints.length === 0) return
     
-    // Set preview style
-    this.previewGraphics.lineStyle(1, 0x0066cc, 0.5)
-    this.previewGraphics.fillStyle(0x0066cc, 0.3)
+    // Set engineering preview style
+    this.previewGraphics.lineStyle(1.5, 0x000000, 0.7) // Black dashed preview
+    this.previewGraphics.fillStyle(0xffffff, 0.9) // White background for text
     
     switch (this.creationType) {
       case 'linear-dimension':
@@ -512,23 +550,40 @@ export class AnnotationManager {
           this.previewGraphics.lineTo(currentPoint.x, currentPoint.y)
           this.previewGraphics.stroke()
           
-          // Show distance
+          // Show distance with proper formatting
           const distance = Math.sqrt(
             Math.pow(currentPoint.x - start.x, 2) + 
             Math.pow(currentPoint.y - start.y, 2)
           )
           const midX = (start.x + currentPoint.x) / 2
           const midY = (start.y + currentPoint.y) / 2
-          const distanceInInches = distance / this.gridSize
+          const inches = distance / this.gridSize
           
-          // Draw text background
-          const text = `${distanceInInches.toFixed(1)}"`
-          const textBounds = this.scene.add.text(0, 0, text, { fontSize: '12px' })
-          const textWidth = textBounds.width
-          const textHeight = textBounds.height
-          textBounds.destroy()
+          // Format distance as feet and inches
+          let text: string
+          if (inches >= 12) {
+            const feet = Math.floor(inches / 12)
+            const remainingInches = inches % 12
+            text = `${feet}'-${remainingInches.toFixed(1)}"`
+          } else {
+            text = `${inches.toFixed(1)}"`
+          }
           
+          // Calculate text bounds
+          const fontSize = 14
+          const textWidth = text.length * fontSize * 0.6
+          const textHeight = fontSize
+          
+          // Draw text background with border
+          this.previewGraphics.lineStyle(1, 0x000000, 1)
+          this.previewGraphics.fillStyle(0xffffff, 1)
           this.previewGraphics.fillRect(
+            midX - textWidth/2 - 4,
+            midY - textHeight/2 - 2,
+            textWidth + 8,
+            textHeight + 4
+          )
+          this.previewGraphics.strokeRect(
             midX - textWidth/2 - 4,
             midY - textHeight/2 - 2,
             textWidth + 8,
@@ -631,26 +686,42 @@ export class AnnotationManager {
   private updateCustomCursor(point: AnnotationPoint): void {
     this.cursorGraphics.clear()
     
-    // Check if near a snap point
-    const snapPoint = this.findNearestSnapPoint(point)
-    const isSnapping = snapPoint !== null
+    // Check if snapped to grid
+    const isSnapping = point.gridX !== undefined && point.gridY !== undefined
     
-    // Draw custom cursor based on annotation type
-    this.cursorGraphics.lineStyle(2, isSnapping ? 0x00ff00 : 0x0066cc)
-    this.cursorGraphics.strokeCircle(point.x, point.y, isSnapping ? 8 : 5)
-    
-    // Draw crosshairs
-    this.cursorGraphics.lineStyle(1, 0x0066cc)
+    // Draw engineering-style crosshair cursor
+    // White lines with black outline for visibility
+    this.cursorGraphics.lineStyle(3, 0x000000, 0.5) // Black outline
     this.cursorGraphics.beginPath()
     this.cursorGraphics.moveTo(point.x - 15, point.y)
-    this.cursorGraphics.lineTo(point.x - 8, point.y)
-    this.cursorGraphics.moveTo(point.x + 8, point.y)
+    this.cursorGraphics.lineTo(point.x - 5, point.y)
+    this.cursorGraphics.moveTo(point.x + 5, point.y)
     this.cursorGraphics.lineTo(point.x + 15, point.y)
     this.cursorGraphics.moveTo(point.x, point.y - 15)
-    this.cursorGraphics.lineTo(point.x, point.y - 8)
-    this.cursorGraphics.moveTo(point.x, point.y + 8)
+    this.cursorGraphics.lineTo(point.x, point.y - 5)
+    this.cursorGraphics.moveTo(point.x, point.y + 5)
     this.cursorGraphics.lineTo(point.x, point.y + 15)
     this.cursorGraphics.stroke()
+    
+    this.cursorGraphics.lineStyle(1, 0xffffff, 1) // White lines
+    this.cursorGraphics.beginPath()
+    this.cursorGraphics.moveTo(point.x - 15, point.y)
+    this.cursorGraphics.lineTo(point.x - 5, point.y)
+    this.cursorGraphics.moveTo(point.x + 5, point.y)
+    this.cursorGraphics.lineTo(point.x + 15, point.y)
+    this.cursorGraphics.moveTo(point.x, point.y - 15)
+    this.cursorGraphics.lineTo(point.x, point.y - 5)
+    this.cursorGraphics.moveTo(point.x, point.y + 5)
+    this.cursorGraphics.lineTo(point.x, point.y + 15)
+    this.cursorGraphics.stroke()
+    
+    // Draw snap indicator if snapped to grid
+    if (isSnapping) {
+      this.cursorGraphics.lineStyle(2, 0x00ff00, 1)
+      this.cursorGraphics.fillStyle(0x00ff00, 0.3)
+      this.cursorGraphics.fillCircle(point.x, point.y, 4)
+      this.cursorGraphics.strokeCircle(point.x, point.y, 4)
+    }
     
     // Add type-specific indicators
     switch (this.creationType) {
@@ -697,5 +768,32 @@ export class AnnotationManager {
       y - Math.sin(angle + arrowAngle) * arrowLength
     )
     this.cursorGraphics.stroke()
+  }
+  
+  public setInteractive(interactive: boolean): void {
+    this.isInteractive = interactive
+    if (this.inputZone) {
+      this.inputZone.setInteractive(interactive)
+    }
+    // Hide creation UI elements when not interactive
+    if (!interactive) {
+      this.cancelCreation()
+      this.cursorGraphics.setVisible(false)
+      this.modeIndicator.setVisible(false)
+    } else {
+      this.cursorGraphics.setVisible(true)
+    }
+  }
+  
+  public get isCreatingAnnotation(): boolean {
+    return this.isCreating
+  }
+  
+  public restoreAnnotations(savedAnnotations: any[]): void {
+    savedAnnotations.forEach(saved => {
+      // Recreate the annotation with the same properties
+      this.annotations.set(saved.id, saved)
+      this.renderAnnotation(saved)
+    })
   }
 }

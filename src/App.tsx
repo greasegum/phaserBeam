@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { SetupPopup } from './components/SetupPopup'
 import { PhaserCanvas } from './components/PhaserCanvas'
 import { BeamProfile, GridCell } from './types/beam'
@@ -13,6 +13,16 @@ export default function App() {
   const [gridOrigin, setGridOrigin] = useState<'left' | 'right'>('left')
   const [showTopFlange, setShowTopFlange] = useState<boolean>(true)
   const [elevationView, setElevationView] = useState<'N' | 'S' | 'E' | 'W'>('N')
+  const [isMobile, setIsMobile] = useState(false)
+  
+  useEffect(() => {
+    const checkMobile = () => {
+      setIsMobile(window.innerWidth < 768)
+    }
+    checkMobile()
+    window.addEventListener('resize', checkMobile)
+    return () => window.removeEventListener('resize', checkMobile)
+  }, [])
 
   const handleSetupComplete = (beam: BeamProfile, length: number, elevation: 'N' | 'S' | 'E' | 'W') => {
     setSelectedBeam(beam)
