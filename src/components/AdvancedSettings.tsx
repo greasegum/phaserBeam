@@ -63,9 +63,9 @@ export const AdvancedSettings: React.FC<AdvancedSettingsProps> = ({ scene }) => 
       // Get offsets
       const offsets = scene.getContourOffsets?.()
       if (offsets) {
-        // Convert from internal offset (2.0 internal = 0 in UI)
-        setGlobalOffsetX(2.0 - offsets.globalX)
-        setGlobalOffsetY(2.0 - offsets.globalY)
+        // Direct pass-through: internal value = UI value
+        setGlobalOffsetX(offsets.globalX)
+        setGlobalOffsetY(offsets.globalY)
       }
       
       // Get buffer
@@ -106,15 +106,13 @@ export const AdvancedSettings: React.FC<AdvancedSettingsProps> = ({ scene }) => 
   const handleGlobalOffsetChange = (axis: 'x' | 'y', value: number) => {
     if (!scene) return
     
-    // Convert UI value to internal offset (0 in UI = 2.0 internal)
-    const internalValue = 2.0 - value
-    
+    // Direct pass-through: UI value = internal value (0 = 0)
     if (axis === 'x') {
       setGlobalOffsetX(value)
-      scene.setContourGlobalOffsets(internalValue, 2.0 - globalOffsetY)
+      scene.setContourGlobalOffsets(value, globalOffsetY)
     } else {
       setGlobalOffsetY(value)
-      scene.setContourGlobalOffsets(2.0 - globalOffsetX, internalValue)
+      scene.setContourGlobalOffsets(globalOffsetX, value)
     }
   }
 
@@ -179,15 +177,15 @@ export const AdvancedSettings: React.FC<AdvancedSettingsProps> = ({ scene }) => 
     scene?.setThreshold?.(0.5)
     // Geometry
     setAlignmentMode('edges')
-    setGlobalOffsetX(0.0) // 0 in UI = 2.0 internal
-    setGlobalOffsetY(0.0) // 0 in UI = 2.0 internal
+    setGlobalOffsetX(0.0) // Direct: 0 in UI = 0 internal
+    setGlobalOffsetY(0.0) // Direct: 0 in UI = 0 internal
     setBufferSize(1)
     setBufferValue(0)
     setClampToGrid(true)
     setExtendToBoundary(false)
     setSnapDistance(0.1)
     scene?.setAlignmentMode?.('edges')
-    scene?.setContourGlobalOffsets(2.0, 2.0)
+    scene?.setContourGlobalOffsets(0.0, 0.0)
     scene?.setContourBuffer(1, 0)
     scene?.setClampToGrid?.(true)
     scene?.setExtendToBoundary?.(false)
@@ -546,7 +544,7 @@ export const AdvancedSettings: React.FC<AdvancedSettingsProps> = ({ scene }) => 
                 }}>
                   <span style={{ display: 'flex', alignItems: 'center' }}>
                     Global Offset X
-                    <HelpTooltip text="Shifts the entire contour horizontally in grid units. 0 is the default position." />
+                    <HelpTooltip text="Shifts the entire contour horizontally in grid units. 0 = no offset." />
                   </span>
                   <span style={{ fontWeight: 'bold', color: '#333' }}>{globalOffsetX.toFixed(2)}</span>
                 </label>
@@ -571,7 +569,7 @@ export const AdvancedSettings: React.FC<AdvancedSettingsProps> = ({ scene }) => 
                 }}>
                   <span style={{ display: 'flex', alignItems: 'center' }}>
                     Global Offset Y
-                    <HelpTooltip text="Shifts the entire contour vertically in grid units. 0 is the default position." />
+                    <HelpTooltip text="Shifts the entire contour vertically in grid units. 0 = no offset." />
                   </span>
                   <span style={{ fontWeight: 'bold', color: '#333' }}>{globalOffsetY.toFixed(2)}</span>
                 </label>

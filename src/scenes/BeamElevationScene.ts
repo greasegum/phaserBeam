@@ -35,8 +35,8 @@ export class BeamElevationScene extends Phaser.Scene {
   // Marching squares alignment offsets
   private contourOffsetX = 0 // Cell offset removed - use global offset
   private contourOffsetY = 0 // Cell offset removed - use global offset
-  private contourGlobalOffsetX = -0.5 // Default -0.5 to center contours on cells
-  private contourGlobalOffsetY = -0.5 // Default -0.5 to center contours on cells
+  private contourGlobalOffsetX = 0.0 // Default 0.0 - no offset
+  private contourGlobalOffsetY = 0.0 // Default 0.0 - no offset
   // Marching squares buffer configuration
   private contourBufferSize = 1 // Default buffer of 1 for proper edge handling
   private contourBufferValue = 0 // Default buffer value
