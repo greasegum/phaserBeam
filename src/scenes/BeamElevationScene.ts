@@ -99,6 +99,7 @@ export class BeamElevationScene extends Phaser.Scene {
     showTopFlange?: boolean;
     gridCells?: GridCell[];
     elevationView?: 'N' | 'S' | 'E' | 'W';
+    appMode?: AppMode;
     onCellChange?: (cells: GridCell[]) => void 
   }) {
     this.beamProfile = data.beamProfile
@@ -111,6 +112,14 @@ export class BeamElevationScene extends Phaser.Scene {
     this.appMode = data.appMode || 'edit'
     this.storedCells = data.gridCells || []
     this.onCellChange = data.onCellChange
+    
+    console.log('Scene init complete:', {
+      appMode: this.appMode,
+      editMode: this.editMode,
+      showGrid: this.showGrid,
+      dataAppMode: data.appMode,
+      dataShowGrid: data.showGrid
+    })
     
     // Initialize selected cells from grid cells
     this.selectedCells.clear()
@@ -219,6 +228,30 @@ export class BeamElevationScene extends Phaser.Scene {
       this.createGrid(startX, centerY, beamWidth)
       // Update grid cell visibility after creating grid
       this.updateGridCellVisibility()
+      
+      // Add debug indicator to show grid was created
+      const gridDebug = this.add.text(10, 40, `Grid created with ${this.gridCells.size} cells | Container visible: ${this.gridContainer?.visible}`, {
+        fontSize: '14px',
+        color: '#00ff00',
+        backgroundColor: '#000000',
+        padding: { x: 5, y: 3 }
+      })
+      gridDebug.setDepth(2001)
+      
+      // Force grid container to be visible
+      if (this.gridContainer) {
+        this.gridContainer.setVisible(true)
+        console.log('Forced grid container visible:', this.gridContainer.visible)
+      }
+    } else {
+      // Add debug indicator to show why grid wasn't created
+      const gridDebug = this.add.text(10, 40, `Grid NOT created - editMode: ${this.editMode}, appMode: ${this.appMode}, showGrid: ${this.showGrid}`, {
+        fontSize: '14px',
+        color: '#ff0000',
+        backgroundColor: '#000000',
+        padding: { x: 5, y: 3 }
+      })
+      gridDebug.setDepth(2001)
     }
     
     // Initialize annotation manager for annotation mode
@@ -238,8 +271,26 @@ export class BeamElevationScene extends Phaser.Scene {
       // Update snap points based on grid
       this.updateAnnotationSnapPoints()
       console.log('AnnotationManager initialized:', this.annotationManager)
+      
+      // Add a visual indicator that we're in annotation mode
+      const debugText = this.add.text(10, 10, 'ANNOTATION MODE ACTIVE - Grid should be visible', {
+        fontSize: '20px',
+        color: '#ff0000',
+        backgroundColor: '#ffff00',
+        padding: { x: 10, y: 5 }
+      })
+      debugText.setDepth(2000)
     } else {
       console.log('Not in annotation mode, appMode:', this.appMode)
+      
+      // Add debug text for other modes
+      const debugText = this.add.text(10, 10, `MODE: ${this.appMode} | EditMode: ${this.editMode} | ShowGrid: ${this.showGrid}`, {
+        fontSize: '16px',
+        color: '#0000ff',
+        backgroundColor: '#ffffff',
+        padding: { x: 10, y: 5 }
+      })
+      debugText.setDepth(2000)
     }
 
     // Add dimension lines and labels
@@ -1114,10 +1165,10 @@ export class BeamElevationScene extends Phaser.Scene {
       this.gridSize - 1,
       height,
       0xffffff,
-      0
+      0.1  // Make cells slightly visible with fill
     )
     
-    cell.setStrokeStyle(1, 0x999999, 0.8)
+    cell.setStrokeStyle(2, 0xff0000, 1.0)  // Bright red thick border for debugging
     // Only make cells interactive in edit mode
     if (this.appMode === 'edit') {
       cell.setInteractive()
