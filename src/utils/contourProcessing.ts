@@ -70,10 +70,12 @@ function clampContourToEdges(
   bounds: { width: number; height: number },
   bufferSize: number
 ): Point[] {
-  const minX = -bufferSize
-  const maxX = bounds.width + bufferSize
-  const minY = -bufferSize
-  const maxY = bounds.height + bufferSize
+  // For proper grid alignment, clamp to actual grid bounds (0 to width-1, 0 to height-1)
+  // not to buffer-extended bounds
+  const minX = 0
+  const maxX = bounds.width - 1
+  const minY = 0
+  const maxY = bounds.height - 1
   
   return contour.map(point => ({
     x: Math.max(minX, Math.min(maxX, point.x)),

@@ -22,8 +22,8 @@ export class BeamElevationSceneRefactored extends Phaser.Scene {
   // Configuration
   private contourConfig: ContourConfig = {
     core: { threshold: 0.5, cellSize: 1 },
-    smoothing: { enabled: true, strength: 0.5 },
-    edges: { clampToBeam: true, bufferSize: 1 },
+    smoothing: { enabled: false, strength: 0.5 },  // Disable smoothing for now
+    edges: { clampToBeam: false, bufferSize: 0 },  // Edge clamping is handled in marching squares
     separation: { enabled: true, minDistance: 0.5 }
   }
   
@@ -204,19 +204,39 @@ export class BeamElevationSceneRefactored extends Phaser.Scene {
   private drawSectionLoss(centerX: number, centerY: number): void {
     if (!this.lossGraphics || !this.beamProfile || this.webGrid.length === 0) return
     
-    // Run marching squares with proper options
-    const result = marchingSquares(this.webGrid, this.contourConfig.core.threshold, {
+    // Run marching squares with proper options to ensure grid alignment
+    const contours = marchingSquares(this.webGrid, {
+      // Core settings for perfect grid alignment
+      threshold: this.contourConfig.core.threshold,
       interpolationMethod: 'none',
       offsetX: 0,
       offsetY: 0,
-      bufferSize: 0
+      bufferSize: 0,
+      bufferValue: 0,
+      
+      // Edge clamping settings
+      clampToGrid: true,
+      edgeSnapping: true,
+      edgeDetectionEnabled: true,
+      edgeDetectionThreshold: 0.1,
+      edgeClampDistance: 0.8,
+      
+      // Disable smoothing for now
+      smoothing: false,
+      
+      // Keep alignment on edges
+      alignmentMode: 'edges'
     })
     
-    // Process contours
+    // Process contours with grid bounds
+    const bounds = {
+      width: this.webGrid[0].length,
+      height: this.webGrid.length
+    }
     const processed = processContours(
-      result.contours,
+      contours,
       this.contourConfig,
-      result.bounds
+      bounds
     )
     
     // Transform to screen coordinates
