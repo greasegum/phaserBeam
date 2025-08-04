@@ -41,7 +41,12 @@ export const ContourSettings: React.FC<ContourSettingsProps> = ({ scene }) => {
   if (!scene) return null
 
   return (
-    <div className="contour-settings">
+    <div 
+      className="contour-settings"
+      onMouseDown={(e) => e.stopPropagation()}
+      onPointerDown={(e) => e.stopPropagation()}
+      onClick={(e) => e.stopPropagation()}
+    >
       {/* Compact toggle button */}
       <button
         className="settings-toggle"
@@ -55,7 +60,12 @@ export const ContourSettings: React.FC<ContourSettingsProps> = ({ scene }) => {
 
       {/* Settings panel */}
       {isOpen && (
-        <div className="settings-panel">
+        <div 
+          className="settings-panel"
+          onMouseDown={(e) => e.stopPropagation()}
+          onPointerDown={(e) => e.stopPropagation()}
+          onClick={(e) => e.stopPropagation()}
+        >
           <h3>Contour Settings</h3>
           
           {/* Simplified custom controls */}

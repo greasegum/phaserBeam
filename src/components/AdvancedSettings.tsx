@@ -220,12 +220,17 @@ export const AdvancedSettings: React.FC<AdvancedSettingsProps> = ({ scene }) => 
   if (!scene) return null
 
   return (
-    <div style={{
-      position: 'fixed',
-      bottom: '20px',
-      right: '20px',
-      zIndex: 1000
-    }}>
+    <div 
+      style={{
+        position: 'fixed',
+        bottom: '20px',
+        right: '20px',
+        zIndex: 1000
+      }}
+      onMouseDown={(e) => e.stopPropagation()}
+      onPointerDown={(e) => e.stopPropagation()}
+      onClick={(e) => e.stopPropagation()}
+    >
       {/* Toggle Button */}
       <button
         onClick={() => setIsOpen(!isOpen)}
@@ -254,23 +259,28 @@ export const AdvancedSettings: React.FC<AdvancedSettingsProps> = ({ scene }) => 
       </button>
 
       {/* Settings Panel */}
-      <div style={{
-        position: 'absolute',
-        bottom: '40px',
-        right: 0,
-        width: '600px',
-        maxHeight: '80vh',
-        overflowY: 'auto',
-        background: 'white',
-        border: '1px solid #ddd',
-        borderRadius: '8px',
-        boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
-        padding: '16px',
-        transform: `translateY(${isOpen ? 0 : 'calc(100% + 50px)'})`,
-        opacity: isOpen ? 1 : 0,
-        pointerEvents: isOpen ? 'auto' : 'none',
-        transition: 'transform 0.3s ease, opacity 0.3s ease'
-      }}>
+      <div 
+        style={{
+          position: 'absolute',
+          bottom: '40px',
+          right: 0,
+          width: '600px',
+          maxHeight: '80vh',
+          overflowY: 'auto',
+          background: 'white',
+          border: '1px solid #ddd',
+          borderRadius: '8px',
+          boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
+          padding: '16px',
+          transform: `translateY(${isOpen ? 0 : 'calc(100% + 50px)'})`,
+          opacity: isOpen ? 1 : 0,
+          pointerEvents: isOpen ? 'auto' : 'none',
+          transition: 'transform 0.3s ease, opacity 0.3s ease'
+        }}
+        onMouseDown={(e) => e.stopPropagation()}
+        onPointerDown={(e) => e.stopPropagation()}
+        onClick={(e) => e.stopPropagation()}
+      >
 
         {/* Two Column Layout */}
         <div style={{ display: 'flex', gap: '16px' }}>

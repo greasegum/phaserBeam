@@ -116,12 +116,20 @@ export class AnnotationManager {
         { x: cell.x + cell.width, y: cell.y + cell.height, type: 'grid-vertex', priority: 1 }
       )
       
+      // Add grid line midpoints
+      this.snapPoints.push(
+        { x: cell.x + cell.width / 2, y: cell.y, type: 'grid-edge', priority: 2 }, // Top edge midpoint
+        { x: cell.x + cell.width / 2, y: cell.y + cell.height, type: 'grid-edge', priority: 2 }, // Bottom edge midpoint
+        { x: cell.x, y: cell.y + cell.height / 2, type: 'grid-edge', priority: 2 }, // Left edge midpoint
+        { x: cell.x + cell.width, y: cell.y + cell.height / 2, type: 'grid-edge', priority: 2 } // Right edge midpoint
+      )
+      
       // Add grid centers
       this.snapPoints.push({
         x: cell.x + cell.width / 2,
         y: cell.y + cell.height / 2,
         type: 'grid-center',
-        priority: 2
+        priority: 3
       })
     })
   }
@@ -210,7 +218,7 @@ export class AnnotationManager {
     this.isCreating = true
     this.creationType = type
     this.creationPoints = []
-    this.scene.input.setDefaultCursor('none') // Hide default cursor
+    this.scene.input.setDefaultCursor('crosshair') // Use standard crosshair cursor
     this.updateModeIndicator()
     this.modeIndicator.setVisible(true)
   }
@@ -684,38 +692,25 @@ export class AnnotationManager {
     // Check if snapped to grid
     const isSnapping = point.gridX !== undefined && point.gridY !== undefined
     
-    // Draw engineering-style crosshair cursor
-    // White lines with black outline for visibility
-    this.cursorGraphics.lineStyle(3, 0x000000, 0.5) // Black outline
-    this.cursorGraphics.beginPath()
-    this.cursorGraphics.moveTo(point.x - 15, point.y)
-    this.cursorGraphics.lineTo(point.x - 5, point.y)
-    this.cursorGraphics.moveTo(point.x + 5, point.y)
-    this.cursorGraphics.lineTo(point.x + 15, point.y)
-    this.cursorGraphics.moveTo(point.x, point.y - 15)
-    this.cursorGraphics.lineTo(point.x, point.y - 5)
-    this.cursorGraphics.moveTo(point.x, point.y + 5)
-    this.cursorGraphics.lineTo(point.x, point.y + 15)
-    this.cursorGraphics.stroke()
-    
-    this.cursorGraphics.lineStyle(1, 0xffffff, 1) // White lines
-    this.cursorGraphics.beginPath()
-    this.cursorGraphics.moveTo(point.x - 15, point.y)
-    this.cursorGraphics.lineTo(point.x - 5, point.y)
-    this.cursorGraphics.moveTo(point.x + 5, point.y)
-    this.cursorGraphics.lineTo(point.x + 15, point.y)
-    this.cursorGraphics.moveTo(point.x, point.y - 15)
-    this.cursorGraphics.lineTo(point.x, point.y - 5)
-    this.cursorGraphics.moveTo(point.x, point.y + 5)
-    this.cursorGraphics.lineTo(point.x, point.y + 15)
-    this.cursorGraphics.stroke()
-    
-    // Draw snap indicator if snapped to grid
+    // Draw snap indicator if snapped to grid - yellow cross
     if (isSnapping) {
-      this.cursorGraphics.lineStyle(2, 0x00ff00, 1)
-      this.cursorGraphics.fillStyle(0x00ff00, 0.3)
-      this.cursorGraphics.fillCircle(point.x, point.y, 4)
-      this.cursorGraphics.strokeCircle(point.x, point.y, 4)
+      // Draw black outline first for visibility
+      this.cursorGraphics.lineStyle(5, 0x000000, 0.3) // Black outline
+      this.cursorGraphics.beginPath()
+      this.cursorGraphics.moveTo(point.x - 10, point.y)
+      this.cursorGraphics.lineTo(point.x + 10, point.y)
+      this.cursorGraphics.moveTo(point.x, point.y - 10)
+      this.cursorGraphics.lineTo(point.x, point.y + 10)
+      this.cursorGraphics.stroke()
+      
+      // Draw yellow cross on top
+      this.cursorGraphics.lineStyle(3, 0xffff00, 1) // Thick yellow line
+      this.cursorGraphics.beginPath()
+      this.cursorGraphics.moveTo(point.x - 10, point.y)
+      this.cursorGraphics.lineTo(point.x + 10, point.y)
+      this.cursorGraphics.moveTo(point.x, point.y - 10)
+      this.cursorGraphics.lineTo(point.x, point.y + 10)
+      this.cursorGraphics.stroke()
     }
     
     // Add type-specific indicators

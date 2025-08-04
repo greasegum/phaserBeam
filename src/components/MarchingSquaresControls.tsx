@@ -64,7 +64,12 @@ export const MarchingSquaresControls: React.FC<MarchingSquaresControlsProps> = (
   
   
   return (
-    <div className="marching-squares-controls">
+    <div 
+      className="marching-squares-controls"
+      onMouseDown={(e) => e.stopPropagation()}
+      onPointerDown={(e) => e.stopPropagation()}
+      onClick={(e) => e.stopPropagation()}
+    >
       <div className="controls-header">
         <h3>Marching Squares Controls</h3>
         {showPerformanceMetrics && (
