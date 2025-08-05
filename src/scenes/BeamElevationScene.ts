@@ -179,12 +179,14 @@ export class BeamElevationScene extends Phaser.Scene {
     console.log('Scene create() called with:', {
       editMode: this.editMode,
       appMode: this.appMode,
-      showGrid: this.showGrid
+      showGrid: this.showGrid,
+      typeofEditMode: typeof this.editMode,
+      editModeValue: this.editMode === true ? 'true' : this.editMode === false ? 'false' : 'other:' + this.editMode
     })
 
     const { webHeight, flangeThickness } = this.beamProfile
     
-    // Set up global mouse up handler for paint mode
+    // Set up global mouse up handler for paint mode and panning
     this.input.on('pointerup', () => {
       console.log('Scene pointerup triggered')
       if (this.appMode === 'edit') {
@@ -192,11 +194,26 @@ export class BeamElevationScene extends Phaser.Scene {
         this.isPainting = false
         this.paintMode = null
       }
+      this.isPanning = false
     })
     
-    // Test scene input
+    // Combined scene input handler
     this.input.on('pointerdown', (pointer: Phaser.Input.Pointer) => {
-      console.log('Scene pointerdown at:', pointer.x, pointer.y)
+      console.log('Scene pointerdown at:', pointer.x, pointer.y, 'appMode:', this.appMode)
+      
+      // Only allow panning in view mode, or annotation mode when not interacting with annotations
+      const allowPanning = this.appMode === 'view' || 
+        (this.appMode === 'annotation' && 
+         !this.annotationManager?.isCreatingAnnotation && 
+         !this.annotationManager?.isDragging())
+      
+      if (allowPanning) {
+        this.isPanning = true
+        this.panStartX = pointer.x
+        this.panStartY = pointer.y
+        this.cameraStartX = this.cameras.main.scrollX
+        this.cameraStartY = this.cameras.main.scrollY
+      }
     })
     
     // Set up keyboard shortcuts for annotation mode
@@ -296,7 +313,12 @@ export class BeamElevationScene extends Phaser.Scene {
       // Force grid container to be visible
       if (this.gridContainer) {
         this.gridContainer.setVisible(true)
-        console.log('Forced grid container visible:', this.gridContainer.visible)
+        console.log('Grid container status:', {
+          visible: this.gridContainer.visible,
+          depth: this.gridContainer.depth,
+          childCount: this.gridContainer.list.length,
+          cellCount: this.gridCells.size
+        })
       }
     } else {
     }
@@ -1338,7 +1360,8 @@ export class BeamElevationScene extends Phaser.Scene {
     cell.setStrokeStyle(1, 0x999999, 0.8)  // Standard grid stroke
     
     // Always make cells interactive - the actual interaction logic will check edit mode
-    cell.setInteractive(new Phaser.Geom.Rectangle(0, 0, this.gridSize - 1, height), Phaser.Geom.Rectangle.Contains)
+    // Use the cell's actual dimensions for the hit area
+    cell.setInteractive()
     console.log('Cell made interactive:', { zone, col, row, editMode: this.editMode, width: this.gridSize - 1, height: height })
     
     cell.setData('col', col)
@@ -2204,22 +2227,8 @@ export class BeamElevationScene extends Phaser.Scene {
     // Enable multi-touch
     this.input.addPointer(2)
     
-    // Pan support
-    this.input.on('pointerdown', (pointer: Phaser.Input.Pointer) => {
-      // Only allow panning in view mode, or annotation mode when not interacting with annotations
-      const allowPanning = this.appMode === 'view' || 
-        (this.appMode === 'annotation' && 
-         !this.annotationManager?.isCreatingAnnotation && 
-         !this.annotationManager?.isDragging())
-      
-      if (allowPanning) {
-        this.isPanning = true
-        this.panStartX = pointer.x
-        this.panStartY = pointer.y
-        this.cameraStartX = this.cameras.main.scrollX
-        this.cameraStartY = this.cameras.main.scrollY
-      }
-    })
+    // Pan support - moved after grid creation to not interfere
+    // Remove this duplicate handler since we already have one at line 198
     
     this.input.on('pointermove', (pointer: Phaser.Input.Pointer) => {
       if (this.isPanning && pointer.isDown) {
@@ -2230,9 +2239,7 @@ export class BeamElevationScene extends Phaser.Scene {
       }
     })
     
-    this.input.on('pointerup', () => {
-      this.isPanning = false
-    })
+    // Removed duplicate pointerup handler - already handled above
     
     // Pinch to zoom
     let lastPinchDistance = 0
