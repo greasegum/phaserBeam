@@ -274,8 +274,10 @@ export class BeamElevationScene extends Phaser.Scene {
 
     // Create grid overlay container
     this.gridContainer = this.add.container()
-    // Set grid container depth to be above contour graphics for proper interaction
-    this.gridContainer.setDepth(80)
+    // Set grid container depth to be below contour graphics but still interactive
+    this.gridContainer.setDepth(15)
+    // Ensure container doesn't block graphics below
+    this.gridContainer.setInteractive(false)
     console.log('Grid creation check:', {
       editMode: this.editMode,
       appMode: this.appMode,
@@ -584,8 +586,15 @@ export class BeamElevationScene extends Phaser.Scene {
     // In edit mode, show all visualization layers
     if (this.editMode) {
       console.log('Drawing marching squares layers - Edit mode active', {
+        webCellsCount: webCells.length,
         gridHasCells: webCells.length > 0,
-        editMode: this.editMode
+        editMode: this.editMode,
+        graphicsObjects: {
+          lossGraphics: !!this.lossGraphics,
+          rawContourGraphics: !!this.rawContourGraphics,
+          smoothedContourGraphics: !!this.smoothedContourGraphics
+        },
+        gridData: grid.map(row => row.join('')).join('\n')
       })
       
       // 1. Draw blurred field if enabled
@@ -816,7 +825,11 @@ export class BeamElevationScene extends Phaser.Scene {
     if (this.rawContourGraphics) {
       this.rawContourGraphics.lineStyle(3, 0xFF6B6B, 0.8) // Red, thicker line
       
-      console.log('Drawing raw contours to graphics layer', rawContours.length)
+      console.log('Drawing raw contours to graphics layer', {
+        contoursCount: rawContours.length,
+        graphicsDepth: this.rawContourGraphics.depth,
+        graphicsVisible: this.rawContourGraphics.visible
+      })
       
       rawContours.forEach(contour => {
         const screenContour = contour.points.map(pt => ({
@@ -1315,7 +1328,7 @@ export class BeamElevationScene extends Phaser.Scene {
       this.gridSize - 1,
       height,
       0xffffff,
-      0  // Transparent fill
+      0.01  // Almost transparent fill to ensure interactivity
     )
     
     cell.setStrokeStyle(1, 0x999999, 0.8)  // Standard grid stroke
