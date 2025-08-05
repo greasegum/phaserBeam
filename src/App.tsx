@@ -4,9 +4,8 @@ import { PhaserCanvas } from './components/PhaserCanvas'
 import { BeamProfile, GridCell } from './types/beam'
 import { AppMode, MODE_CONFIGS } from './types/mode'
 import { AnnotationType } from './types/annotations'
-import { AnnotationToolband } from './components/AnnotationToolband'
+import { ModeToolbar } from './components/ModeToolbar'
 import { ZoomControl } from './components/ZoomControl'
-import { DefectToolbar } from './components/DefectToolbar'
 import { DefectType } from './types/defects'
 
 export default function App() {
@@ -149,22 +148,19 @@ export default function App() {
         </div>
       </header>
       
-      {/* Annotation toolbar band */}
-      <AnnotationToolband
-        visible={appMode === 'annotation'}
-        selectedTool={selectedAnnotationTool}
-        onSelectTool={setSelectedAnnotationTool}
+      {/* Mode-specific toolbar band (2nd from top) */}
+      <ModeToolbar
+        appMode={appMode}
+        // Annotation mode props
+        selectedAnnotationTool={selectedAnnotationTool}
+        onSelectAnnotationTool={setSelectedAnnotationTool}
         ordinateOriginSide={gridOrigin}
         onToggleOrdinateOrigin={() => setGridOrigin(gridOrigin === 'left' ? 'right' : 'left')}
         showBeamEndDimensions={showBeamEndDimensions}
         showBottomOrdinate={showBottomOrdinate}
         onToggleBeamEndDimensions={() => setShowBeamEndDimensions(!showBeamEndDimensions)}
         onToggleBottomOrdinate={() => setShowBottomOrdinate(!showBottomOrdinate)}
-      />
-      
-      {/* Defect toolbar band */}
-      <DefectToolbar
-        visible={appMode === 'edit'}
+        // Edit mode props
         selectedDefect={selectedDefectType}
         onSelectDefect={setSelectedDefectType}
       />
@@ -211,7 +207,7 @@ export default function App() {
         justifyContent: 'space-between'
       }}>
         <span>
-          {appMode === 'edit' && 'Click cells to mark section loss'}
+          {appMode === 'edit' && `Click cells to mark ${selectedDefectType.replace('-', ' ')}`}
           {appMode === 'view' && 'View mode - Smooth rendering'}
           {appMode === 'annotation' && 'Click to add annotations'}
         </span>
