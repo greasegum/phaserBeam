@@ -28,6 +28,7 @@ export default function App() {
   const [currentZoom, setCurrentZoom] = useState<number>(1.0)
   const [selectedDefectType, setSelectedDefectType] = useState<DefectType>('section-loss')
   const [currentScene, setCurrentScene] = useState<BeamElevationScene | null>(null)
+  const [showDebugVisualization, setShowDebugVisualization] = useState<boolean>(false)
   
   useEffect(() => {
     const checkMobile = () => {
@@ -190,6 +191,9 @@ export default function App() {
         onSelectDefect={setSelectedDefectType}
         // View mode props
         onExport={handleExport}
+        // Debug props
+        showDebugVisualization={showDebugVisualization}
+        onToggleDebugVisualization={() => setShowDebugVisualization(!showDebugVisualization)}
       />
 
       {/* Main canvas area */}
@@ -220,6 +224,7 @@ export default function App() {
             zoom={currentZoom}
             selectedDefectType={selectedDefectType}
             onSceneReady={setCurrentScene}
+            showDebugVisualization={showDebugVisualization}
           />
         </div>
       </main>

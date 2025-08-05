@@ -43,6 +43,7 @@ export class BeamElevationScene extends Phaser.Scene {
   private blurredFieldGraphics?: Phaser.GameObjects.Graphics
   private rawContourGraphics?: Phaser.GameObjects.Graphics
   private smoothedContourGraphics?: Phaser.GameObjects.Graphics
+  private binaryContourGraphics?: Phaser.GameObjects.Graphics // Binary marching squares (no interpolation)
   private dimensionText: Phaser.GameObjects.Text[] = []
   private isMouseDown = false
   private isPainting = false
@@ -80,6 +81,7 @@ export class BeamElevationScene extends Phaser.Scene {
   private showRawMarchingSquares = false // Show raw marching squares without smoothing
   private showControlPoints = false // Show marching squares control points in edit mode
   private showBlurredField = false // Show blurred field visualization
+  private showDebugVisualization = false // Show all three line types simultaneously
   // Marching Squares Algorithm Properties
   private interpolationMethod: 'linear' | 'cubic' | 'none' = 'linear'
   private scalarFieldMethod: ScalarFieldMethod = 'edge-preserving'
@@ -140,6 +142,7 @@ export class BeamElevationScene extends Phaser.Scene {
     this.onCellChange = data.onCellChange
     this.spanLength = data.spanLength || 96
     this.selectedDefectType = data.selectedDefectType || 'section-loss'
+    this.showDebugVisualization = data.showDebugVisualization || false
     
     console.log('Scene init complete:', {
       appMode: this.appMode,
@@ -241,6 +244,7 @@ export class BeamElevationScene extends Phaser.Scene {
     this.blurredFieldGraphics = this.add.graphics() // Blurred field (bottom)
     this.pixelOutlineGraphics = this.add.graphics() // Pixel outline
     this.lossGraphics = this.add.graphics() // Filled regions (for non-edit mode)
+    this.binaryContourGraphics = this.add.graphics() // Binary marching squares (no interpolation)
     this.rawContourGraphics = this.add.graphics() // Raw marching squares contours
     this.smoothedContourGraphics = this.add.graphics() // Smoothed contours (top)
     this.controlPointGraphics = this.add.graphics() // Control points (topmost)
@@ -726,6 +730,147 @@ export class BeamElevationScene extends Phaser.Scene {
   }
   
   private drawMarchingSquaresLayers(grid: number[][], startX: number, webTop: number, webBottom: number, cols: number, rows: number) {
+    // When in debug mode, clear all graphics and draw all three line types
+    if (this.showDebugVisualization) {
+      this.binaryContourGraphics?.clear()
+      this.rawContourGraphics?.clear()
+      this.smoothedContourGraphics?.clear()
+      
+      // 1. Binary marching squares (no scalar field, no interpolation)
+      const binaryOptions: MarchingSquaresOptions = {
+        threshold: this.threshold,
+        interpolationMethod: 'none', // Force no interpolation
+        saddlePointResolution: this.saddlePointResolution,
+        smoothing: false,
+        edgeSnapping: true,
+        snapDistance: this.snapDistance,
+        offsetX: this.contourOffsetX,
+        offsetY: this.contourOffsetY,
+        globalOffsetX: this.contourGlobalOffsetX,
+        globalOffsetY: this.contourGlobalOffsetY,
+        bufferSize: this.contourBufferSize,
+        bufferValue: this.contourBufferValue,
+        alignmentMode: 'vertices', // Force vertex alignment for pixelated look
+        clampToGrid: this.clampToGrid,
+        extendToBoundary: this.extendToBoundary
+      }
+      const binaryContours = marchingSquaresOptimized(grid, binaryOptions) // Direct binary grid
+      
+      // Draw binary contours in blue
+      if (this.binaryContourGraphics) {
+        this.binaryContourGraphics.lineStyle(3, 0x0000FF, 0.8) // Blue
+        binaryContours.forEach(contour => {
+          const screenContour = contour.map(pt => ({
+            x: startX + pt.x * this.gridSize,
+            y: webTop + pt.y * this.gridSize
+          }))
+          
+          this.binaryContourGraphics.beginPath()
+          screenContour.forEach((point, index) => {
+            if (index === 0) {
+              this.binaryContourGraphics.moveTo(point.x, point.y)
+            } else {
+              this.binaryContourGraphics.lineTo(point.x, point.y)
+            }
+          })
+          this.binaryContourGraphics.closePath()
+          this.binaryContourGraphics.strokePath()
+        })
+      }
+      
+      // 2. Interpolated marching squares (with scalar field)
+      const scalarGrid = binaryToScalarField(grid, this.scalarFieldMethod, this.scalarFieldRadius)
+      const interpolatedOptions: MarchingSquaresOptions = {
+        threshold: this.threshold,
+        interpolationMethod: this.interpolationMethod,
+        saddlePointResolution: this.saddlePointResolution,
+        smoothing: false,
+        edgeSnapping: true,
+        snapDistance: this.snapDistance,
+        offsetX: this.contourOffsetX,
+        offsetY: this.contourOffsetY,
+        globalOffsetX: this.contourGlobalOffsetX,
+        globalOffsetY: this.contourGlobalOffsetY,
+        bufferSize: this.contourBufferSize,
+        bufferValue: this.contourBufferValue,
+        alignmentMode: this.alignmentMode,
+        clampToGrid: this.clampToGrid,
+        extendToBoundary: this.extendToBoundary
+      }
+      const interpolatedContours = marchingSquaresOptimized(scalarGrid, interpolatedOptions)
+      
+      // Draw interpolated contours in red
+      if (this.rawContourGraphics) {
+        this.rawContourGraphics.lineStyle(3, 0xFF0000, 0.8) // Red
+        interpolatedContours.forEach(contour => {
+          const screenContour = contour.map(pt => ({
+            x: startX + pt.x * this.gridSize,
+            y: webTop + pt.y * this.gridSize
+          }))
+          
+          this.rawContourGraphics.beginPath()
+          screenContour.forEach((point, index) => {
+            if (index === 0) {
+              this.rawContourGraphics.moveTo(point.x, point.y)
+            } else {
+              this.rawContourGraphics.lineTo(point.x, point.y)
+            }
+          })
+          this.rawContourGraphics.closePath()
+          this.rawContourGraphics.strokePath()
+        })
+      }
+      
+      // 3. Smoothed contours
+      const smoothOptions: MarchingSquaresOptions = {
+        ...interpolatedOptions,
+        smoothing: true,
+        smoothingMethod: this.smoothingMethod,
+        smoothingIterations: this.smoothingIterations,
+        smoothingStrength: this.smoothingStrength,
+        edgeBufferDistance: this.edgeBufferDistance,
+        preserveEdgeSegments: this.preserveEdgeSegments,
+        transitionBlending: this.transitionBlending,
+        curvatureThreshold: this.curvatureThreshold,
+        preserveStraightSegments: this.preserveStraightSegments,
+        collisionAvoidance: this.collisionAvoidance,
+        collisionMinDistance: this.collisionMinDistance,
+        collisionMethod: this.collisionMethod,
+        collisionIterations: this.collisionIterations,
+        edgeClamping: this.edgeClamping,
+        edgeClampDistance: this.edgeClampDistance,
+        cornerTreatment: this.cornerTreatment
+      }
+      const smoothContours = marchingSquaresOptimized(scalarGrid, smoothOptions)
+      
+      // Draw smoothed contours in green
+      if (this.smoothedContourGraphics) {
+        this.smoothedContourGraphics.lineStyle(3, 0x00FF00, 0.8) // Green
+        smoothContours.forEach(contour => {
+          const screenContour = contour.map(pt => ({
+            x: startX + pt.x * this.gridSize,
+            y: webTop + pt.y * this.gridSize
+          }))
+          
+          this.smoothedContourGraphics.beginPath()
+          screenContour.forEach((point, index) => {
+            if (index === 0) {
+              this.smoothedContourGraphics.moveTo(point.x, point.y)
+            } else {
+              this.smoothedContourGraphics.lineTo(point.x, point.y)
+            }
+          })
+          this.smoothedContourGraphics.closePath()
+          this.smoothedContourGraphics.strokePath()
+        })
+      }
+      
+      return // Exit early when in debug mode
+    }
+    
+    // Normal mode: Clear only the graphics we'll use
+    this.binaryContourGraphics?.clear()
+    
     // Convert binary grid to scalar field
     const scalarGrid = binaryToScalarField(grid, this.scalarFieldMethod, this.scalarFieldRadius)
     
@@ -1075,6 +1220,7 @@ export class BeamElevationScene extends Phaser.Scene {
     this.lossGraphics?.clear()
     this.pixelOutlineGraphics?.clear()
     this.blurredFieldGraphics?.clear()
+    this.binaryContourGraphics?.clear()
     this.rawContourGraphics?.clear()
     this.smoothedContourGraphics?.clear()
     this.controlPointGraphics?.clear()
@@ -1646,7 +1792,7 @@ export class BeamElevationScene extends Phaser.Scene {
     return this.savedAnnotations || []
   }
 
-  updateBeamProfile(profile: BeamProfile, length?: number, editMode?: boolean, showGrid?: boolean, gridOrigin?: 'left' | 'right', showTopFlange?: boolean, gridCells?: GridCell[], elevationView?: 'N' | 'S' | 'E' | 'W', appMode?: AppMode, spanLength?: number, zoom?: number, selectedDefectType?: DefectType) {
+  updateBeamProfile(profile: BeamProfile, length?: number, editMode?: boolean, showGrid?: boolean, gridOrigin?: 'left' | 'right', showTopFlange?: boolean, gridCells?: GridCell[], elevationView?: 'N' | 'S' | 'E' | 'W', appMode?: AppMode, spanLength?: number, zoom?: number, selectedDefectType?: DefectType, showDebugVisualization?: boolean) {
     console.log('updateBeamProfile called with:', {
       appMode,
       currentAppMode: this.appMode,
@@ -1704,6 +1850,7 @@ export class BeamElevationScene extends Phaser.Scene {
         savedAnnotations: this.getCurrentAnnotations(),
         spanLength: this.spanLength,
         selectedDefectType: this.selectedDefectType,
+        showDebugVisualization: this.showDebugVisualization,
         onCellChange: this.onCellChange 
       })
       
@@ -1734,6 +1881,7 @@ export class BeamElevationScene extends Phaser.Scene {
         savedAnnotations: this.getCurrentAnnotations(),
         spanLength: this.spanLength,
         selectedDefectType: this.selectedDefectType,
+        showDebugVisualization: this.showDebugVisualization,
         onCellChange: this.onCellChange 
       })
       
@@ -1811,6 +1959,7 @@ export class BeamElevationScene extends Phaser.Scene {
     this.appMode = appMode || this.appMode
     this.spanLength = spanLength || this.spanLength
     this.selectedDefectType = selectedDefectType || this.selectedDefectType
+    this.showDebugVisualization = showDebugVisualization !== undefined ? showDebugVisualization : this.showDebugVisualization
     this.scene.restart({ 
       beamProfile: profile, 
       beamLength: this.beamLength,
@@ -1824,6 +1973,7 @@ export class BeamElevationScene extends Phaser.Scene {
       savedAnnotations: this.getCurrentAnnotations(),
       spanLength: this.spanLength,
       selectedDefectType: this.selectedDefectType,
+      showDebugVisualization: this.showDebugVisualization,
       onCellChange: this.onCellChange 
     })
   }

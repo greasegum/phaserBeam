@@ -19,6 +19,9 @@ interface ModeToolbarProps {
   onSelectDefect?: (defect: DefectType) => void
   // For view mode
   onExport?: (format: 'pdf' | 'png' | 'svg') => void
+  // For debug
+  showDebugVisualization?: boolean
+  onToggleDebugVisualization?: () => void
 }
 
 const ANNOTATION_TOOLS: { type: AnnotationType; label: string; shortcut: string }[] = [
@@ -48,7 +51,9 @@ export const ModeToolbar: React.FC<ModeToolbarProps> = ({
   onToggleBottomOrdinate,
   selectedDefect = 'section-loss',
   onSelectDefect,
-  onExport
+  onExport,
+  showDebugVisualization = false,
+  onToggleDebugVisualization
 }) => {
   
   const renderPatternPreview = (defectType: DefectType) => {
@@ -251,6 +256,28 @@ export const ModeToolbar: React.FC<ModeToolbarProps> = ({
               </div>
             </button>
           ))}
+          
+          <div style={{ width: '1px', height: '30px', backgroundColor: '#ddd', margin: '0 10px' }} />
+          
+          <button
+            onClick={onToggleDebugVisualization}
+            style={{
+              padding: '6px 12px',
+              border: showDebugVisualization ? '2px solid #FF6B6B' : '1px solid #ddd',
+              borderRadius: '4px',
+              backgroundColor: showDebugVisualization ? '#FFE3E3' : 'white',
+              cursor: 'pointer',
+              fontSize: '14px',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '5px',
+              transition: 'all 0.2s ease'
+            }}
+            title="Show all three line types simultaneously for debugging"
+          >
+            <span style={{ fontSize: '16px' }}>🐛</span>
+            Debug Lines
+          </button>
         </>
       )}
       
