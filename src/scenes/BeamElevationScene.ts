@@ -277,8 +277,8 @@ export class BeamElevationScene extends Phaser.Scene {
 
     // Create grid overlay container
     this.gridContainer = this.add.container()
-    // Set grid container depth to be below contour graphics but above beam background
-    this.gridContainer.setDepth(5)
+    // Set grid container depth to be above contour graphics for proper interaction
+    this.gridContainer.setDepth(80)
     console.log('Grid creation check:', {
       editMode: this.editMode,
       appMode: this.appMode,
@@ -1320,18 +1320,14 @@ export class BeamElevationScene extends Phaser.Scene {
       this.gridSize - 1,
       height,
       0xffffff,
-      0.1  // Make cells slightly visible with fill
+      0  // Transparent fill
     )
     
-    cell.setStrokeStyle(2, 0xff0000, 1.0)  // Bright red thick border for debugging
+    cell.setStrokeStyle(1, 0x999999, 0.8)  // Standard grid stroke
     
-    // Make cells interactive in edit mode
-    if (this.editMode) {
-      cell.setInteractive()
-      console.log('Cell made interactive:', { zone, col, row, editMode: this.editMode })
-    } else {
-      console.log('Cell NOT made interactive:', { zone, col, row, editMode: this.editMode })
-    }
+    // Always make cells interactive - the actual interaction logic will check edit mode
+    cell.setInteractive()
+    console.log('Cell made interactive:', { zone, col, row, editMode: this.editMode })
     
     cell.setData('col', col)
     cell.setData('row', row)
