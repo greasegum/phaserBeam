@@ -172,9 +172,6 @@ export class BeamElevationScene extends Phaser.Scene {
 
   create() {
     if (!this.beamProfile) return
-    
-    // Enable input on all objects, not just the top one
-    this.input.topOnly = false
 
     // Expose debug method globally for testing
     (window as any).debugDrawContours = () => this.debugDrawContours()
