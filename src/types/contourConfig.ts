@@ -28,36 +28,3 @@ export interface ContourConfig {
     minDistance: number // Grid units between regions
   }
 }
-
-/** Preset configurations for common use cases */
-export const CONTOUR_PRESETS = {
-  default: {
-    core: { threshold: 0.5, cellSize: 1 },
-    smoothing: { enabled: true, strength: 0.5 },
-    edges: { clampToBeam: true, bufferSize: 0 },
-    separation: { enabled: true, minDistance: 0.5 }
-  },
-  
-  sharp: {
-    core: { threshold: 0.5, cellSize: 1 },
-    smoothing: { enabled: false, strength: 0 },
-    edges: { clampToBeam: true, bufferSize: 0 },
-    separation: { enabled: true, minDistance: 0.3 }
-  },
-  
-  organic: {
-    core: { threshold: 0.5, cellSize: 1 },
-    smoothing: { enabled: true, strength: 0.8 },
-    edges: { clampToBeam: true, bufferSize: 1 },
-    separation: { enabled: true, minDistance: 0.7 }
-  },
-  
-  technical: {
-    core: { threshold: 0.5, cellSize: 1 },
-    smoothing: { enabled: true, strength: 0.3 },
-    edges: { clampToBeam: true, bufferSize: 0 },
-    separation: { enabled: false, minDistance: 0 }
-  }
-} as const
-
-export type ContourPreset = keyof typeof CONTOUR_PRESETS

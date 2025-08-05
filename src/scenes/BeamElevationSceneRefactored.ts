@@ -5,9 +5,10 @@
 
 import Phaser from 'phaser'
 import { BeamProfile, GridCell } from '../types/beam'
-import { ContourConfig, CONTOUR_PRESETS } from '../types/contourConfig'
+import { ContourConfig } from '../types/contourConfig'
 import { marchingSquares } from '../utils/marchingSquares'
 import { processContours, transformToScreen } from '../utils/contourProcessing'
+import { binaryToScalarField, ScalarFieldMethod } from '../utils/scalarField'
 
 export class BeamElevationSceneRefactored extends Phaser.Scene {
   // Core properties
@@ -20,7 +21,16 @@ export class BeamElevationSceneRefactored extends Phaser.Scene {
   private webGrid: number[][] = []
   
   // Configuration
-  private contourConfig: ContourConfig = CONTOUR_PRESETS.default
+  private contourConfig: ContourConfig = {
+    core: { threshold: 0.5, cellSize: 1 },
+    smoothing: { enabled: false, strength: 0.5 },  // Disable smoothing for now
+    edges: { clampToBeam: false, bufferSize: 0 },  // Edge clamping is handled in marching squares
+    separation: { enabled: true, minDistance: 0.5 }
+  }
+  
+  // Scalar field configuration for edge-aware blurring
+  private scalarFieldMethod: ScalarFieldMethod = 'edge-clamping'
+  private scalarFieldRadius = 1
   
   // Graphics objects
   private beamGraphics: Phaser.GameObjects.Graphics | null = null
@@ -199,14 +209,42 @@ export class BeamElevationSceneRefactored extends Phaser.Scene {
   private drawSectionLoss(centerX: number, centerY: number): void {
     if (!this.lossGraphics || !this.beamProfile || this.webGrid.length === 0) return
     
-    // Run marching squares
-    const result = marchingSquares(this.webGrid, this.contourConfig.core.threshold)
+    // Convert binary grid to scalar field using edge-aware blurring
+    const scalarGrid = binaryToScalarField(this.webGrid, this.scalarFieldMethod, this.scalarFieldRadius, 0.95)
     
-    // Process contours
+    // Run marching squares with proper options to ensure grid alignment
+    const contours = marchingSquares(scalarGrid, {
+      // Core settings for perfect grid alignment
+      threshold: this.contourConfig.core.threshold,
+      interpolationMethod: 'linear',  // Use linear interpolation with scalar field
+      offsetX: -1,  // Compensate for buffer shift
+      offsetY: -1,  // Compensate for buffer shift
+      bufferSize: 1,  // Required for marching squares to process edge cells
+      bufferValue: 0,  // Always 0 for binary fields
+      
+      // Edge clamping settings - aggressive for perfect alignment
+      clampToGrid: true,
+      edgeSnapping: true,
+      edgeDetectionEnabled: true,
+      edgeDetectionThreshold: 0.01,  // Very sensitive edge detection
+      edgeClampDistance: 1.0,  // Clamp points within 1 grid unit of edge
+      
+      // Disable smoothing for now
+      smoothing: false,
+      
+      // Keep alignment on edges
+      alignmentMode: 'edges'
+    })
+    
+    // Process contours with grid bounds
+    const bounds = {
+      width: this.webGrid[0].length,
+      height: this.webGrid.length
+    }
     const processed = processContours(
-      result.contours,
+      contours,
       this.contourConfig,
-      result.bounds
+      bounds
     )
     
     // Transform to screen coordinates
@@ -361,18 +399,26 @@ export class BeamElevationSceneRefactored extends Phaser.Scene {
   }
 
   /**
-   * Set preset configuration
-   */
-  public setPreset(preset: keyof typeof CONTOUR_PRESETS): void {
-    this.contourConfig = CONTOUR_PRESETS[preset]
-    this.render()
-  }
-
-  /**
    * Toggle grid visibility
    */
   public setShowGrid(show: boolean): void {
     this.showGrid = show
+    this.render()
+  }
+  
+  /**
+   * Set scalar field method for edge-aware blurring
+   */
+  public setScalarFieldMethod(method: ScalarFieldMethod): void {
+    this.scalarFieldMethod = method
+    this.render()
+  }
+  
+  /**
+   * Set scalar field radius
+   */
+  public setScalarFieldRadius(radius: number): void {
+    this.scalarFieldRadius = radius
     this.render()
   }
 

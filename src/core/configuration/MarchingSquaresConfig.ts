@@ -202,36 +202,6 @@ export class ConfigValidator {
   }
 }
 
-/**
- * Configuration presets for common use cases
- */
-export const CONFIG_PRESETS: Record<string, Partial<MarchingSquaresConfig>> = {
-  default: {
-    algorithm: { threshold: 0.5, interpolationMethod: 'linear' },
-    geometry: { alignment: { mode: 'edges', offsetX: 0.5, offsetY: 0.5 } },
-    processing: { smoothing: { enabled: true, strength: 0.5 } }
-  },
-  
-  precise: {
-    algorithm: { interpolationMethod: 'cubic', saddlePointResolution: 'gradient' },
-    geometry: { edges: { snapDistance: 0.01 } },
-    processing: { smoothing: { enabled: false } },
-    performance: { quality: 'high' }
-  },
-  
-  smooth: {
-    processing: {
-      smoothing: { enabled: true, algorithm: 'catmull-rom', strength: 0.8, iterations: 3 },
-      simplification: { enabled: true, tolerance: 0.1 }
-    }
-  },
-  
-  performance: {
-    algorithm: { interpolationMethod: 'none' },
-    processing: { smoothing: { enabled: false }, simplification: { enabled: true } },
-    performance: { quality: 'draft', enableCaching: true }
-  }
-}
 
 /**
  * Configuration builder for fluent API
@@ -243,10 +213,6 @@ export class ConfigBuilder {
     return new ConfigBuilder()
   }
   
-  fromPreset(preset: keyof typeof CONFIG_PRESETS): ConfigBuilder {
-    this.config = { ...CONFIG_PRESETS[preset] }
-    return this
-  }
   
   withThreshold(threshold: number): ConfigBuilder {
     this.config.algorithm = { ...this.config.algorithm, threshold }

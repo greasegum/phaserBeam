@@ -257,11 +257,12 @@ function executeAlgorithm(grid: number[][], options: Required<MarchingSquaresOpt
       )
       
       // Always apply strict edge clamping to segments - this is mandatory behavior
+      // When buffer is applied, the actual content starts at bufferSize and ends at cols/rows - bufferSize
       const gridBounds = {
-        minX: 0,
-        maxX: cols - 1,
-        minY: 0,
-        maxY: rows - 1
+        minX: options.bufferSize,
+        maxX: cols - 1 - options.bufferSize,
+        minY: options.bufferSize,
+        maxY: rows - 1 - options.bufferSize
       }
       
       cellSegments.forEach(segment => {
@@ -432,13 +433,20 @@ function resolveSaddlePoint(
       return (config === 5 && center >= options.threshold) || (config === 10 && center < options.threshold)
     }
   } else if (options.saddlePointResolution === 'majority') {
-    const diag1Diff = Math.abs(tl - br)
-    const diag2Diff = Math.abs(tr - bl)
+    // For diagonal patterns, prefer connecting corners that are both active
+    const tlActive = tl >= options.threshold
+    const trActive = tr >= options.threshold
+    const brActive = br >= options.threshold
+    const blActive = bl >= options.threshold
     
+    // For case 5 (tl and br active), connect them if they're both strongly active
+    // For case 10 (tr and bl active), connect them if they're both strongly active
     if (config === 5) {
-      return diag1Diff < diag2Diff
-    } else {
-      return diag2Diff < diag1Diff
+      // If both tl and br are active, prefer connecting them
+      return tlActive && brActive
+    } else { // config === 10
+      // If both tr and bl are active, prefer connecting them
+      return trActive && blActive
     }
   }
   
@@ -582,8 +590,7 @@ function interpolate(v1: number, v2: number, threshold: number, method: string =
 /**
  * Detect if edge cells are activated and create strict boundary constraints
  * Uses separate edge detection threshold to prevent contour threshold from overriding edge clamping
- * Enhanced to be more robust and less dependent on contour threshold
- * Fixed asymmetric edge detection for consistent behavior across all edges
+ * Only checks exact edge cells (not nearby cells) to ensure proper boundary alignment
  */
 function detectActivatedEdges(
   grid: number[][],
@@ -598,41 +605,36 @@ function detectActivatedEdges(
   let topEdgeActive = false
   let bottomEdgeActive = false
   
-  // Enhanced edge detection: check for any activity near edges, not just exact edge cells
-  const edgeSensitivity = 0.01 // Even lower threshold for more sensitive edge detection
+  // Edge detection: check for activity at exact edge cells only
+  const edgeSensitivity = 0.01 // Low threshold for sensitive edge detection
   
-  // Check left edge (column 0 and nearby)
+  // Check left edge (column 0 only)
   for (let row = 0; row < rows; row++) {
-    // Check exact edge and nearby cells
-    if (grid[row][0] >= edgeSensitivity || 
-        (cols > 1 && grid[row][1] >= edgeSensitivity)) {
+    if (grid[row][0] >= edgeSensitivity) {
       leftEdgeActive = true
       break
     }
   }
   
-  // Check right edge (last column and nearby)
+  // Check right edge (last column only)
   for (let row = 0; row < rows; row++) {
-    if (grid[row][cols - 1] >= edgeSensitivity || 
-        (cols > 1 && grid[row][cols - 2] >= edgeSensitivity)) {
+    if (grid[row][cols - 1] >= edgeSensitivity) {
       rightEdgeActive = true
       break
     }
   }
   
-  // Check top edge (row 0 and nearby)
+  // Check top edge (row 0 only)
   for (let col = 0; col < cols; col++) {
-    if (grid[0][col] >= edgeSensitivity || 
-        (rows > 1 && grid[1][col] >= edgeSensitivity)) {
+    if (grid[0][col] >= edgeSensitivity) {
       topEdgeActive = true
       break
     }
   }
   
-  // Check bottom edge (last row and nearby)
+  // Check bottom edge (last row only)
   for (let col = 0; col < cols; col++) {
-    if (grid[rows - 1][col] >= edgeSensitivity || 
-        (rows > 1 && grid[rows - 2][col] >= edgeSensitivity)) {
+    if (grid[rows - 1][col] >= edgeSensitivity) {
       bottomEdgeActive = true
       break
     }
@@ -874,10 +876,10 @@ function applyPostProcessing(
   // Enhanced edge preservation: ensure edge points are preserved regardless of threshold
   if (activatedEdges) {
     const gridBounds = {
-      minX: 0 - options.bufferSize,
-      maxX: gridInfo.cols - options.bufferSize,
-      minY: 0 - options.bufferSize,
-      maxY: gridInfo.rows - options.bufferSize
+      minX: 0,
+      maxX: gridInfo.cols - 1,
+      minY: 0,
+      maxY: gridInfo.rows - 1
     }
     
     finalContours = finalContours.map(contour => 
@@ -907,8 +909,9 @@ function applyPostProcessing(
   }
   
   // Apply global offsets
-  const adjustX = options.globalOffsetX - (options.bufferSize > 0 ? options.bufferSize : 0)
-  const adjustY = options.globalOffsetY - (options.bufferSize > 0 ? options.bufferSize : 0)
+  // The coordinates are already in the original grid space after clamping
+  const adjustX = options.globalOffsetX
+  const adjustY = options.globalOffsetY
   
   if (adjustX !== 0 || adjustY !== 0) {
     finalContours = finalContours.map(contour => 
@@ -945,10 +948,10 @@ function applySmoothingToContours(
   activatedEdges?: { left: boolean, right: boolean, top: boolean, bottom: boolean }
 ): Point[][] {
   const edgeConstraints: EdgeConstraints = {
-    leftEdge: 0 - options.bufferSize,
-    rightEdge: gridInfo.cols - options.bufferSize,
-    topEdge: 0 - options.bufferSize,
-    bottomEdge: gridInfo.rows - options.bufferSize,
+    leftEdge: 0,
+    rightEdge: gridInfo.cols - 1,
+    topEdge: 0,
+    bottomEdge: gridInfo.rows - 1,
     tolerance: 0.1,
     // Edge clamping is now mandatory
     edgeClampDistance: options.edgeClampDistance,
@@ -1001,10 +1004,10 @@ function applySmoothingToContours(
     case 'edge-aware':
       {
         const gridBounds: GridBounds = {
-          left: 0 - options.bufferSize,
-          right: gridInfo.cols - options.bufferSize,
-          top: 0 - options.bufferSize,
-          bottom: gridInfo.rows - options.bufferSize,
+          left: 0,
+          right: gridInfo.cols - 1,
+          top: 0,
+          bottom: gridInfo.rows - 1,
           strictEdges: activatedEdges
         }
         return contours.map(contour =>
@@ -1020,10 +1023,10 @@ function applySmoothingToContours(
     case 'intelligent':
       {
         const gridBounds: GridBounds = {
-          left: 0 - options.bufferSize,
-          right: gridInfo.cols - options.bufferSize,
-          top: 0 - options.bufferSize,
-          bottom: gridInfo.rows - options.bufferSize,
+          left: 0,
+          right: gridInfo.cols - 1,
+          top: 0,
+          bottom: gridInfo.rows - 1,
           strictEdges: activatedEdges
         }
         return contours.map(contour =>
@@ -1039,10 +1042,10 @@ function applySmoothingToContours(
     case 'selective':
       {
         const gridBounds: GridBounds = {
-          left: 0 - options.bufferSize,
-          right: gridInfo.cols - options.bufferSize,
-          top: 0 - options.bufferSize,
-          bottom: gridInfo.rows - options.bufferSize,
+          left: 0,
+          right: gridInfo.cols - 1,
+          top: 0,
+          bottom: gridInfo.rows - 1,
           strictEdges: activatedEdges
         }
         return contours.map(contour =>
@@ -1061,10 +1064,10 @@ function applySmoothingToContours(
     case 'intelligent-selective':
       {
         const gridBounds: GridBounds = {
-          left: 0 - options.bufferSize,
-          right: gridInfo.cols - options.bufferSize,
-          top: 0 - options.bufferSize,
-          bottom: gridInfo.rows - options.bufferSize,
+          left: 0,
+          right: gridInfo.cols - 1,
+          top: 0,
+          bottom: gridInfo.rows - 1,
           strictEdges: activatedEdges
         }
         return contours.map(contour =>

@@ -420,7 +420,66 @@ function createAdaptiveKernel(radius: number, edgeDistance: number): number[][] 
   return kernel
 }
 
-export type ScalarFieldMethod = 'gaussian' | 'distance' | 'box' | 'none' | 'edge-preserving' | 'adaptive-edge-preserving'
+/**
+ * Edge-clamping blur that enforces hard boundaries at grid edges
+ * This ensures contours always clamp to the exact grid boundaries
+ * @param grid Binary grid (0 or 1 values)
+ * @param radius Blur radius in grid cells
+ * @param edgeClampStrength How strongly to enforce edge clamping (0-1)
+ * @returns Grid with smooth gradients and hard-clamped edges
+ */
+export function edgeClampingBlur(
+  grid: number[][],
+  radius: number = 2,
+  edgeClampStrength: number = 0.95
+): number[][] {
+  const rows = grid.length
+  const cols = grid[0].length
+  const output: number[][] = Array(rows).fill(null).map(() => Array(cols).fill(0))
+  
+  // First pass: standard Gaussian blur
+  const gaussianBlurred = gaussianBlur(grid, radius)
+  
+  // Second pass: apply edge clamping
+  for (let y = 0; y < rows; y++) {
+    for (let x = 0; x < cols; x++) {
+      // Calculate distance to nearest edge
+      const distToLeft = x
+      const distToRight = cols - 1 - x
+      const distToTop = y
+      const distToBottom = rows - 1 - y
+      const minEdgeDistance = Math.min(distToLeft, distToRight, distToTop, distToBottom)
+      
+      // Determine if this is an edge cell
+      const isEdgeCell = minEdgeDistance === 0
+      const isNearEdge = minEdgeDistance <= 1
+      
+      if (isEdgeCell) {
+        // Hard clamp edge cells to binary values
+        if (grid[y][x] >= 0.5) {
+          // Active edge cell - ensure it stays above threshold
+          output[y][x] = Math.max(0.5 + edgeClampStrength * 0.5, gaussianBlurred[y][x])
+        } else {
+          // Inactive edge cell - ensure it stays below threshold
+          output[y][x] = Math.min(0.5 - edgeClampStrength * 0.5, gaussianBlurred[y][x])
+        }
+      } else if (isNearEdge) {
+        // Near-edge cells: blend between clamped and blurred values
+        const edgeFactor = 1 - (minEdgeDistance / 2)
+        const clampedValue = grid[y][x] >= 0.5 ? 1 : 0
+        output[y][x] = gaussianBlurred[y][x] * (1 - edgeFactor * edgeClampStrength) + 
+                       clampedValue * edgeFactor * edgeClampStrength
+      } else {
+        // Interior cells: use normal blurred value
+        output[y][x] = gaussianBlurred[y][x]
+      }
+    }
+  }
+  
+  return output
+}
+
+export type ScalarFieldMethod = 'gaussian' | 'distance' | 'box' | 'none' | 'edge-preserving' | 'adaptive-edge-preserving' | 'edge-clamping'
 
 /**
  * Convert binary grid to scalar field using specified method
@@ -432,7 +491,8 @@ export type ScalarFieldMethod = 'gaussian' | 'distance' | 'box' | 'none' | 'edge
 export function binaryToScalarField(
   grid: number[][], 
   method: ScalarFieldMethod = 'gaussian',
-  radius: number = 2
+  radius: number = 2,
+  edgeClampStrength: number = 0.95
 ): number[][] {
   switch (method) {
     case 'gaussian':
@@ -445,6 +505,8 @@ export function binaryToScalarField(
       return edgePreservingGaussianBlur(grid, radius, true, 0.5)
     case 'adaptive-edge-preserving':
       return adaptiveEdgePreservingBlur(grid, radius, 0.8)
+    case 'edge-clamping':
+      return edgeClampingBlur(grid, radius, edgeClampStrength)
     case 'none':
     default:
       return grid
