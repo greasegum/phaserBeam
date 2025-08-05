@@ -186,11 +186,17 @@ export class BeamElevationScene extends Phaser.Scene {
     
     // Set up global mouse up handler for paint mode
     this.input.on('pointerup', () => {
+      console.log('Scene pointerup triggered')
       if (this.appMode === 'edit') {
         this.isMouseDown = false
         this.isPainting = false
         this.paintMode = null
       }
+    })
+    
+    // Test scene input
+    this.input.on('pointerdown', (pointer: Phaser.Input.Pointer) => {
+      console.log('Scene pointerdown at:', pointer.x, pointer.y)
     })
     
     // Set up keyboard shortcuts for annotation mode
@@ -1326,14 +1332,14 @@ export class BeamElevationScene extends Phaser.Scene {
       this.gridSize - 1,
       height,
       0xffffff,
-      0.01  // Almost transparent fill to ensure interactivity
+      0.1  // Slightly visible fill to ensure interactivity
     )
     
     cell.setStrokeStyle(1, 0x999999, 0.8)  // Standard grid stroke
     
     // Always make cells interactive - the actual interaction logic will check edit mode
-    cell.setInteractive()
-    console.log('Cell made interactive:', { zone, col, row, editMode: this.editMode })
+    cell.setInteractive(new Phaser.Geom.Rectangle(0, 0, this.gridSize - 1, height), Phaser.Geom.Rectangle.Contains)
+    console.log('Cell made interactive:', { zone, col, row, editMode: this.editMode, width: this.gridSize - 1, height: height })
     
     cell.setData('col', col)
     cell.setData('row', row)
@@ -1363,8 +1369,13 @@ export class BeamElevationScene extends Phaser.Scene {
   
   private setupCellInteraction(cell: Phaser.GameObjects.Rectangle) {
     cell.on('pointerdown', () => {
+      console.log('Cell pointerdown event triggered')
+      
       // Only allow interaction in edit mode
-      if (!this.editMode) return
+      if (!this.editMode) {
+        console.log('Not in edit mode, ignoring click')
+        return
+      }
       
       const zone = cell.getData('zone') || 'default'
       const key = `${zone}_${cell.getData('col')}_${cell.getData('row')}`
