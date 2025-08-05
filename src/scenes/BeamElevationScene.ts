@@ -1409,7 +1409,7 @@ export class BeamElevationScene extends Phaser.Scene {
       0.1  // Slightly visible fill to ensure interactivity
     )
     
-    cell.setStrokeStyle(1, 0x999999, 0.8)  // Standard grid stroke
+    cell.setStrokeStyle(3, 0xFF0000, 1.0)  // THICK RED BORDER FOR TESTING
     
     // Always make cells interactive - the actual interaction logic will check edit mode
     // Make rectangle interactive with its bounds
