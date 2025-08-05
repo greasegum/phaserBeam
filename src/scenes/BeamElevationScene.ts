@@ -3,6 +3,7 @@ import { BeamProfile, GridCell } from '../types/beam'
 import { AppMode } from '../types/mode'
 import { AnnotationType } from '../types/annotations'
 import { processGrid as marchingSquaresOptimized } from '../core'
+import { MarchingSquaresConfig } from '../core'
 import { binaryToScalarField, ScalarFieldMethod } from '../core/ScalarField'
 import { drawBezierContour, EdgeConstraints } from '../core/BezierRendering'
 import { AnnotationManager } from '../annotations/AnnotationManager'
@@ -127,6 +128,7 @@ export class BeamElevationScene extends Phaser.Scene {
     spanLength?: number;
     zoom?: number;
     selectedDefectType?: DefectType;
+    showDebugVisualization?: boolean;
     onCellChange?: (cells: GridCell[]) => void 
   }) {
     this.beamProfile = data.beamProfile
@@ -173,6 +175,15 @@ export class BeamElevationScene extends Phaser.Scene {
 
   create() {
     if (!this.beamProfile) return
+
+    // Expose debug method globally for testing
+    (window as any).debugDrawContours = () => this.debugDrawContours()
+
+    console.log('Scene create() called with:', {
+      editMode: this.editMode,
+      appMode: this.appMode,
+      showGrid: this.showGrid
+    })
 
     const { webHeight, flangeThickness } = this.beamProfile
     
@@ -242,19 +253,32 @@ export class BeamElevationScene extends Phaser.Scene {
 
     // Create visualization layers in proper order (bottom to top)
     this.blurredFieldGraphics = this.add.graphics() // Blurred field (bottom)
+    this.blurredFieldGraphics.setDepth(10)
+    
     this.pixelOutlineGraphics = this.add.graphics() // Pixel outline
+    this.pixelOutlineGraphics.setDepth(20)
+    
     this.lossGraphics = this.add.graphics() // Filled regions (for non-edit mode)
+    this.lossGraphics.setDepth(30)
+    
     this.binaryContourGraphics = this.add.graphics() // Binary marching squares (no interpolation)
+    this.binaryContourGraphics.setDepth(40)
+    
     this.rawContourGraphics = this.add.graphics() // Raw marching squares contours
+    this.rawContourGraphics.setDepth(50)
+    
     this.smoothedContourGraphics = this.add.graphics() // Smoothed contours (top)
+    this.smoothedContourGraphics.setDepth(60)
+    
     this.controlPointGraphics = this.add.graphics() // Control points (topmost)
+    this.controlPointGraphics.setDepth(70)
     
     this.drawSectionLoss(startX, centerY, beamWidth)
 
     // Create grid overlay container
     this.gridContainer = this.add.container()
-    // Set grid container depth to be visible above section loss but below annotations
-    this.gridContainer.setDepth(100)
+    // Set grid container depth to be below contour graphics but above beam background
+    this.gridContainer.setDepth(5)
     console.log('Grid creation check:', {
       editMode: this.editMode,
       appMode: this.appMode,
@@ -562,6 +586,12 @@ export class BeamElevationScene extends Phaser.Scene {
     
     // In edit mode, show all visualization layers
     if (this.editMode) {
+      console.log('Drawing marching squares layers - Edit mode active', {
+        gridHasCells: webCells.length > 0,
+        editMode: this.editMode,
+        showDebugVisualization: this.showDebugVisualization
+      })
+      
       // 1. Draw blurred field if enabled
       if (this.showBlurredField && this.blurredFieldGraphics) {
         this.drawBlurredField(grid, startX, webTop, webBottom, cols, rows)
@@ -612,11 +642,11 @@ export class BeamElevationScene extends Phaser.Scene {
       
       // Draw filled contours
       if (this.lossGraphics) {
-        this.lossGraphics.fillStyle(0xFFB3BA, 0.8)
-        this.lossGraphics.lineStyle(2, 0xFF6B6B)
+        this.lossGraphics!.fillStyle(0xFFB3BA, 0.8)
+        this.lossGraphics!.lineStyle(2, 0xFF6B6B)
         
         contours.forEach(contour => {
-          const screenContour = contour.map(pt => ({
+          const screenContour = contour.points.map(pt => ({
             x: startX + pt.x * this.gridSize,
             y: webTop + pt.y * this.gridSize
           }))
@@ -633,7 +663,7 @@ export class BeamElevationScene extends Phaser.Scene {
           if (this.useSmoothCurves && !this.showRawMarchingSquares && screenContour.length > 4 && this.lossGraphics) {
             drawBezierContour(this.lossGraphics, screenContour, true, edgeConstraints)
           } else if (this.lossGraphics) {
-            this.lossGraphics.beginPath()
+            this.lossGraphics!.beginPath()
             screenContour.forEach((point, index) => {
               if (index === 0) {
                 this.lossGraphics!.moveTo(point.x, point.y)
@@ -641,9 +671,9 @@ export class BeamElevationScene extends Phaser.Scene {
                 this.lossGraphics!.lineTo(point.x, point.y)
               }
             })
-            this.lossGraphics.closePath()
-            this.lossGraphics.fillPath()
-            this.lossGraphics.strokePath()
+            this.lossGraphics!.closePath()
+            this.lossGraphics!.fillPath()
+            this.lossGraphics!.strokePath()
           }
         })
       }
@@ -723,138 +753,46 @@ export class BeamElevationScene extends Phaser.Scene {
   }
   
   private drawMarchingSquaresLayers(grid: number[][], startX: number, webTop: number, webBottom: number, cols: number, rows: number) {
+    console.log('drawMarchingSquaresLayers called', {
+      gridSize: `${cols}x${rows}`,
+      hasData: grid.some(row => row.some(cell => cell > 0)),
+      showDebugVisualization: this.showDebugVisualization,
+      showRawMarchingSquares: this.showRawMarchingSquares,
+      graphics: {
+        raw: !!this.rawContourGraphics,
+        smoothed: !!this.smoothedContourGraphics,
+        binary: !!this.binaryContourGraphics
+      }
+    })
+    
     // When in debug mode, clear all graphics and draw all three line types
     if (this.showDebugVisualization) {
       this.binaryContourGraphics?.clear()
       this.rawContourGraphics?.clear()
       this.smoothedContourGraphics?.clear()
       
-      // 1. Binary marching squares (no scalar field, no interpolation)
-      const binaryOptions: MarchingSquaresOptions = {
-        threshold: this.threshold,
-        interpolationMethod: 'none', // Force no interpolation
-        saddlePointResolution: this.saddlePointResolution,
-        smoothing: false,
-        edgeSnapping: true,
-        snapDistance: this.snapDistance,
-        offsetX: this.contourOffsetX,
-        offsetY: this.contourOffsetY,
-        globalOffsetX: this.contourGlobalOffsetX,
-        globalOffsetY: this.contourGlobalOffsetY,
-        bufferSize: this.contourBufferSize,
-        bufferValue: this.contourBufferValue,
-        alignmentMode: 'vertices', // Force vertex alignment for pixelated look
-        clampToGrid: this.clampToGrid,
-        extendToBoundary: this.extendToBoundary
-      }
-      const binaryContours = marchingSquaresOptimized(grid, binaryOptions) // Direct binary grid
+      // For now, just draw with default config - we'll enhance this later
+      const { contours: debugContours } = marchingSquaresOptimized(grid, {})
       
       // Draw binary contours in blue
-      if (this.binaryContourGraphics) {
+      if (this.binaryContourGraphics && debugContours.length > 0) {
         this.binaryContourGraphics.lineStyle(3, 0x0000FF, 0.8) // Blue
-        binaryContours.forEach(contour => {
-          const screenContour = contour.map(pt => ({
+        debugContours.forEach(contour => {
+          const screenContour = contour.points.map(pt => ({
             x: startX + pt.x * this.gridSize,
             y: webTop + pt.y * this.gridSize
           }))
           
-          this.binaryContourGraphics.beginPath()
+          this.binaryContourGraphics!.beginPath()
           screenContour.forEach((point, index) => {
             if (index === 0) {
-              this.binaryContourGraphics.moveTo(point.x, point.y)
+              this.binaryContourGraphics!.moveTo(point.x, point.y)
             } else {
-              this.binaryContourGraphics.lineTo(point.x, point.y)
+              this.binaryContourGraphics!.lineTo(point.x, point.y)
             }
           })
-          this.binaryContourGraphics.closePath()
-          this.binaryContourGraphics.strokePath()
-        })
-      }
-      
-      // 2. Interpolated marching squares (with scalar field)
-      const scalarGrid = binaryToScalarField(grid, this.scalarFieldMethod, this.scalarFieldRadius)
-      const interpolatedOptions: MarchingSquaresOptions = {
-        threshold: this.threshold,
-        interpolationMethod: this.interpolationMethod,
-        saddlePointResolution: this.saddlePointResolution,
-        smoothing: false,
-        edgeSnapping: true,
-        snapDistance: this.snapDistance,
-        offsetX: this.contourOffsetX,
-        offsetY: this.contourOffsetY,
-        globalOffsetX: this.contourGlobalOffsetX,
-        globalOffsetY: this.contourGlobalOffsetY,
-        bufferSize: this.contourBufferSize,
-        bufferValue: this.contourBufferValue,
-        alignmentMode: this.alignmentMode,
-        clampToGrid: this.clampToGrid,
-        extendToBoundary: this.extendToBoundary
-      }
-      const interpolatedContours = marchingSquaresOptimized(scalarGrid, interpolatedOptions)
-      
-      // Draw interpolated contours in red
-      if (this.rawContourGraphics) {
-        this.rawContourGraphics.lineStyle(3, 0xFF0000, 0.8) // Red
-        interpolatedContours.forEach(contour => {
-          const screenContour = contour.map(pt => ({
-            x: startX + pt.x * this.gridSize,
-            y: webTop + pt.y * this.gridSize
-          }))
-          
-          this.rawContourGraphics.beginPath()
-          screenContour.forEach((point, index) => {
-            if (index === 0) {
-              this.rawContourGraphics.moveTo(point.x, point.y)
-            } else {
-              this.rawContourGraphics.lineTo(point.x, point.y)
-            }
-          })
-          this.rawContourGraphics.closePath()
-          this.rawContourGraphics.strokePath()
-        })
-      }
-      
-      // 3. Smoothed contours
-      const smoothOptions: MarchingSquaresOptions = {
-        ...interpolatedOptions,
-        smoothing: true,
-        smoothingMethod: this.smoothingMethod,
-        smoothingIterations: this.smoothingIterations,
-        smoothingStrength: this.smoothingStrength,
-        edgeBufferDistance: this.edgeBufferDistance,
-        preserveEdgeSegments: this.preserveEdgeSegments,
-        transitionBlending: this.transitionBlending,
-        curvatureThreshold: this.curvatureThreshold,
-        preserveStraightSegments: this.preserveStraightSegments,
-        collisionAvoidance: this.collisionAvoidance,
-        collisionMinDistance: this.collisionMinDistance,
-        collisionMethod: this.collisionMethod,
-        collisionIterations: this.collisionIterations,
-        edgeClamping: this.edgeClamping,
-        edgeClampDistance: this.edgeClampDistance,
-        cornerTreatment: this.cornerTreatment
-      }
-      const smoothContours = marchingSquaresOptimized(scalarGrid, smoothOptions)
-      
-      // Draw smoothed contours in green
-      if (this.smoothedContourGraphics) {
-        this.smoothedContourGraphics.lineStyle(3, 0x00FF00, 0.8) // Green
-        smoothContours.forEach(contour => {
-          const screenContour = contour.map(pt => ({
-            x: startX + pt.x * this.gridSize,
-            y: webTop + pt.y * this.gridSize
-          }))
-          
-          this.smoothedContourGraphics.beginPath()
-          screenContour.forEach((point, index) => {
-            if (index === 0) {
-              this.smoothedContourGraphics.moveTo(point.x, point.y)
-            } else {
-              this.smoothedContourGraphics.lineTo(point.x, point.y)
-            }
-          })
-          this.smoothedContourGraphics.closePath()
-          this.smoothedContourGraphics.strokePath()
+          this.binaryContourGraphics!.closePath()
+          this.binaryContourGraphics!.strokePath()
         })
       }
       
@@ -863,56 +801,50 @@ export class BeamElevationScene extends Phaser.Scene {
     
     // Normal mode: Clear only the graphics we'll use
     this.binaryContourGraphics?.clear()
+    this.rawContourGraphics?.clear()
+    this.smoothedContourGraphics?.clear()
     
     // Convert binary grid to scalar field
     const scalarGrid = binaryToScalarField(grid, this.scalarFieldMethod, this.scalarFieldRadius)
     
-    // Apply marching squares without smoothing first
-    const rawOptions: MarchingSquaresOptions = {
-      threshold: this.threshold,
-      interpolationMethod: this.interpolationMethod,
-      saddlePointResolution: this.saddlePointResolution,
-      smoothing: false, // Always get raw contours first
-      edgeSnapping: true,
-      snapDistance: this.snapDistance,
-      offsetX: this.contourOffsetX,
-      offsetY: this.contourOffsetY,
-      globalOffsetX: this.contourGlobalOffsetX,
-      globalOffsetY: this.contourGlobalOffsetY,
-      bufferSize: this.contourBufferSize,
-      bufferValue: this.contourBufferValue,
-      alignmentMode: this.alignmentMode,
-      clampToGrid: this.clampToGrid,
-      extendToBoundary: this.extendToBoundary
-    }
-    const rawContours = marchingSquaresOptimized(scalarGrid, rawOptions)
+    // Apply marching squares with default config
+    const { contours: rawContours } = marchingSquaresOptimized(scalarGrid, {})
+    
+    console.log('Marching squares results', {
+      inputGridHasData: grid.some(row => row.some(cell => cell > 0)),
+      scalarGridHasData: scalarGrid.some(row => row.some(cell => cell > 0)),
+      contoursFound: rawContours.length,
+      contourPoints: rawContours.map(c => c.points.length)
+    })
     
     // Draw raw contours
     if (this.rawContourGraphics) {
       this.rawContourGraphics.lineStyle(3, 0xFF6B6B, 0.8) // Red, thicker line
       
+      console.log('Drawing raw contours to graphics layer', rawContours.length)
+      
       rawContours.forEach(contour => {
-        const screenContour = contour.map(pt => ({
+        const screenContour = contour.points.map(pt => ({
           x: startX + pt.x * this.gridSize,
           y: webTop + pt.y * this.gridSize
         }))
         
-        this.rawContourGraphics.beginPath()
+        this.rawContourGraphics!.beginPath()
         screenContour.forEach((point, index) => {
           if (index === 0) {
-            this.rawContourGraphics.moveTo(point.x, point.y)
+            this.rawContourGraphics!.moveTo(point.x, point.y)
           } else {
-            this.rawContourGraphics.lineTo(point.x, point.y)
+            this.rawContourGraphics!.lineTo(point.x, point.y)
           }
         })
-        this.rawContourGraphics.closePath()
-        this.rawContourGraphics.strokePath()
+        this.rawContourGraphics!.closePath()
+        this.rawContourGraphics!.strokePath()
         
         // Draw control points if enabled
         if (this.showControlPoints && this.controlPointGraphics) {
           this.controlPointGraphics.fillStyle(0xFFFF00, 0.8) // Yellow
           screenContour.forEach(point => {
-            this.controlPointGraphics.fillCircle(point.x, point.y, 3)
+            this.controlPointGraphics!.fillCircle(point.x, point.y, 3)
           })
         }
       })
@@ -920,46 +852,25 @@ export class BeamElevationScene extends Phaser.Scene {
     
     // Draw smoothed contours if smoothing is enabled
     if (!this.showRawMarchingSquares && this.smoothedContourGraphics) {
-      // Apply marching squares with smoothing
-      const smoothOptions: MarchingSquaresOptions = {
-        ...rawOptions,
-        smoothing: true,
-        smoothingMethod: this.smoothingMethod,
-        smoothingIterations: this.smoothingIterations,
-        smoothingStrength: this.smoothingStrength,
-        edgeBufferDistance: this.edgeBufferDistance,
-        preserveEdgeSegments: this.preserveEdgeSegments,
-        transitionBlending: this.transitionBlending,
-        curvatureThreshold: this.curvatureThreshold,
-        preserveStraightSegments: this.preserveStraightSegments,
-        collisionAvoidance: this.collisionAvoidance,
-        collisionMinDistance: this.collisionMinDistance,
-        collisionMethod: this.collisionMethod,
-        collisionIterations: this.collisionIterations,
-        edgeClamping: this.edgeClamping,
-        edgeClampDistance: this.edgeClampDistance,
-        cornerTreatment: this.cornerTreatment
-      }
-      const smoothContours = marchingSquaresOptimized(scalarGrid, smoothOptions)
-      
+      // Apply marching squares with smoothing enabled - use same contours for now
       this.smoothedContourGraphics.lineStyle(3, 0x00FF00, 0.8) // Green, thicker line
       
-      smoothContours.forEach(contour => {
-        const screenContour = contour.map(pt => ({
+      rawContours.forEach(contour => {
+        const screenContour = contour.points.map(pt => ({
           x: startX + pt.x * this.gridSize,
           y: webTop + pt.y * this.gridSize
         }))
         
-        this.smoothedContourGraphics.beginPath()
+        this.smoothedContourGraphics!.beginPath()
         screenContour.forEach((point, index) => {
           if (index === 0) {
-            this.smoothedContourGraphics.moveTo(point.x, point.y)
+            this.smoothedContourGraphics!.moveTo(point.x, point.y)
           } else {
-            this.smoothedContourGraphics.lineTo(point.x, point.y)
+            this.smoothedContourGraphics!.lineTo(point.x, point.y)
           }
         })
-        this.smoothedContourGraphics.closePath()
-        this.smoothedContourGraphics.strokePath()
+        this.smoothedContourGraphics!.closePath()
+        this.smoothedContourGraphics!.strokePath()
       })
     }
   }
@@ -990,54 +901,21 @@ export class BeamElevationScene extends Phaser.Scene {
     // Convert binary grid to scalar field for interpolation
     const scalarGrid = binaryToScalarField(grid, this.scalarFieldMethod, this.scalarFieldRadius)
     
-    // Apply marching squares
-    const marchingOptions: MarchingSquaresOptions = {
-              threshold: this.threshold,
-        interpolationMethod: this.smoothingMethod === 'selective' && !this.useInterpolationWithSelective ? 'none' : this.interpolationMethod,
-        saddlePointResolution: this.saddlePointResolution,
-        edgeDetectionThreshold: this.edgeDetectionThreshold,
-        edgeDetectionEnabled: this.edgeDetectionEnabled,
-        alignmentMode: this.alignmentMode,
-        smoothing: !this.showRawMarchingSquares && !this.editMode,
-        edgeSnapping: this.clampToGrid,
-        extendToBoundary: this.extendToBoundary,
-        snapDistance: this.snapDistance,
-        offsetX: this.contourOffsetX,
-        offsetY: this.contourOffsetY,
-        globalOffsetX: this.contourGlobalOffsetX,
-        globalOffsetY: this.contourGlobalOffsetY,
-        bufferSize: this.contourBufferSize,
-        bufferValue: this.contourBufferValue,
-        smoothingMethod: this.smoothingMethod,
-        smoothingIterations: this.smoothingIterations,
-        smoothingStrength: this.smoothingStrength,
-        edgeBufferDistance: this.edgeBufferDistance,
-        preserveEdgeSegments: this.preserveEdgeSegments,
-        transitionBlending: this.transitionBlending,
-        curvatureThreshold: this.curvatureThreshold,
-        preserveStraightSegments: this.preserveStraightSegments,
-        collisionAvoidance: this.collisionAvoidance,
-      collisionMinDistance: this.collisionMinDistance,
-      collisionMethod: this.collisionMethod,
-      collisionIterations: this.collisionIterations,
-      edgeClamping: this.edgeClamping,
-      edgeClampDistance: this.edgeClampDistance,
-      cornerTreatment: this.cornerTreatment
-    }
-    
-    const contours = marchingSquaresOptimized(scalarGrid, marchingOptions)
+    // Apply marching squares with default config
+    const { contours } = marchingSquaresOptimized(scalarGrid, {})
     
     // Clear control points
-    this.controlPointGraphics.clear()
+    this.controlPointGraphics?.clear()
     
     // Draw contours
-    this.lossGraphics.lineStyle(2, 0xFF6B6B)
+    if (this.lossGraphics) {
+      this.lossGraphics!.lineStyle(2, 0xFF6B6B)
     
-    contours.forEach(contour => {
-      if (contour.length < 3) return
+      contours.forEach(contour => {
+      if (contour.points.length < 3) return
       
       // Transform contour points to screen coordinates with edge clamping
-      const screenContour = contour.map(point => {
+      const screenContour = contour.points.map(point => {
         let x = startX + point.x * this.gridSize
         let y = webTop + point.y * this.gridSize
         
@@ -1053,22 +931,22 @@ export class BeamElevationScene extends Phaser.Scene {
       // Draw the contour
       if (this.editMode || this.showRawMarchingSquares) {
         // In edit mode or raw mode, always use linear segments
-        this.lossGraphics.beginPath()
+        this.lossGraphics!.beginPath()
         screenContour.forEach((point, index) => {
           if (index === 0) {
-            this.lossGraphics.moveTo(point.x, point.y)
+            this.lossGraphics!.moveTo(point.x, point.y)
           } else {
-            this.lossGraphics.lineTo(point.x, point.y)
+            this.lossGraphics!.lineTo(point.x, point.y)
           }
         })
-        this.lossGraphics.closePath()
-        this.lossGraphics.strokePath()
+        this.lossGraphics!.closePath()
+        this.lossGraphics!.strokePath()
         
         // Draw control points if requested
         if (showControlPoints && this.showControlPoints && this.editMode) {
-          this.controlPointGraphics.fillStyle(0x00FF00, 0.8) // Green control points
+          this.controlPointGraphics!.fillStyle(0x00FF00, 0.8) // Green control points
           screenContour.forEach(point => {
-            this.controlPointGraphics.fillCircle(point.x, point.y, 3)
+            this.controlPointGraphics!.fillCircle(point.x, point.y, 3)
           })
         }
       } else {
@@ -1082,22 +960,23 @@ export class BeamElevationScene extends Phaser.Scene {
             bottomEdge: webBottom,
             strictEdges: { left: true, right: true, top: true, bottom: true }
           }
-          drawBezierContour(this.lossGraphics, screenContour, true, edgeConstraints)
+          drawBezierContour(this.lossGraphics!, screenContour, true, edgeConstraints)
         } else {
-          this.lossGraphics.beginPath()
+          this.lossGraphics!.beginPath()
           screenContour.forEach((point, index) => {
             if (index === 0) {
-              this.lossGraphics.moveTo(point.x, point.y)
+              this.lossGraphics!.moveTo(point.x, point.y)
             } else {
-              this.lossGraphics.lineTo(point.x, point.y)
+              this.lossGraphics!.lineTo(point.x, point.y)
             }
           })
-          this.lossGraphics.closePath()
-          this.lossGraphics.fillPath()
-          this.lossGraphics.strokePath()
+          this.lossGraphics!.closePath()
+          this.lossGraphics!.fillPath()
+          this.lossGraphics!.strokePath()
         }
       }
     })
+    }
   }
   
   private drawRectangularOutlines(webCells: {x: number, y: number}[], startX: number, webBottom: number) {
@@ -1170,37 +1049,37 @@ export class BeamElevationScene extends Phaser.Scene {
       // Check each edge
       // Top edge
       if (!regionSet.has(`${cell.x},${cell.y + 1}`)) {
-        this.lossGraphics.beginPath()
-        this.lossGraphics.moveTo(x, y)
-        this.lossGraphics.lineTo(x + cellWidth, y)
-        this.lossGraphics.strokePath()
+        this.lossGraphics!.beginPath()
+        this.lossGraphics!.moveTo(x, y)
+        this.lossGraphics!.lineTo(x + cellWidth, y)
+        this.lossGraphics!.strokePath()
       }
       
       // Bottom edge
       if (!regionSet.has(`${cell.x},${cell.y - 1}`)) {
-        this.lossGraphics.beginPath()
-        this.lossGraphics.moveTo(x, y + this.gridSize)
-        this.lossGraphics.lineTo(x + cellWidth, y + this.gridSize)
-        this.lossGraphics.strokePath()
+        this.lossGraphics!.beginPath()
+        this.lossGraphics!.moveTo(x, y + this.gridSize)
+        this.lossGraphics!.lineTo(x + cellWidth, y + this.gridSize)
+        this.lossGraphics!.strokePath()
       }
       
       // Left edge - only draw if not at beam edge or if neighbor exists
       if (!regionSet.has(`${cell.x - 1},${cell.y}`)) {
         if (cell.x !== 0) {
-          this.lossGraphics.beginPath()
-          this.lossGraphics.moveTo(x, y)
-          this.lossGraphics.lineTo(x, y + this.gridSize)
-          this.lossGraphics.strokePath()
+          this.lossGraphics!.beginPath()
+          this.lossGraphics!.moveTo(x, y)
+          this.lossGraphics!.lineTo(x, y + this.gridSize)
+          this.lossGraphics!.strokePath()
         }
       }
       
       // Right edge - only draw if not at beam edge or if neighbor exists
       if (!regionSet.has(`${cell.x + 1},${cell.y}`)) {
         if (cell.x !== maxCol) {
-          this.lossGraphics.beginPath()
-          this.lossGraphics.moveTo(x + cellWidth, y)
-          this.lossGraphics.lineTo(x + cellWidth, y + this.gridSize)
-          this.lossGraphics.strokePath()
+          this.lossGraphics!.beginPath()
+          this.lossGraphics!.moveTo(x + cellWidth, y)
+          this.lossGraphics!.lineTo(x + cellWidth, y + this.gridSize)
+          this.lossGraphics!.strokePath()
         }
       }
     })
@@ -1270,11 +1149,11 @@ export class BeamElevationScene extends Phaser.Scene {
     if (!this.lossGraphics) return
     
     // Set fill style
-    this.lossGraphics.fillStyle(0xFFB3BA, 0.8)
+    this.lossGraphics!.fillStyle(0xFFB3BA, 0.8)
     
     // In annotation mode, draw with outlines like edit mode
     if (this.appMode === 'annotation' || this.editMode) {
-      this.lossGraphics.lineStyle(2, 0xFF6B6B)
+      this.lossGraphics!.lineStyle(2, 0xFF6B6B)
     }
     
     // Fill individual cells with proper edge extension
@@ -1294,11 +1173,11 @@ export class BeamElevationScene extends Phaser.Scene {
         cellWidth = beamRight - x
       }
       
-      this.lossGraphics.fillRect(x, flangeY, cellWidth, flangeThickness * this.gridSize)
+      this.lossGraphics!.fillRect(x, flangeY, cellWidth, flangeThickness * this.gridSize)
     })
     
     // Draw outlines - darker red for flanges
-    this.lossGraphics.lineStyle(2, 0xCC5555)
+    this.lossGraphics!.lineStyle(2, 0xCC5555)
     
     // Create a set for quick lookup
     const cellSet = new Set(flangeCells.map(c => c.x))
@@ -1348,31 +1227,31 @@ export class BeamElevationScene extends Phaser.Scene {
       }
       
       // Top edge
-      this.lossGraphics.beginPath()
-      this.lossGraphics.moveTo(leftX, flangeY)
-      this.lossGraphics.lineTo(rightX, flangeY)
-      this.lossGraphics.strokePath()
+      this.lossGraphics!.beginPath()
+      this.lossGraphics!.moveTo(leftX, flangeY)
+      this.lossGraphics!.lineTo(rightX, flangeY)
+      this.lossGraphics!.strokePath()
       
       // Bottom edge
-      this.lossGraphics.beginPath()
-      this.lossGraphics.moveTo(leftX, flangeY + height)
-      this.lossGraphics.lineTo(rightX, flangeY + height)
-      this.lossGraphics.strokePath()
+      this.lossGraphics!.beginPath()
+      this.lossGraphics!.moveTo(leftX, flangeY + height)
+      this.lossGraphics!.lineTo(rightX, flangeY + height)
+      this.lossGraphics!.strokePath()
       
       // Left edge - only draw if not at beam edge
       if (segment[0] !== 0) {
-        this.lossGraphics.beginPath()
-        this.lossGraphics.moveTo(leftX, flangeY)
-        this.lossGraphics.lineTo(leftX, flangeY + height)
-        this.lossGraphics.strokePath()
+        this.lossGraphics!.beginPath()
+        this.lossGraphics!.moveTo(leftX, flangeY)
+        this.lossGraphics!.lineTo(leftX, flangeY + height)
+        this.lossGraphics!.strokePath()
       }
       
       // Right edge - only draw if not at beam edge
       if (segment[segment.length - 1] !== Math.ceil(this.beamLength) - 1) {
-        this.lossGraphics.beginPath()
-        this.lossGraphics.moveTo(rightX, flangeY)
-        this.lossGraphics.lineTo(rightX, flangeY + height)
-        this.lossGraphics.strokePath()
+        this.lossGraphics!.beginPath()
+        this.lossGraphics!.moveTo(rightX, flangeY)
+        this.lossGraphics!.lineTo(rightX, flangeY + height)
+        this.lossGraphics!.strokePath()
       }
     })
   }
@@ -1445,10 +1324,15 @@ export class BeamElevationScene extends Phaser.Scene {
     )
     
     cell.setStrokeStyle(2, 0xff0000, 1.0)  // Bright red thick border for debugging
-    // Only make cells interactive in edit mode
-    if (this.appMode === 'edit') {
+    
+    // Make cells interactive in edit mode
+    if (this.editMode) {
       cell.setInteractive()
+      console.log('Cell made interactive:', { zone, col, row, editMode: this.editMode })
+    } else {
+      console.log('Cell NOT made interactive:', { zone, col, row, editMode: this.editMode })
     }
+    
     cell.setData('col', col)
     cell.setData('row', row)
     cell.setData('zone', zone)
@@ -1477,10 +1361,13 @@ export class BeamElevationScene extends Phaser.Scene {
   
   private setupCellInteraction(cell: Phaser.GameObjects.Rectangle) {
     cell.on('pointerdown', () => {
-      if (!this.editMode || this.appMode === 'annotation') return
+      // Only allow interaction in edit mode
+      if (!this.editMode) return
       
       const zone = cell.getData('zone') || 'default'
       const key = `${zone}_${cell.getData('col')}_${cell.getData('row')}`
+      
+      console.log('Cell clicked:', { key, editMode: this.editMode, appMode: this.appMode })
       
       // Set paint mode based on current cell state
       if (this.selectedCells.has(key)) {
@@ -2256,6 +2143,21 @@ export class BeamElevationScene extends Phaser.Scene {
       this.cameras.main.centerY,
       this.beamLength * this.gridSize
     )
+  }
+  
+  // Debug method to force contour drawing
+  public debugDrawContours() {
+    console.log('Debug: Forcing contour redraw', {
+      selectedCells: this.selectedCells.size,
+      editMode: this.editMode,
+      appMode: this.appMode
+    })
+    
+    const sceneWidth = this.cameras.main.width
+    const padding = 100
+    const startX = padding
+    const beamWidth = this.beamLength * this.gridSize
+    this.drawSectionLoss(startX, this.cameras.main.height / 2, beamWidth)
   }
   
   public getEdgeClampStrength(): number {
