@@ -172,16 +172,43 @@ export class BeamElevationScene extends Phaser.Scene {
 
   create() {
     if (!this.beamProfile) return
+    
+    // Enable input on all objects, not just the top one
+    this.input.topOnly = false
 
     // Expose debug method globally for testing
     (window as any).debugDrawContours = () => this.debugDrawContours()
+    
+    // Expose grid cells for debugging
+    (window as any).debugGridCells = () => {
+      console.log('Grid cells:', this.gridCells.size)
+      this.gridCells.forEach((cell, key) => {
+        console.log(key, {
+          interactive: cell.input ? true : false,
+          visible: cell.visible,
+          x: cell.x,
+          y: cell.y
+        })
+      })
+    }
+    
+    // Test cell click directly
+    (window as any).testCellClick = () => {
+      const firstCell = this.gridCells.values().next().value
+      if (firstCell) {
+        console.log('Manually triggering click on first cell')
+        firstCell.emit('pointerdown')
+      }
+    }
 
     console.log('Scene create() called with:', {
       editMode: this.editMode,
       appMode: this.appMode,
       showGrid: this.showGrid,
       typeofEditMode: typeof this.editMode,
-      editModeValue: this.editMode === true ? 'true' : this.editMode === false ? 'false' : 'other:' + this.editMode
+      editModeValue: this.editMode === true ? 'true' : this.editMode === false ? 'false' : 'other:' + this.editMode,
+      inputEnabled: this.input.enabled,
+      inputManager: this.input.manager ? 'exists' : 'missing'
     })
 
     const { webHeight, flangeThickness } = this.beamProfile
@@ -197,17 +224,26 @@ export class BeamElevationScene extends Phaser.Scene {
       this.isPanning = false
     })
     
-    // Combined scene input handler
+    // Combined scene input handler - lower priority to allow cells to handle first
     this.input.on('pointerdown', (pointer: Phaser.Input.Pointer) => {
-      console.log('Scene pointerdown at:', pointer.x, pointer.y, 'appMode:', this.appMode)
+      console.log('Scene pointerdown at:', pointer.x, pointer.y, 'appMode:', this.appMode, 'target:', pointer.event.target)
       
-      // Only allow panning in view mode, or annotation mode when not interacting with annotations
-      const allowPanning = this.appMode === 'view' || 
-        (this.appMode === 'annotation' && 
-         !this.annotationManager?.isCreatingAnnotation && 
-         !this.annotationManager?.isDragging())
+      // Don't pan in edit mode at all
+      if (this.appMode === 'edit') {
+        return
+      }
       
-      if (allowPanning) {
+      // In annotation mode, check if annotation manager should handle this pointer
+      if (this.appMode === 'annotation' && this.annotationManager) {
+        const worldPoint = { x: pointer.worldX, y: pointer.worldY }
+        if (this.annotationManager.shouldHandlePointer(worldPoint)) {
+          console.log('Annotation manager handling pointer, not panning')
+          return
+        }
+      }
+      
+      // Allow panning in view mode or annotation mode when not interacting
+      if (this.appMode === 'view' || this.appMode === 'annotation') {
         this.isPanning = true
         this.panStartX = pointer.x
         this.panStartY = pointer.y
@@ -1360,9 +1396,25 @@ export class BeamElevationScene extends Phaser.Scene {
     cell.setStrokeStyle(1, 0x999999, 0.8)  // Standard grid stroke
     
     // Always make cells interactive - the actual interaction logic will check edit mode
-    // Use the cell's actual dimensions for the hit area
-    cell.setInteractive()
-    console.log('Cell made interactive:', { zone, col, row, editMode: this.editMode, width: this.gridSize - 1, height: height })
+    // Make rectangle interactive with its bounds
+    cell.setInteractive(new Phaser.Geom.Rectangle(0, 0, cell.width, cell.height), Phaser.Geom.Rectangle.Contains)
+    
+    // Test if setInteractive worked
+    if (!cell.input) {
+      console.error('Cell failed to become interactive!', { zone, col, row })
+    } else {
+      console.log('Cell successfully made interactive:', { 
+        zone, col, row, 
+        editMode: this.editMode, 
+        cellWidth: cell.width,
+        cellHeight: cell.height,
+        cellX: cell.x,
+        cellY: cell.y,
+        hasInput: true,
+        inputEnabled: cell.input.enabled,
+        hitArea: cell.input.hitArea
+      })
+    }
     
     cell.setData('col', col)
     cell.setData('row', row)
@@ -1372,6 +1424,12 @@ export class BeamElevationScene extends Phaser.Scene {
     const key = `${zone}_${col}_${row}`
     this.gridCells.set(key, cell)
     this.gridContainer!.add(cell)
+    
+    // Ensure the cell stays interactive after being added to container
+    if (!cell.input || !cell.input.enabled) {
+      console.warn('Cell lost interactivity after adding to container, re-enabling')
+      cell.setInteractive()
+    }
     
     // Restore selected state if cell was previously selected
     if (this.selectedCells.has(key)) {
@@ -1391,12 +1449,20 @@ export class BeamElevationScene extends Phaser.Scene {
   }
   
   private setupCellInteraction(cell: Phaser.GameObjects.Rectangle) {
+    console.log('Setting up cell interaction for cell:', {
+      x: cell.x,
+      y: cell.y,
+      interactive: cell.input ? 'yes' : 'no',
+      visible: cell.visible,
+      alpha: cell.alpha
+    })
+    
     cell.on('pointerdown', () => {
       console.log('Cell pointerdown event triggered')
       
       // Only allow interaction in edit mode
       if (!this.editMode) {
-        console.log('Not in edit mode, ignoring click')
+        console.log('Not in edit mode, ignoring click. editMode=', this.editMode, 'appMode=', this.appMode)
         return
       }
       
