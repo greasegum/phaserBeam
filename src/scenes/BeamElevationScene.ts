@@ -104,9 +104,22 @@ export class BeamElevationScene extends Phaser.Scene {
 
   constructor() {
     super({ key: 'BeamElevationScene' })
+    console.log('=== BeamElevationScene CONSTRUCTOR ===')
+  }
+  
+  preload() {
+    console.log('=== BeamElevationScene PRELOAD ===')
   }
 
+  private updateCounter = 0
+  
   update() {
+    // Log first few updates to confirm scene is running
+    if (this.updateCounter < 5) {
+      console.log('=== BeamElevationScene UPDATE ===', this.updateCounter)
+      this.updateCounter++
+    }
+    
     // Update annotation manager effects
     if (this.annotationManager) {
       this.annotationManager.update()
@@ -198,6 +211,7 @@ export class BeamElevationScene extends Phaser.Scene {
       }
     }
 
+    console.log('=== SCENE CREATE START ===')
     console.log('Scene create() called with:', {
       editMode: this.editMode,
       appMode: this.appMode,
@@ -206,6 +220,11 @@ export class BeamElevationScene extends Phaser.Scene {
       editModeValue: this.editMode === true ? 'true' : this.editMode === false ? 'false' : 'other:' + this.editMode,
       inputEnabled: this.input.enabled,
       inputManager: this.input.manager ? 'exists' : 'missing'
+    })
+    console.log('=== SCENE CREATE DETAILS ===', {
+      sceneKey: this.scene.key,
+      isActive: this.scene.isActive(),
+      isVisible: this.scene.isVisible()
     })
 
     const { webHeight, flangeThickness } = this.beamProfile
