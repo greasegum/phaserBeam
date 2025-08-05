@@ -2,7 +2,7 @@ import Phaser from 'phaser'
 import { BeamProfile, GridCell } from '../types/beam'
 import { AppMode } from '../types/mode'
 import { AnnotationType } from '../types/annotations'
-import { marchingSquaresOptimized, MarchingSquaresOptions } from '../utils/marchingSquares'
+import { processGrid as marchingSquaresOptimized } from '../core'
 import { binaryToScalarField, ScalarFieldMethod } from '../utils/scalarField'
 import { drawBezierContour, EdgeConstraints } from '../utils/phaserBezierPath'
 import { AnnotationManager } from '../annotations/AnnotationManager'
@@ -580,42 +580,35 @@ export class BeamElevationScene extends Phaser.Scene {
       // Convert binary grid to scalar field for interpolation
       const scalarGrid = binaryToScalarField(grid, this.scalarFieldMethod, this.scalarFieldRadius, this.edgeClampStrength)
       
-      // Apply marching squares
-      const marchingOptions: MarchingSquaresOptions = {
-        threshold: this.threshold,
-        interpolationMethod: (this.smoothingMethod === 'selective' || this.smoothingMethod === 'intelligent-selective') && !this.useInterpolationWithSelective ? 'none' : this.interpolationMethod,
-        saddlePointResolution: this.saddlePointResolution,
-        edgeDetectionThreshold: this.edgeDetectionThreshold,
-        edgeDetectionEnabled: this.edgeDetectionEnabled,
-        smoothing: !this.showRawMarchingSquares,
-        edgeSnapping: true,
-        snapDistance: this.snapDistance,
-        offsetX: this.contourOffsetX,
-        offsetY: this.contourOffsetY,
-        globalOffsetX: this.contourGlobalOffsetX,
-        globalOffsetY: this.contourGlobalOffsetY,
-        bufferSize: this.contourBufferSize,
-        bufferValue: this.contourBufferValue,
-        smoothingMethod: this.smoothingMethod,
-        smoothingIterations: this.smoothingIterations,
-        smoothingStrength: this.smoothingStrength,
-        edgeBufferDistance: this.edgeBufferDistance,
-        preserveEdgeSegments: this.preserveEdgeSegments,
-        transitionBlending: this.transitionBlending,
-        curvatureThreshold: this.curvatureThreshold,
-        preserveStraightSegments: this.preserveStraightSegments,
-        collisionAvoidance: this.collisionAvoidance,
-        collisionMinDistance: this.collisionMinDistance,
-        collisionMethod: this.collisionMethod,
-        collisionIterations: this.collisionIterations,
-        alignmentMode: this.alignmentMode,
-        clampToGrid: this.clampToGrid,
-        edgeClamping: this.edgeClamping,
-        edgeClampDistance: this.edgeClampDistance,
-        cornerTreatment: this.cornerTreatment,
-        extendToBoundary: this.extendToBoundary
-      }
-      const contours = marchingSquaresOptimized(scalarGrid, marchingOptions)
+      // Generate contours using the unified core pipeline
+      const { contours } = marchingSquaresOptimized(scalarGrid, {
+        algorithm: {
+          threshold: this.threshold,
+          saddlePointResolution: this.saddlePointResolution,
+          alignment: { mode: this.alignmentMode, offsetX: this.contourOffsetX, offsetY: this.contourOffsetY },
+          edgeBehavior: { clampToGrid: this.clampToGrid, extendToBoundary: this.extendToBoundary, snapDistance: this.snapDistance }
+        },
+        interpolation: {
+          enabled: this.interpolationMethod !== 'none',
+          method: this.interpolationMethod,
+          scalarField: {
+            method: this.scalarFieldMethod,
+            radius: this.scalarFieldRadius,
+            edgeClamping: { enabled: this.edgeDetectionEnabled, strength: this.edgeDetectionThreshold, distance: this.edgeClampStrength }
+          },
+          transform: { globalOffsetX: this.contourGlobalOffsetX, globalOffsetY: this.contourGlobalOffsetY, scale: 1 }
+        },
+        smoothing: {
+          enabled: !this.showRawMarchingSquares,
+          algorithm: this.smoothingMethod,
+          iterations: this.smoothingIterations,
+          strength: this.smoothingStrength,
+          edgePreservation: { enabled: this.preserveEdgeSegments, bufferDistance: this.edgeBufferDistance, preserveStraightSegments: this.preserveStraightSegments, curvatureThreshold: this.curvatureThreshold },
+          collision: { enabled: this.collisionAvoidance, method: this.collisionMethod, minDistance: this.collisionMinDistance, maxIterations: this.collisionIterations },
+          filtering: { minContourArea: 0, minContourLength: 3, maxContours: 1000 }
+        },
+        performance: { enableCaching: true, interpolationCache: true, quality: 'balanced', maxGridSize: 1000, maxContourPoints: 10000 }
+      })
       
       // Draw filled contours
       if (this.lossGraphics) {

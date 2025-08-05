@@ -117,10 +117,10 @@ src/
 The consolidated marching squares implementation provides a clean interface with intelligent defaults:
 
 ```typescript
-import { marchingSquares } from './utils/marchingSquares'
+import { enhancedMarching } from './utils/marchingSquares'
 
-// Simple usage with defaults
-const contours = marchingSquares(grid)
+// Simple usage with defaults using the unified pipeline
+const contours = enhancedMarching(grid)
 
 // Advanced configuration
 const contours = marchingSquares(grid, {

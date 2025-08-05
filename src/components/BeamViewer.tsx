@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react'
 import paper from 'paper'
 import { BeamProfile, GridCell } from '../types/beam'
-import { marchingSquares } from '../utils/marchingSquares'
+import { processGrid as marchingSquares } from '../core'
 
 interface BeamViewerProps {
   beamProfile: BeamProfile
@@ -26,7 +26,10 @@ export const BeamViewer: React.FC<BeamViewerProps> = ({
 
     return () => {
       scope.project.clear()
-      // @ts-ignore - remove() method exists but not in types
+      // Clean up by manually removing all event listeners and references
+      // This is safer than using the undocumented remove() method
+      scope.view.detach()
+      // @ts-expect-error Paper.js cleanup - documented in examples but not in types
       scope.remove()
     }
   }, [])
