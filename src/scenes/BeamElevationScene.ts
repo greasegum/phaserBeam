@@ -21,6 +21,7 @@ export class BeamElevationScene extends Phaser.Scene {
   private selectedCells: Set<string> = new Set()
   private gridCells: Map<string, Phaser.GameObjects.Rectangle> = new Map()
   private onCellChange?: (cells: GridCell[]) => void
+  private spanLength = 96 // inches (8 feet default)
   
   // Touch/pan support
   private isPanning: boolean = false
@@ -117,6 +118,7 @@ export class BeamElevationScene extends Phaser.Scene {
     elevationView?: 'N' | 'S' | 'E' | 'W';
     appMode?: AppMode;
     savedAnnotations?: any[];
+    spanLength?: number;
     onCellChange?: (cells: GridCell[]) => void 
   }) {
     this.beamProfile = data.beamProfile
@@ -130,6 +132,7 @@ export class BeamElevationScene extends Phaser.Scene {
     this.storedCells = data.gridCells || []
     this.savedAnnotations = data.savedAnnotations || []
     this.onCellChange = data.onCellChange
+    this.spanLength = data.spanLength || 96
     
     console.log('Scene init complete:', {
       appMode: this.appMode,
@@ -399,6 +402,58 @@ export class BeamElevationScene extends Phaser.Scene {
     this.beamGraphics.moveTo(startX, centerY)
     this.beamGraphics.lineTo(startX + width, centerY)
     this.beamGraphics.strokePath()
+    
+    // Draw bearing centerlines (CL-to-CL)
+    if (this.spanLength > 0) {
+      const bearingOffset = (this.beamLength - this.spanLength) / 2
+      const leftBearingX = startX + bearingOffset * this.gridSize
+      const rightBearingX = startX + (this.beamLength - bearingOffset) * this.gridSize
+      
+      // Calculate vertical extent (slightly longer than beam height)
+      const totalBeamHeight = (webHeight + 2 * flangeThickness) * this.gridSize
+      const centerlineExtension = totalBeamHeight * 0.1 // 10% extension on each side
+      const centerlineTop = flangeTop - centerlineExtension
+      const centerlineBottom = flangeBottom + centerlineExtension
+      
+      // Long-short-long dashed line pattern
+      const dashPattern = [12, 4, 4, 4] // long dash, short gap, short dash, short gap
+      
+      // Draw left bearing centerline
+      this.drawDashedLine(leftBearingX, centerlineTop, leftBearingX, centerlineBottom, dashPattern)
+      
+      // Draw right bearing centerline
+      this.drawDashedLine(rightBearingX, centerlineTop, rightBearingX, centerlineBottom, dashPattern)
+    }
+  }
+  
+  private drawDashedLine(x1: number, y1: number, x2: number, y2: number, dashPattern: number[]) {
+    const dx = x2 - x1
+    const dy = y2 - y1
+    const length = Math.sqrt(dx * dx + dy * dy)
+    const unitX = dx / length
+    const unitY = dy / length
+    
+    let currentPos = 0
+    let dashIndex = 0
+    let drawing = true
+    
+    this.beamGraphics.lineStyle(1, 0x333333, 0.8) // Dark gray centerline
+    
+    while (currentPos < length) {
+      const dashLength = dashPattern[dashIndex % dashPattern.length]
+      const endPos = Math.min(currentPos + dashLength, length)
+      
+      if (drawing) {
+        this.beamGraphics.beginPath()
+        this.beamGraphics.moveTo(x1 + unitX * currentPos, y1 + unitY * currentPos)
+        this.beamGraphics.lineTo(x1 + unitX * endPos, y1 + unitY * endPos)
+        this.beamGraphics.strokePath()
+      }
+      
+      currentPos = endPos
+      dashIndex++
+      drawing = !drawing
+    }
   }
   
   private drawWebSectionLoss(webCells: {x: number, y: number}[], startX: number, centerY: number, width: number) {
@@ -1494,7 +1549,7 @@ export class BeamElevationScene extends Phaser.Scene {
     return this.savedAnnotations || []
   }
 
-  updateBeamProfile(profile: BeamProfile, length?: number, editMode?: boolean, showGrid?: boolean, gridOrigin?: 'left' | 'right', showTopFlange?: boolean, gridCells?: GridCell[], elevationView?: 'N' | 'S' | 'E' | 'W', appMode?: AppMode) {
+  updateBeamProfile(profile: BeamProfile, length?: number, editMode?: boolean, showGrid?: boolean, gridOrigin?: 'left' | 'right', showTopFlange?: boolean, gridCells?: GridCell[], elevationView?: 'N' | 'S' | 'E' | 'W', appMode?: AppMode, spanLength?: number) {
     console.log('updateBeamProfile called with:', {
       appMode,
       currentAppMode: this.appMode,
@@ -1521,6 +1576,7 @@ export class BeamElevationScene extends Phaser.Scene {
         elevationView: elevationView || this.elevationView,
         appMode: this.appMode,
         savedAnnotations: this.getCurrentAnnotations(),
+        spanLength: spanLength || this.spanLength,
         onCellChange: this.onCellChange 
       })
       return
@@ -1548,6 +1604,7 @@ export class BeamElevationScene extends Phaser.Scene {
         elevationView: elevationView || this.elevationView,
         appMode: this.appMode,
         savedAnnotations: this.getCurrentAnnotations(),
+        spanLength: this.spanLength,
         onCellChange: this.onCellChange 
       })
       
@@ -1576,6 +1633,7 @@ export class BeamElevationScene extends Phaser.Scene {
         elevationView: elevationView || this.elevationView,
         appMode: this.appMode,
         savedAnnotations: this.getCurrentAnnotations(),
+        spanLength: this.spanLength,
         onCellChange: this.onCellChange 
       })
       
@@ -1651,6 +1709,7 @@ export class BeamElevationScene extends Phaser.Scene {
     this.storedCells = gridCells || this.storedCells
     this.elevationView = elevationView || this.elevationView
     this.appMode = appMode || this.appMode
+    this.spanLength = spanLength || this.spanLength
     this.scene.restart({ 
       beamProfile: profile, 
       beamLength: this.beamLength,
@@ -1662,6 +1721,7 @@ export class BeamElevationScene extends Phaser.Scene {
       elevationView: this.elevationView,
       appMode: this.appMode,
       savedAnnotations: this.getCurrentAnnotations(),
+      spanLength: this.spanLength,
       onCellChange: this.onCellChange 
     })
   }

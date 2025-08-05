@@ -23,6 +23,7 @@ interface PhaserCanvasProps {
   onToggleOrdinateOrigin?: () => void
   showBeamEndDimensions?: boolean
   showBottomOrdinate?: boolean
+  spanLength?: number
 }
 
 export const PhaserCanvas: React.FC<PhaserCanvasProps> = ({ 
@@ -41,7 +42,8 @@ export const PhaserCanvas: React.FC<PhaserCanvasProps> = ({
   ordinateOriginSide = 'left',
   onToggleOrdinateOrigin,
   showBeamEndDimensions = true,
-  showBottomOrdinate = true
+  showBottomOrdinate = true,
+  spanLength = 96
 }) => {
   console.log('PhaserCanvas render - appMode:', appMode, 'editMode:', editMode, 'showGrid:', showGrid)
   const gameRef = useRef<Phaser.Game | null>(null)
@@ -102,7 +104,7 @@ export const PhaserCanvas: React.FC<PhaserCanvasProps> = ({
     if (scene) {
       setCurrentScene(scene)
       if (scene.scene.isActive()) {
-        scene.updateBeamProfile(beamProfile, beamLength, editMode, showGrid, gridOrigin, showTopFlange, gridCells, elevationView, appMode)
+        scene.updateBeamProfile(beamProfile, beamLength, editMode, showGrid, gridOrigin, showTopFlange, gridCells, elevationView, appMode, spanLength)
       } else {
         scene.scene.start('BeamElevationScene', { 
           beamProfile, 
@@ -114,7 +116,8 @@ export const PhaserCanvas: React.FC<PhaserCanvasProps> = ({
           showTopFlange,
           gridCells,
           elevationView,
-          appMode
+          appMode,
+          spanLength
         })
       }
     } else {
@@ -133,12 +136,13 @@ export const PhaserCanvas: React.FC<PhaserCanvasProps> = ({
             showTopFlange,
             gridCells,
             elevationView,
-            appMode
+            appMode,
+            spanLength
           })
         }
       })
     }
-  }, [beamProfile, beamLength, editMode, onCellChange, showGrid, gridOrigin, showTopFlange, gridCells, elevationView, appMode])
+  }, [beamProfile, beamLength, editMode, onCellChange, showGrid, gridOrigin, showTopFlange, gridCells, elevationView, appMode, spanLength])
 
   if (!beamProfile) {
     return (

@@ -20,6 +20,7 @@ export default function App() {
   const [ordinateOriginSide, setOrdinateOriginSide] = useState<'left' | 'right'>('left')
   const [showBeamEndDimensions, setShowBeamEndDimensions] = useState(true)
   const [showBottomOrdinate, setShowBottomOrdinate] = useState(true)
+  const [spanLength, setSpanLength] = useState<number>(96) // Default 96" (8 ft)
   
   useEffect(() => {
     const checkMobile = () => {
@@ -30,10 +31,11 @@ export default function App() {
     return () => window.removeEventListener('resize', checkMobile)
   }, [])
 
-  const handleSetupComplete = (beam: BeamProfile, length: number, elevation: 'N' | 'S' | 'E' | 'W') => {
+  const handleSetupComplete = (beam: BeamProfile, length: number, elevation: 'N' | 'S' | 'E' | 'W', span: number) => {
     setSelectedBeam(beam)
     setBeamLength(length)
     setElevationView(elevation)
+    setSpanLength(span)
     setShowSetup(false)
   }
 
@@ -179,6 +181,7 @@ export default function App() {
             onToggleOrdinateOrigin={() => setOrdinateOriginSide(ordinateOriginSide === 'left' ? 'right' : 'left')}
             showBeamEndDimensions={showBeamEndDimensions}
             showBottomOrdinate={showBottomOrdinate}
+            spanLength={spanLength}
           />
         </div>
       </main>
