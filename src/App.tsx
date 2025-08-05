@@ -7,6 +7,8 @@ import { AnnotationType } from './types/annotations'
 import { ModeToolbar } from './components/ModeToolbar'
 import { ZoomControl } from './components/ZoomControl'
 import { DefectType } from './types/defects'
+import { exportCanvasAsPNG, exportCanvasAsSVG } from './utils/canvasExport'
+import { BeamElevationScene } from './scenes/BeamElevationScene'
 
 export default function App() {
   const [selectedBeam, setSelectedBeam] = useState<BeamProfile | null>(null)
@@ -25,6 +27,7 @@ export default function App() {
   const [spanLength, setSpanLength] = useState<number>(96) // Default 96" (8 ft)
   const [currentZoom, setCurrentZoom] = useState<number>(1.0)
   const [selectedDefectType, setSelectedDefectType] = useState<DefectType>('section-loss')
+  const [currentScene, setCurrentScene] = useState<BeamElevationScene | null>(null)
   
   useEffect(() => {
     const checkMobile = () => {
@@ -45,6 +48,28 @@ export default function App() {
 
   const handleCellChange = (cells: GridCell[]) => {
     setGridCells(cells)
+  }
+  
+  const handleExport = (format: 'pdf' | 'png' | 'svg') => {
+    if (!currentScene) {
+      alert('Scene not ready. Please wait a moment and try again.')
+      return
+    }
+    
+    const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, -5)
+    const beamName = selectedBeam?.name.replace(/\s+/g, '-') || 'beam'
+    
+    switch (format) {
+      case 'png':
+        exportCanvasAsPNG(currentScene, `${beamName}-inspection-${timestamp}.png`)
+        break
+      case 'svg':
+        exportCanvasAsSVG(currentScene, `${beamName}-inspection-${timestamp}.svg`)
+        break
+      case 'pdf':
+        alert('PDF export coming soon! This will generate a professional report with beam details, defect summary, and inspection notes.')
+        break
+    }
   }
 
   if (showSetup) {
@@ -163,6 +188,8 @@ export default function App() {
         // Edit mode props
         selectedDefect={selectedDefectType}
         onSelectDefect={setSelectedDefectType}
+        // View mode props
+        onExport={handleExport}
       />
 
       {/* Main canvas area */}
@@ -192,6 +219,7 @@ export default function App() {
             spanLength={spanLength}
             zoom={currentZoom}
             selectedDefectType={selectedDefectType}
+            onSceneReady={setCurrentScene}
           />
         </div>
       </main>
@@ -208,7 +236,7 @@ export default function App() {
       }}>
         <span>
           {appMode === 'edit' && `Click cells to mark ${selectedDefectType.replace('-', ' ')}`}
-          {appMode === 'view' && 'View mode - Smooth rendering'}
+          {appMode === 'view' && 'View mode - Export ready'}
           {appMode === 'annotation' && 'Click to add annotations'}
         </span>
         <span>Total cells: {gridCells.length}</span>

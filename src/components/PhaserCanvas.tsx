@@ -27,6 +27,7 @@ interface PhaserCanvasProps {
   spanLength?: number
   zoom?: number
   selectedDefectType?: DefectType
+  onSceneReady?: (scene: BeamElevationScene) => void
 }
 
 export const PhaserCanvas: React.FC<PhaserCanvasProps> = ({ 
@@ -48,7 +49,8 @@ export const PhaserCanvas: React.FC<PhaserCanvasProps> = ({
   showBottomOrdinate = true,
   spanLength = 96,
   zoom = 1.0,
-  selectedDefectType = 'section-loss'
+  selectedDefectType = 'section-loss',
+  onSceneReady
 }) => {
   console.log('PhaserCanvas render - appMode:', appMode, 'editMode:', editMode, 'showGrid:', showGrid)
   const gameRef = useRef<Phaser.Game | null>(null)
@@ -108,6 +110,7 @@ export const PhaserCanvas: React.FC<PhaserCanvasProps> = ({
     const scene = gameRef.current.scene.getScene('BeamElevationScene') as BeamElevationScene
     if (scene) {
       setCurrentScene(scene)
+      onSceneReady?.(scene)
       if (scene.scene.isActive()) {
         scene.updateBeamProfile(beamProfile, beamLength, editMode, showGrid, gridOrigin, showTopFlange, gridCells, elevationView, appMode, spanLength, zoom, selectedDefectType)
       } else {
@@ -133,6 +136,7 @@ export const PhaserCanvas: React.FC<PhaserCanvasProps> = ({
         const readyScene = gameRef.current?.scene.getScene('BeamElevationScene') as BeamElevationScene
         if (readyScene) {
           setCurrentScene(readyScene)
+          onSceneReady?.(readyScene)
           readyScene.scene.start('BeamElevationScene', { 
             beamProfile, 
             beamLength,

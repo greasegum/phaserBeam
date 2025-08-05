@@ -17,6 +17,8 @@ interface ModeToolbarProps {
   // For edit mode
   selectedDefect?: DefectType
   onSelectDefect?: (defect: DefectType) => void
+  // For view mode
+  onExport?: (format: 'pdf' | 'png' | 'svg') => void
 }
 
 const ANNOTATION_TOOLS: { type: AnnotationType; label: string; shortcut: string }[] = [
@@ -45,10 +47,9 @@ export const ModeToolbar: React.FC<ModeToolbarProps> = ({
   onToggleBeamEndDimensions,
   onToggleBottomOrdinate,
   selectedDefect = 'section-loss',
-  onSelectDefect
+  onSelectDefect,
+  onExport
 }) => {
-  // Hide toolbar in view mode
-  if (appMode === 'view') return null
   
   const renderPatternPreview = (defectType: DefectType) => {
     const style = DEFECT_STYLES[defectType]
@@ -250,6 +251,145 @@ export const ModeToolbar: React.FC<ModeToolbarProps> = ({
               </div>
             </button>
           ))}
+        </>
+      )}
+      
+      {appMode === 'view' && (
+        <>
+          <span style={{ 
+            fontWeight: 'bold', 
+            marginRight: '10px',
+            fontSize: '14px',
+            color: '#333'
+          }}>
+            Export:
+          </span>
+          
+          <button
+            onClick={() => onExport?.('png')}
+            style={{
+              padding: '8px 16px',
+              border: '1px solid #ddd',
+              borderRadius: '4px',
+              backgroundColor: 'white',
+              cursor: 'pointer',
+              fontSize: '14px',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px',
+              transition: 'all 0.2s ease'
+            }}
+            onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#f5f5f5'}
+            onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'white'}
+          >
+            <span style={{ fontSize: '16px' }}>🖼️</span>
+            PNG
+          </button>
+          
+          <button
+            onClick={() => onExport?.('svg')}
+            style={{
+              padding: '8px 16px',
+              border: '1px solid #ddd',
+              borderRadius: '4px',
+              backgroundColor: 'white',
+              cursor: 'pointer',
+              fontSize: '14px',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px',
+              transition: 'all 0.2s ease'
+            }}
+            onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#f5f5f5'}
+            onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'white'}
+          >
+            <span style={{ fontSize: '16px' }}>📐</span>
+            SVG
+          </button>
+          
+          <button
+            onClick={() => onExport?.('pdf')}
+            style={{
+              padding: '8px 16px',
+              border: '1px solid #ddd',
+              borderRadius: '4px',
+              backgroundColor: 'white',
+              cursor: 'pointer',
+              fontSize: '14px',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px',
+              transition: 'all 0.2s ease'
+            }}
+            onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#f5f5f5'}
+            onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'white'}
+          >
+            <span style={{ fontSize: '16px' }}>📄</span>
+            PDF
+          </button>
+          
+          <div style={{ width: '1px', height: '30px', backgroundColor: '#ddd', margin: '0 10px' }} />
+          
+          {/* Stubbed future features */}
+          <button
+            disabled
+            style={{
+              padding: '8px 16px',
+              border: '1px solid #ddd',
+              borderRadius: '4px',
+              backgroundColor: '#f5f5f5',
+              cursor: 'not-allowed',
+              fontSize: '14px',
+              opacity: 0.5,
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px'
+            }}
+            title="Coming soon"
+          >
+            <span style={{ fontSize: '16px' }}>📊</span>
+            Report
+          </button>
+          
+          <button
+            disabled
+            style={{
+              padding: '8px 16px',
+              border: '1px solid #ddd',
+              borderRadius: '4px',
+              backgroundColor: '#f5f5f5',
+              cursor: 'not-allowed',
+              fontSize: '14px',
+              opacity: 0.5,
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px'
+            }}
+            title="Coming soon"
+          >
+            <span style={{ fontSize: '16px' }}>📤</span>
+            Share
+          </button>
+          
+          <button
+            disabled
+            style={{
+              padding: '8px 16px',
+              border: '1px solid #ddd',
+              borderRadius: '4px',
+              backgroundColor: '#f5f5f5',
+              cursor: 'not-allowed',
+              fontSize: '14px',
+              opacity: 0.5,
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px'
+            }}
+            title="Coming soon"
+          >
+            <span style={{ fontSize: '16px' }}>🖨️</span>
+            Print
+          </button>
         </>
       )}
     </div>
