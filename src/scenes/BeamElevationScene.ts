@@ -55,8 +55,8 @@ export class BeamElevationScene extends Phaser.Scene {
   // Marching squares alignment offsets
   private contourOffsetX = 0.5 // Center on edges for proper grid alignment
   private contourOffsetY = 0.5 // Center on edges for proper grid alignment
-  private contourGlobalOffsetX = 0 // Default 0 for proper grid alignment
-  private contourGlobalOffsetY = 0 // Default 0 for proper grid alignment
+  private contourGlobalOffsetX = -1 // Shift left by 1 cell
+  private contourGlobalOffsetY = -1 // Shift up by 1 cell
   // Marching squares buffer configuration
   private contourBufferSize = 1 // Buffer of 1 to ensure proper edge processing
   private contourBufferValue = 0 // Default buffer value
