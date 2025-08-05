@@ -276,8 +276,6 @@ export class BeamElevationScene extends Phaser.Scene {
     this.gridContainer = this.add.container()
     // Set grid container depth to be below contour graphics but still interactive
     this.gridContainer.setDepth(15)
-    // Ensure container doesn't block graphics below
-    this.gridContainer.setInteractive(false)
     console.log('Grid creation check:', {
       editMode: this.editMode,
       appMode: this.appMode,
