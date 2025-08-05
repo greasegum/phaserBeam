@@ -3,8 +3,8 @@ import { BeamProfile, GridCell } from '../types/beam'
 import { AppMode } from '../types/mode'
 import { AnnotationType } from '../types/annotations'
 import { processGrid as marchingSquaresOptimized } from '../core'
-import { binaryToScalarField, ScalarFieldMethod } from '../utils/scalarField'
-import { drawBezierContour, EdgeConstraints } from '../utils/phaserBezierPath'
+import { binaryToScalarField, ScalarFieldMethod } from '../core/ScalarField'
+import { drawBezierContour, EdgeConstraints } from '../core/BezierRendering'
 import { AnnotationManager } from '../annotations/AnnotationManager'
 import { DefectType, DEFECT_STYLES } from '../types/defects'
 import { applyDefectPattern } from '../utils/defectPatterns'
@@ -61,7 +61,7 @@ export class BeamElevationScene extends Phaser.Scene {
   private contourBufferSize = 1 // Buffer of 1 to ensure proper edge processing
   private contourBufferValue = 0 // Default buffer value
   // Smoothing options
-  private smoothingMethod: 'basic' | 'laplacian' | 'chaikin' | 'bilateral' | 'savitzky-golay' | 'catmull-rom' | 'edge-aware' | 'intelligent' | 'selective' | 'intelligent-selective' = 'edge-aware'
+  private smoothingMethod: 'basic' | 'laplacian' | 'chaikin' | 'bilateral' | 'catmull-rom' | 'edge-aware' | 'intelligent' | 'selective' = 'edge-aware'
   private smoothingIterations = 1
   private smoothingStrength = 0.3
   
@@ -75,7 +75,7 @@ export class BeamElevationScene extends Phaser.Scene {
   // Collision avoidance options
   private collisionAvoidance = false // Default to disabled for simpler behavior
   private collisionMinDistance = 0.5
-  private collisionMethod: 'push' | 'shrink' | 'hybrid' = 'hybrid'
+  private collisionMethod: 'repulsion' | 'shrink' | 'hybrid' = 'hybrid'
   private collisionIterations = 10
   // View mode options
   private showRawMarchingSquares = false // Show raw marching squares without smoothing
@@ -993,7 +993,7 @@ export class BeamElevationScene extends Phaser.Scene {
     // Apply marching squares
     const marchingOptions: MarchingSquaresOptions = {
               threshold: this.threshold,
-        interpolationMethod: (this.smoothingMethod === 'selective' || this.smoothingMethod === 'intelligent-selective') && !this.useInterpolationWithSelective ? 'none' : this.interpolationMethod,
+        interpolationMethod: this.smoothingMethod === 'selective' && !this.useInterpolationWithSelective ? 'none' : this.interpolationMethod,
         saddlePointResolution: this.saddlePointResolution,
         edgeDetectionThreshold: this.edgeDetectionThreshold,
         edgeDetectionEnabled: this.edgeDetectionEnabled,
@@ -2019,7 +2019,7 @@ export class BeamElevationScene extends Phaser.Scene {
     }
   }
   
-  public setSmoothingOptions(method: 'basic' | 'laplacian' | 'chaikin' | 'bilateral' | 'savitzky-golay' | 'catmull-rom' | 'edge-aware' | 'intelligent', iterations: number, strength: number): void {
+  public setSmoothingOptions(method: 'basic' | 'laplacian' | 'chaikin' | 'bilateral' | 'catmull-rom' | 'edge-aware' | 'intelligent' | 'selective', iterations: number, strength: number): void {
     this.smoothingMethod = method
     this.smoothingIterations = iterations
     this.smoothingStrength = strength
@@ -2030,7 +2030,7 @@ export class BeamElevationScene extends Phaser.Scene {
     )
   }
   
-  public getSmoothingOptions(): { smoothingMethod: 'basic' | 'laplacian' | 'chaikin' | 'bilateral' | 'savitzky-golay' | 'catmull-rom' | 'edge-aware' | 'intelligent'; smoothingIterations: number; smoothingStrength: number } {
+  public getSmoothingOptions(): { smoothingMethod: 'basic' | 'laplacian' | 'chaikin' | 'bilateral' | 'catmull-rom' | 'edge-aware' | 'intelligent' | 'selective'; smoothingIterations: number; smoothingStrength: number } {
     return {
       smoothingMethod: this.smoothingMethod,
       smoothingIterations: this.smoothingIterations,
@@ -2038,7 +2038,7 @@ export class BeamElevationScene extends Phaser.Scene {
     }
   }
   
-  public setCollisionAvoidance(enabled: boolean, minDistance: number, method: 'push' | 'shrink' | 'hybrid', iterations: number): void {
+  public setCollisionAvoidance(enabled: boolean, minDistance: number, method: 'repulsion' | 'shrink' | 'hybrid', iterations: number): void {
     this.collisionAvoidance = enabled
     this.collisionMinDistance = minDistance
     this.collisionMethod = method
@@ -2050,7 +2050,7 @@ export class BeamElevationScene extends Phaser.Scene {
     )
   }
   
-  public getCollisionAvoidance(): { collisionAvoidance: boolean; collisionMinDistance: number; collisionMethod: 'push' | 'shrink' | 'hybrid'; collisionIterations: number } {
+  public getCollisionAvoidance(): { collisionAvoidance: boolean; collisionMinDistance: number; collisionMethod: 'repulsion' | 'shrink' | 'hybrid'; collisionIterations: number } {
     return {
       collisionAvoidance: this.collisionAvoidance,
       collisionMinDistance: this.collisionMinDistance,

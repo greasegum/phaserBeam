@@ -22,7 +22,7 @@ export const AdvancedSettings: React.FC<AdvancedSettingsProps> = ({ scene }) => 
   const [edgeClampStrength, setEdgeClampStrength] = useState(0.95)
   
   // Stage 3: Algorithmically Smoothed
-  const [smoothingMethod, setSmoothingMethod] = useState<'basic' | 'laplacian' | 'chaikin' | 'bilateral' | 'savitzky-golay' | 'catmull-rom' | 'edge-aware' | 'intelligent' | 'selective' | 'intelligent-selective'>('edge-aware')
+  const [smoothingMethod, setSmoothingMethod] = useState<'basic' | 'laplacian' | 'chaikin' | 'bilateral' | 'catmull-rom' | 'edge-aware' | 'intelligent' | 'selective'>('edge-aware')
   const [smoothingIterations, setSmoothingIterations] = useState(1)
   const [smoothingStrength, setSmoothingStrength] = useState(0.3)
   const [edgeBufferDistance, setEdgeBufferDistance] = useState(2.0)
@@ -34,7 +34,7 @@ export const AdvancedSettings: React.FC<AdvancedSettingsProps> = ({ scene }) => 
   // Post-processing options
   const [collisionAvoidance, setCollisionAvoidance] = useState(false)
   const [collisionMinDistance, setCollisionMinDistance] = useState(0.5)
-  const [collisionMethod, setCollisionMethod] = useState<'push' | 'shrink' | 'hybrid'>('hybrid')
+  const [collisionMethod, setCollisionMethod] = useState<'repulsion' | 'shrink' | 'hybrid'>('hybrid')
   const [collisionIterations, setCollisionIterations] = useState(10)
   
   // Edge Clamping (applies to all stages)
@@ -755,7 +755,6 @@ export const AdvancedSettings: React.FC<AdvancedSettingsProps> = ({ scene }) => 
                 <option value="laplacian">Laplacian</option>
                 <option value="chaikin">Chaikin</option>
                 <option value="bilateral">Bilateral</option>
-                <option value="savitzky-golay">Savitzky-Golay</option>
                 <option value="catmull-rom">Catmull-Rom</option>
                 <option value="edge-aware">Edge-Aware</option>
                 <option value="intelligent">Intelligent</option>
@@ -819,7 +818,7 @@ export const AdvancedSettings: React.FC<AdvancedSettingsProps> = ({ scene }) => 
             </div>
 
             {/* Selective Smoothing Options */}
-            {(smoothingMethod === 'selective' || smoothingMethod === 'intelligent-selective') && (
+            {(smoothingMethod === 'selective') && (
               <>
                 <h5 style={{ fontSize: '12px', fontWeight: 600, marginTop: '16px', marginBottom: '8px' }}>
                   Selective Smoothing Options
@@ -948,7 +947,7 @@ export const AdvancedSettings: React.FC<AdvancedSettingsProps> = ({ scene }) => 
                       cursor: 'pointer'
                     }}
                   >
-                    <option value="push">Push</option>
+                    <option value="repulsion">Repulsion</option>
                     <option value="shrink">Shrink</option>
                     <option value="hybrid">Hybrid</option>
                   </select>
