@@ -5,6 +5,7 @@ import { BeamProfile, GridCell } from '../types/beam'
 import { AdvancedSettings } from './AdvancedSettings'
 import { AppMode } from '../types/mode'
 import { AnnotationType } from '../types/annotations'
+import { DefectType } from '../types/defects'
 
 interface PhaserCanvasProps {
   beamProfile: BeamProfile | null
@@ -24,6 +25,8 @@ interface PhaserCanvasProps {
   showBeamEndDimensions?: boolean
   showBottomOrdinate?: boolean
   spanLength?: number
+  zoom?: number
+  selectedDefectType?: DefectType
 }
 
 export const PhaserCanvas: React.FC<PhaserCanvasProps> = ({ 
@@ -43,7 +46,9 @@ export const PhaserCanvas: React.FC<PhaserCanvasProps> = ({
   onToggleOrdinateOrigin,
   showBeamEndDimensions = true,
   showBottomOrdinate = true,
-  spanLength = 96
+  spanLength = 96,
+  zoom = 1.0,
+  selectedDefectType = 'section-loss'
 }) => {
   console.log('PhaserCanvas render - appMode:', appMode, 'editMode:', editMode, 'showGrid:', showGrid)
   const gameRef = useRef<Phaser.Game | null>(null)
@@ -104,7 +109,7 @@ export const PhaserCanvas: React.FC<PhaserCanvasProps> = ({
     if (scene) {
       setCurrentScene(scene)
       if (scene.scene.isActive()) {
-        scene.updateBeamProfile(beamProfile, beamLength, editMode, showGrid, gridOrigin, showTopFlange, gridCells, elevationView, appMode, spanLength)
+        scene.updateBeamProfile(beamProfile, beamLength, editMode, showGrid, gridOrigin, showTopFlange, gridCells, elevationView, appMode, spanLength, zoom, selectedDefectType)
       } else {
         scene.scene.start('BeamElevationScene', { 
           beamProfile, 
@@ -117,7 +122,9 @@ export const PhaserCanvas: React.FC<PhaserCanvasProps> = ({
           gridCells,
           elevationView,
           appMode,
-          spanLength
+          spanLength,
+          zoom,
+          selectedDefectType
         })
       }
     } else {
@@ -137,12 +144,14 @@ export const PhaserCanvas: React.FC<PhaserCanvasProps> = ({
             gridCells,
             elevationView,
             appMode,
-            spanLength
+            spanLength,
+            zoom,
+            selectedDefectType
           })
         }
       })
     }
-  }, [beamProfile, beamLength, editMode, onCellChange, showGrid, gridOrigin, showTopFlange, gridCells, elevationView, appMode, spanLength])
+  }, [beamProfile, beamLength, editMode, onCellChange, showGrid, gridOrigin, showTopFlange, gridCells, elevationView, appMode, spanLength, zoom, selectedDefectType])
 
   if (!beamProfile) {
     return (
@@ -191,6 +200,13 @@ export const PhaserCanvas: React.FC<PhaserCanvasProps> = ({
       }, 100)
     }
   }, [appMode, currentScene, selectedAnnotationTool])
+  
+  // Handle zoom changes
+  useEffect(() => {
+    if (currentScene && gameRef.current) {
+      currentScene.cameras.main.setZoom(zoom)
+    }
+  }, [zoom, currentScene])
 
   // Tool switching is now handled by the useEffect above
 

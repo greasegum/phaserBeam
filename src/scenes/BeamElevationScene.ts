@@ -6,6 +6,8 @@ import { marchingSquaresOptimized, MarchingSquaresOptions } from '../utils/march
 import { binaryToScalarField, ScalarFieldMethod } from '../utils/scalarField'
 import { drawBezierContour, EdgeConstraints } from '../utils/phaserBezierPath'
 import { AnnotationManager } from '../annotations/AnnotationManager'
+import { DefectType, DEFECT_STYLES } from '../types/defects'
+import { applyDefectPattern } from '../utils/defectPatterns'
 
 export class BeamElevationScene extends Phaser.Scene {
   private beamProfile: BeamProfile | null = null
@@ -20,8 +22,10 @@ export class BeamElevationScene extends Phaser.Scene {
   private storedCells: GridCell[] = []
   private selectedCells: Set<string> = new Set()
   private gridCells: Map<string, Phaser.GameObjects.Rectangle> = new Map()
+  private cellDefectTypes: Map<string, DefectType> = new Map()
   private onCellChange?: (cells: GridCell[]) => void
   private spanLength = 96 // inches (8 feet default)
+  private selectedDefectType: DefectType = 'section-loss'
   
   // Touch/pan support
   private isPanning: boolean = false
@@ -119,6 +123,8 @@ export class BeamElevationScene extends Phaser.Scene {
     appMode?: AppMode;
     savedAnnotations?: any[];
     spanLength?: number;
+    zoom?: number;
+    selectedDefectType?: DefectType;
     onCellChange?: (cells: GridCell[]) => void 
   }) {
     this.beamProfile = data.beamProfile
@@ -133,6 +139,7 @@ export class BeamElevationScene extends Phaser.Scene {
     this.savedAnnotations = data.savedAnnotations || []
     this.onCellChange = data.onCellChange
     this.spanLength = data.spanLength || 96
+    this.selectedDefectType = data.selectedDefectType || 'section-loss'
     
     console.log('Scene init complete:', {
       appMode: this.appMode,
@@ -145,9 +152,13 @@ export class BeamElevationScene extends Phaser.Scene {
     
     // Initialize selected cells from grid cells
     this.selectedCells.clear()
+    this.cellDefectTypes.clear()
     this.storedCells.forEach(cell => {
       const key = `${cell.zone || 'web'}_${cell.x}_${cell.y}`
       this.selectedCells.add(key)
+      if (cell.defectType) {
+        this.cellDefectTypes.set(key, cell.defectType)
+      }
     })
   }
   
@@ -424,6 +435,73 @@ export class BeamElevationScene extends Phaser.Scene {
       // Draw right bearing centerline
       this.drawDashedLine(rightBearingX, centerlineTop, rightBearingX, centerlineBottom, dashPattern)
     }
+  }
+  
+  private drawDefectPatterns(startX: number, centerY: number, width: number) {
+    if (!this.beamProfile) return
+    
+    const { webHeight, flangeThickness } = this.beamProfile
+    
+    // Group cells by defect type and zone
+    const defectGroups = new Map<string, GridCell[]>()
+    
+    this.selectedCells.forEach(key => {
+      const parts = key.split('_')
+      if (parts.length >= 3) {
+        const zone = parts[0]
+        const col = parseInt(parts[1])
+        const row = parseInt(parts[2])
+        const defectType = this.cellDefectTypes.get(key) || 'section-loss'
+        
+        const groupKey = `${zone}_${defectType}`
+        if (!defectGroups.has(groupKey)) {
+          defectGroups.set(groupKey, [])
+        }
+        
+        defectGroups.get(groupKey)!.push({
+          x: col,
+          y: row,
+          selected: true,
+          zone: zone as any,
+          defectType: defectType
+        })
+      }
+    })
+    
+    // Render each defect group with its pattern
+    defectGroups.forEach((cells, groupKey) => {
+      const [zone, defectType] = groupKey.split('_')
+      const style = DEFECT_STYLES[defectType as DefectType]
+      
+      // Create contiguous regions from cells
+      cells.forEach(cell => {
+        const x = startX + cell.x * this.gridSize
+        let y: number
+        
+        if (zone === 'web') {
+          // Web cells count from bottom
+          const webBottom = centerY + (webHeight * this.gridSize) / 2
+          y = webBottom - (cell.y + 1) * this.gridSize
+        } else if (zone === 'flange-top') {
+          const webTop = centerY - (webHeight * this.gridSize) / 2
+          const flangeTop = webTop - flangeThickness * this.gridSize
+          y = flangeTop + cell.y * this.gridSize
+        } else if (zone === 'flange-bottom') {
+          const webBottom = centerY + (webHeight * this.gridSize) / 2
+          y = webBottom + cell.y * this.gridSize
+        } else {
+          return
+        }
+        
+        // Apply defect pattern to this cell
+        applyDefectPattern(this.lossGraphics!, {
+          x,
+          y,
+          width: this.gridSize,
+          height: this.gridSize
+        }, style)
+      })
+    })
   }
   
   private drawDashedLine(x1: number, y1: number, x2: number, y2: number, dashPattern: number[]) {
@@ -1026,9 +1104,14 @@ export class BeamElevationScene extends Phaser.Scene {
       }
     })
     
-    // Draw web section loss using marching squares
-    if (allWebCells.length > 0) {
-      this.drawWebSectionLoss(allWebCells, startX, centerY, width)
+    // In view mode, render defects with their patterns
+    if (this.appMode === 'view' && !this.editMode) {
+      this.drawDefectPatterns(startX, centerY, width)
+    } else {
+      // Draw web section loss using marching squares
+      if (allWebCells.length > 0) {
+        this.drawWebSectionLoss(allWebCells, startX, centerY, width)
+      }
     }
     
     // Draw flange section loss
@@ -1238,12 +1321,21 @@ export class BeamElevationScene extends Phaser.Scene {
     
     // Restore selected state if cell was previously selected
     if (this.selectedCells.has(key)) {
-      cell.setFillStyle(0x888888, 0.3)
+      this.updateCellAppearance(cell, key)
     }
     
     this.setupCellInteraction(cell)
   }
 
+  private updateCellAppearance(cell: Phaser.GameObjects.Rectangle, key: string) {
+    const defectType = this.cellDefectTypes.get(key) || 'section-loss'
+    const style = DEFECT_STYLES[defectType]
+    
+    // For now, use a simplified fill color based on defect type
+    // In view mode, we'll render the full patterns
+    cell.setFillStyle(style.fillColor, 0.3)
+  }
+  
   private setupCellInteraction(cell: Phaser.GameObjects.Rectangle) {
     cell.on('pointerdown', () => {
       if (!this.editMode || this.appMode === 'annotation') return
@@ -1255,11 +1347,13 @@ export class BeamElevationScene extends Phaser.Scene {
       if (this.selectedCells.has(key)) {
         this.paintMode = 'remove'
         this.selectedCells.delete(key)
+        this.cellDefectTypes.delete(key)
         cell.setFillStyle(0xffffff, 0)
       } else {
         this.paintMode = 'add'
         this.selectedCells.add(key)
-        cell.setFillStyle(0x888888, 0.3) // Light gray to indicate selection
+        this.cellDefectTypes.set(key, this.selectedDefectType)
+        this.updateCellAppearance(cell, key)
       }
       
       this.isMouseDown = true
@@ -1288,7 +1382,8 @@ export class BeamElevationScene extends Phaser.Scene {
       if (this.isMouseDown && this.isPainting && this.paintMode) {
         if (this.paintMode === 'add' && !this.selectedCells.has(key)) {
           this.selectedCells.add(key)
-          cell.setFillStyle(0x888888, 0.3)
+          this.cellDefectTypes.set(key, this.selectedDefectType)
+          this.updateCellAppearance(cell, key)
           
           // Redraw section loss and notify
           const sceneWidth = this.cameras.main.width
@@ -1300,6 +1395,7 @@ export class BeamElevationScene extends Phaser.Scene {
           this.notifyCellChange()
         } else if (this.paintMode === 'remove' && this.selectedCells.has(key)) {
           this.selectedCells.delete(key)
+          this.cellDefectTypes.delete(key)
           cell.setFillStyle(0xffffff, 0)
           
           // Redraw section loss and notify
@@ -1515,7 +1611,8 @@ export class BeamElevationScene extends Phaser.Scene {
           y,
           selected: true,
           severity: 1,
-          zone: zone as 'web' | 'flange-top' | 'flange-bottom'
+          zone: zone as 'web' | 'flange-top' | 'flange-bottom',
+          defectType: this.cellDefectTypes.get(key) || 'section-loss'
         })
       }
     })
@@ -1549,7 +1646,7 @@ export class BeamElevationScene extends Phaser.Scene {
     return this.savedAnnotations || []
   }
 
-  updateBeamProfile(profile: BeamProfile, length?: number, editMode?: boolean, showGrid?: boolean, gridOrigin?: 'left' | 'right', showTopFlange?: boolean, gridCells?: GridCell[], elevationView?: 'N' | 'S' | 'E' | 'W', appMode?: AppMode, spanLength?: number) {
+  updateBeamProfile(profile: BeamProfile, length?: number, editMode?: boolean, showGrid?: boolean, gridOrigin?: 'left' | 'right', showTopFlange?: boolean, gridCells?: GridCell[], elevationView?: 'N' | 'S' | 'E' | 'W', appMode?: AppMode, spanLength?: number, zoom?: number, selectedDefectType?: DefectType) {
     console.log('updateBeamProfile called with:', {
       appMode,
       currentAppMode: this.appMode,
@@ -1577,6 +1674,7 @@ export class BeamElevationScene extends Phaser.Scene {
         appMode: this.appMode,
         savedAnnotations: this.getCurrentAnnotations(),
         spanLength: spanLength || this.spanLength,
+        selectedDefectType: selectedDefectType || this.selectedDefectType,
         onCellChange: this.onCellChange 
       })
       return
@@ -1605,6 +1703,7 @@ export class BeamElevationScene extends Phaser.Scene {
         appMode: this.appMode,
         savedAnnotations: this.getCurrentAnnotations(),
         spanLength: this.spanLength,
+        selectedDefectType: this.selectedDefectType,
         onCellChange: this.onCellChange 
       })
       
@@ -1634,6 +1733,7 @@ export class BeamElevationScene extends Phaser.Scene {
         appMode: this.appMode,
         savedAnnotations: this.getCurrentAnnotations(),
         spanLength: this.spanLength,
+        selectedDefectType: this.selectedDefectType,
         onCellChange: this.onCellChange 
       })
       
@@ -1710,6 +1810,7 @@ export class BeamElevationScene extends Phaser.Scene {
     this.elevationView = elevationView || this.elevationView
     this.appMode = appMode || this.appMode
     this.spanLength = spanLength || this.spanLength
+    this.selectedDefectType = selectedDefectType || this.selectedDefectType
     this.scene.restart({ 
       beamProfile: profile, 
       beamLength: this.beamLength,
@@ -1722,6 +1823,7 @@ export class BeamElevationScene extends Phaser.Scene {
       appMode: this.appMode,
       savedAnnotations: this.getCurrentAnnotations(),
       spanLength: this.spanLength,
+      selectedDefectType: this.selectedDefectType,
       onCellChange: this.onCellChange 
     })
   }

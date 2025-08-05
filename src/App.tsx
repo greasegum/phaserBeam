@@ -5,6 +5,9 @@ import { BeamProfile, GridCell } from './types/beam'
 import { AppMode, MODE_CONFIGS } from './types/mode'
 import { AnnotationType } from './types/annotations'
 import { AnnotationToolband } from './components/AnnotationToolband'
+import { ZoomControl } from './components/ZoomControl'
+import { DefectToolbar } from './components/DefectToolbar'
+import { DefectType } from './types/defects'
 
 export default function App() {
   const [selectedBeam, setSelectedBeam] = useState<BeamProfile | null>(null)
@@ -21,6 +24,8 @@ export default function App() {
   const [showBeamEndDimensions, setShowBeamEndDimensions] = useState(true)
   const [showBottomOrdinate, setShowBottomOrdinate] = useState(true)
   const [spanLength, setSpanLength] = useState<number>(96) // Default 96" (8 ft)
+  const [currentZoom, setCurrentZoom] = useState<number>(1.0)
+  const [selectedDefectType, setSelectedDefectType] = useState<DefectType>('section-loss')
   
   useEffect(() => {
     const checkMobile = () => {
@@ -156,6 +161,13 @@ export default function App() {
         onToggleBeamEndDimensions={() => setShowBeamEndDimensions(!showBeamEndDimensions)}
         onToggleBottomOrdinate={() => setShowBottomOrdinate(!showBottomOrdinate)}
       />
+      
+      {/* Defect toolbar band */}
+      <DefectToolbar
+        visible={appMode === 'edit'}
+        selectedDefect={selectedDefectType}
+        onSelectDefect={setSelectedDefectType}
+      />
 
       {/* Main canvas area */}
       <main style={{ 
@@ -182,6 +194,8 @@ export default function App() {
             showBeamEndDimensions={showBeamEndDimensions}
             showBottomOrdinate={showBottomOrdinate}
             spanLength={spanLength}
+            zoom={currentZoom}
+            selectedDefectType={selectedDefectType}
           />
         </div>
       </main>
@@ -203,6 +217,12 @@ export default function App() {
         </span>
         <span>Total cells: {gridCells.length}</span>
       </footer>
+      
+      {/* Zoom control */}
+      <ZoomControl
+        currentZoom={currentZoom}
+        onZoomChange={setCurrentZoom}
+      />
     </div>
   )
 }
