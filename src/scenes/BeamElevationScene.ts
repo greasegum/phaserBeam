@@ -186,6 +186,18 @@ export class BeamElevationScene extends Phaser.Scene {
   create() {
     if (!this.beamProfile) return
 
+    // TEST: Add visible banner to verify deployment
+    const { width, height } = this.scale
+    const testBanner = this.add.text(width / 2, 50, 'DEPLOYMENT TEST - Grid Fix Active', {
+      fontSize: '32px',
+      color: '#ff0000',
+      backgroundColor: '#ffff00',
+      padding: { x: 20, y: 10 }
+    })
+    testBanner.setOrigin(0.5)
+    testBanner.setDepth(1000)
+    testBanner.setScrollFactor(0)
+
     // Expose debug method globally for testing
     (window as any).debugDrawContours = () => this.debugDrawContours()
     
