@@ -28,7 +28,6 @@ interface PhaserCanvasProps {
   zoom?: number
   selectedDefectType?: DefectType
   onSceneReady?: (scene: BeamElevationScene) => void
-  showDebugVisualization?: boolean
 }
 
 export const PhaserCanvas: React.FC<PhaserCanvasProps> = ({ 
@@ -51,8 +50,7 @@ export const PhaserCanvas: React.FC<PhaserCanvasProps> = ({
   spanLength = 96,
   zoom = 1.0,
   selectedDefectType = 'section-loss',
-  onSceneReady,
-  showDebugVisualization = false
+  onSceneReady
 }) => {
   console.log('PhaserCanvas render - appMode:', appMode, 'editMode:', editMode, 'showGrid:', showGrid)
   const gameRef = useRef<Phaser.Game | null>(null)
@@ -114,7 +112,7 @@ export const PhaserCanvas: React.FC<PhaserCanvasProps> = ({
       setCurrentScene(scene)
       onSceneReady?.(scene)
       if (scene.scene.isActive()) {
-        scene.updateBeamProfile(beamProfile, beamLength, editMode, showGrid, gridOrigin, showTopFlange, gridCells, elevationView, appMode, spanLength, zoom, selectedDefectType, showDebugVisualization)
+        scene.updateBeamProfile(beamProfile, beamLength, editMode, showGrid, gridOrigin, showTopFlange, gridCells, elevationView, appMode, spanLength, zoom, selectedDefectType)
       } else {
         scene.scene.start('BeamElevationScene', { 
           beamProfile, 
@@ -129,8 +127,7 @@ export const PhaserCanvas: React.FC<PhaserCanvasProps> = ({
           appMode,
           spanLength,
           zoom,
-          selectedDefectType,
-          showDebugVisualization
+          selectedDefectType
         })
       }
     } else {
@@ -153,13 +150,12 @@ export const PhaserCanvas: React.FC<PhaserCanvasProps> = ({
             appMode,
             spanLength,
             zoom,
-            selectedDefectType,
-            showDebugVisualization
+            selectedDefectType
           })
         }
       })
     }
-  }, [beamProfile, beamLength, editMode, onCellChange, showGrid, gridOrigin, showTopFlange, gridCells, elevationView, appMode, spanLength, zoom, selectedDefectType, showDebugVisualization])
+  }, [beamProfile, beamLength, editMode, onCellChange, showGrid, gridOrigin, showTopFlange, gridCells, elevationView, appMode, spanLength, zoom, selectedDefectType])
 
   if (!beamProfile) {
     return (

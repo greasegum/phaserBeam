@@ -656,7 +656,7 @@ export class AnnotationManager {
   }
   
   // Interaction methods
-  private getAnnotationAtPoint(point: AnnotationPoint): { annotation: Annotation, handle?: string } | null {
+  public getAnnotationAtPoint(point: AnnotationPoint): { annotation: Annotation, handle?: string } | null {
     let foundResult: { annotation: Annotation, handle?: string } | null = null
     
     // Check each annotation in reverse order (top to bottom)
@@ -1182,6 +1182,15 @@ export class AnnotationManager {
   
   public get isCreatingAnnotation(): boolean {
     return this.isCreating
+  }
+  
+  public shouldHandlePointer(worldPoint: { x: number, y: number }): boolean {
+    // Check if we're creating an annotation
+    if (this.isCreating) return true
+    
+    // Check if we're clicking on an existing annotation
+    const annotationResult = this.getAnnotationAtPoint(worldPoint)
+    return annotationResult !== null
   }
   
   public restoreAnnotations(savedAnnotations: any[]): void {

@@ -6,50 +6,114 @@ interface AdvancedSettingsProps {
   scene?: BeamElevationScene
 }
 
+// Shared styles for consistency
+const styles = {
+  section: {
+    marginBottom: '20px',
+    padding: '12px',
+    backgroundColor: '#f8f9fa',
+    borderRadius: '6px',
+    border: '1px solid #e0e0e0'
+  },
+  sectionTitle: {
+    fontSize: '14px',
+    fontWeight: 600,
+    marginBottom: '12px',
+    display: 'flex',
+    alignItems: 'center',
+    gap: '8px'
+  },
+  subsectionTitle: {
+    fontSize: '12px',
+    fontWeight: 600,
+    marginTop: '16px',
+    marginBottom: '8px',
+    color: '#555'
+  },
+  control: {
+    marginBottom: '12px'
+  },
+  label: {
+    display: 'flex',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    fontSize: '12px',
+    color: '#666',
+    marginBottom: '4px'
+  },
+  select: {
+    width: '100%',
+    padding: '6px 10px',
+    fontSize: '12px',
+    border: '1px solid #ddd',
+    borderRadius: '4px',
+    backgroundColor: 'white',
+    cursor: 'pointer'
+  },
+  checkbox: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '8px',
+    fontSize: '12px',
+    color: '#666',
+    cursor: 'pointer',
+    marginBottom: '8px'
+  },
+  button: {
+    padding: '6px 12px',
+    fontSize: '12px',
+    border: 'none',
+    borderRadius: '4px',
+    cursor: 'pointer',
+    transition: 'background-color 0.2s'
+  }
+}
+
 export const AdvancedSettings: React.FC<AdvancedSettingsProps> = ({ scene }) => {
   const [isOpen, setIsOpen] = useState(false)
   
-  // Stage 1: Binary Marching Squares
+  // Core Algorithm Settings
   const [threshold, setThreshold] = useState(0.5)
-  const [saddlePointResolution, setSaddlePointResolution] = useState<'center' | 'gradient' | 'majority'>('center')
-  const [alignmentMode, setAlignmentMode] = useState<'edges' | 'vertices' | 'center'>('edges')
-  
-  // Stage 2: Interpolated Marching Squares
-  const [interpolationEnabled, setInterpolationEnabled] = useState(true)
   const [interpolationMethod, setInterpolationMethod] = useState<'linear' | 'cubic' | 'none'>('linear')
+  const [saddlePointResolution, setSaddlePointResolution] = useState<'center' | 'gradient' | 'majority'>('center')
+  
+  // Scalar Field Settings
   const [scalarFieldMethod, setScalarFieldMethod] = useState<'gaussian' | 'distance' | 'box' | 'none' | 'edge-preserving' | 'adaptive-edge-preserving' | 'edge-clamping'>('edge-clamping')
   const [scalarFieldRadius, setScalarFieldRadius] = useState(1)
   const [edgeClampStrength, setEdgeClampStrength] = useState(0.95)
   
-  // Stage 3: Algorithmically Smoothed
+  // Grid Alignment & Edge Behavior
+  const [alignmentMode, setAlignmentMode] = useState<'edges' | 'vertices' | 'center'>('edges')
+  const [clampToGrid, setClampToGrid] = useState(true)
+  const [extendToBoundary, setExtendToBoundary] = useState(false)
+  const [snapDistance, setSnapDistance] = useState(0.1)
+  
+  // Edge Clamping
+  const [edgeClamping, setEdgeClamping] = useState(true)
+  const [edgeClampDistance, setEdgeClampDistance] = useState(0.8)
+  const [cornerTreatment, setCornerTreatment] = useState<'trimmed' | 'flared' | 'square'>('flared')
+  
+  // Smoothing
   const [smoothingMethod, setSmoothingMethod] = useState<'basic' | 'laplacian' | 'chaikin' | 'bilateral' | 'catmull-rom' | 'edge-aware' | 'intelligent' | 'selective'>('edge-aware')
   const [smoothingIterations, setSmoothingIterations] = useState(1)
   const [smoothingStrength, setSmoothingStrength] = useState(0.3)
+  
+  // Selective Smoothing Options
   const [edgeBufferDistance, setEdgeBufferDistance] = useState(2.0)
   const [preserveEdgeSegments, setPreserveEdgeSegments] = useState(true)
   const [transitionBlending, setTransitionBlending] = useState(true)
-  const [curvatureThreshold, setCurvatureThreshold] = useState(0.1)
-  const [preserveStraightSegments, setPreserveStraightSegments] = useState(true)
   
-  // Post-processing options
+  // Collision Avoidance
   const [collisionAvoidance, setCollisionAvoidance] = useState(false)
   const [collisionMinDistance, setCollisionMinDistance] = useState(0.5)
   const [collisionMethod, setCollisionMethod] = useState<'repulsion' | 'shrink' | 'hybrid'>('hybrid')
   const [collisionIterations, setCollisionIterations] = useState(10)
   
-  // Edge Clamping (applies to all stages)
-  const [edgeClamping, setEdgeClamping] = useState(true)
-  const [edgeClampDistance, setEdgeClampDistance] = useState(0.8)
-  const [cornerTreatment, setCornerTreatment] = useState<'trimmed' | 'flared' | 'square'>('flared')
-  const [clampToGrid, setClampToGrid] = useState(true)
-  const [extendToBoundary, setExtendToBoundary] = useState(false)
-  const [snapDistance, setSnapDistance] = useState(0.1)
-  
-  // Global offsets
+  // Global Offsets
   const [globalOffsetX, setGlobalOffsetX] = useState(0.0)
   const [globalOffsetY, setGlobalOffsetY] = useState(0.0)
   
-  // View options
+  // View Options
   const [showRawMarchingSquares, setShowRawMarchingSquares] = useState(false)
   const [showControlPoints, setShowControlPoints] = useState(false)
   const [showBlurredField, setShowBlurredField] = useState(false)
@@ -63,10 +127,10 @@ export const AdvancedSettings: React.FC<AdvancedSettingsProps> = ({ scene }) => 
       
       const currentInterpolationMethod = scene.getInterpolationMethod?.() || 'linear'
       setInterpolationMethod(currentInterpolationMethod)
-      setInterpolationEnabled(currentInterpolationMethod !== 'none')
       
       setScalarFieldMethod(scene.getScalarFieldMethod?.() || 'edge-clamping')
       setScalarFieldRadius(scene.getScalarFieldRadius?.() || 1)
+      setEdgeClampStrength(scene.getEdgeClampStrength?.() || 0.95)
       
       const smoothing = scene.getSmoothingOptions?.()
       if (smoothing) {
@@ -107,7 +171,6 @@ export const AdvancedSettings: React.FC<AdvancedSettingsProps> = ({ scene }) => 
     setThreshold(0.5)
     setSaddlePointResolution('center')
     setAlignmentMode('edges')
-    setInterpolationEnabled(true)
     setInterpolationMethod('linear')
     setScalarFieldMethod('edge-clamping')
     setScalarFieldRadius(1)
@@ -118,8 +181,6 @@ export const AdvancedSettings: React.FC<AdvancedSettingsProps> = ({ scene }) => 
     setEdgeBufferDistance(2.0)
     setPreserveEdgeSegments(true)
     setTransitionBlending(true)
-    setCurvatureThreshold(0.1)
-    setPreserveStraightSegments(true)
     setCollisionAvoidance(false)
     setCollisionMinDistance(0.5)
     setCollisionMethod('hybrid')
@@ -130,31 +191,82 @@ export const AdvancedSettings: React.FC<AdvancedSettingsProps> = ({ scene }) => 
     setClampToGrid(true)
     setExtendToBoundary(false)
     setSnapDistance(0.1)
-    setGlobalOffsetX(-1.0)
-    setGlobalOffsetY(-1.0)
+    setGlobalOffsetX(0.0)
+    setGlobalOffsetY(0.0)
     setShowRawMarchingSquares(false)
     setShowControlPoints(false)
     setShowBlurredField(false)
     
     // Apply to scene
-    scene?.setThreshold?.(0.5)
-    scene?.setSaddlePointResolution?.('center')
-    scene?.setAlignmentMode?.('edges')
-    scene?.setInterpolationMethod?.('linear')
-    scene?.setScalarFieldMethod?.('edge-clamping')
-    scene?.setScalarFieldRadius?.(1)
-    scene?.setSmoothingOptions('edge-aware', 1, 0.3)
-    scene?.setCollisionAvoidance(false, 0.5, 'hybrid', 10)
-    scene?.setEdgeClamping?.(true)
-    scene?.setEdgeClampDistance?.(0.8)
-    scene?.setCornerTreatment?.('flared')
-    scene?.setClampToGrid?.(true)
-    scene?.setExtendToBoundary?.(false)
-    scene?.setSnapDistance?.(0.1)
-    scene?.setContourGlobalOffsets(-1.0, -1.0)
-    scene?.setShowRawMarchingSquares?.(false)
-    scene?.setShowControlPoints?.(false)
+    applyAllSettings()
   }
+  
+  const zeroOffsets = () => {
+    setGlobalOffsetX(0.0)
+    setGlobalOffsetY(0.0)
+    scene?.setContourGlobalOffsets(0.0, 0.0)
+  }
+
+  const applyAllSettings = () => {
+    if (!scene) return
+    
+    scene.setThreshold?.(threshold)
+    scene.setSaddlePointResolution?.(saddlePointResolution)
+    scene.setAlignmentMode?.(alignmentMode)
+    scene.setInterpolationMethod?.(interpolationMethod)
+    scene.setScalarFieldMethod?.(scalarFieldMethod)
+    scene.setScalarFieldRadius?.(scalarFieldRadius)
+    scene.setEdgeClampStrength?.(edgeClampStrength)
+    scene.setSmoothingOptions(smoothingMethod, smoothingIterations, smoothingStrength)
+    scene.setCollisionAvoidance(collisionAvoidance, collisionMinDistance, collisionMethod, collisionIterations)
+    scene.setEdgeClamping?.(edgeClamping)
+    scene.setEdgeClampDistance?.(edgeClampDistance)
+    scene.setCornerTreatment?.(cornerTreatment)
+    scene.setClampToGrid?.(clampToGrid)
+    scene.setExtendToBoundary?.(extendToBoundary)
+    scene.setSnapDistance?.(snapDistance)
+    scene.setContourGlobalOffsets(globalOffsetX, globalOffsetY)
+    scene.setShowRawMarchingSquares?.(showRawMarchingSquares)
+    scene.setShowControlPoints?.(showControlPoints)
+    scene.setShowBlurredField?.(showBlurredField)
+  }
+
+  const renderSlider = (
+    label: string, 
+    value: number, 
+    onChange: (value: number) => void,
+    min: number,
+    max: number,
+    step: number,
+    disabled?: boolean,
+    tooltip?: string
+  ) => (
+    <div style={{ ...styles.control, opacity: disabled ? 0.5 : 1 }}>
+      <label style={styles.label}>
+        <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+          {label}
+          {tooltip && <HelpTooltip text={tooltip} />}
+        </span>
+        <span style={{ fontWeight: 'bold', color: disabled ? '#999' : '#333' }}>
+          {value.toFixed(step < 1 ? 2 : 0)}
+        </span>
+      </label>
+      <input
+        type="range"
+        min={min}
+        max={max}
+        step={step}
+        value={value}
+        disabled={disabled}
+        onChange={(e) => onChange(parseFloat(e.target.value))}
+        style={{ 
+          width: '100%', 
+          cursor: disabled ? 'not-allowed' : 'pointer',
+          opacity: disabled ? 0.5 : 1
+        }}
+      />
+    </div>
+  )
 
   if (!scene) return null
 
@@ -174,25 +286,20 @@ export const AdvancedSettings: React.FC<AdvancedSettingsProps> = ({ scene }) => 
       <button
         onClick={() => setIsOpen(!isOpen)}
         style={{
+          ...styles.button,
           position: 'absolute',
           bottom: 0,
           right: 0,
-          padding: '8px 12px',
-          background: '#333',
+          backgroundColor: '#333',
           color: 'white',
-          border: 'none',
-          borderRadius: '4px',
-          cursor: 'pointer',
-          fontSize: '12px',
-          display: 'flex',
-          alignItems: 'center',
-          gap: '5px',
           boxShadow: '0 2px 4px rgba(0,0,0,0.2)'
         }}
       >
         <span style={{ 
           transform: `rotate(${isOpen ? 180 : 0}deg)`,
-          transition: 'transform 0.3s ease'
+          transition: 'transform 0.3s ease',
+          display: 'inline-block',
+          marginRight: '6px'
         }}>⚙️</span>
         Advanced
       </button>
@@ -201,875 +308,454 @@ export const AdvancedSettings: React.FC<AdvancedSettingsProps> = ({ scene }) => 
       <div 
         style={{
           position: 'absolute',
-          bottom: '40px',
+          bottom: '50px',
           right: 0,
-          width: '900px',
+          width: '400px',
           maxHeight: '80vh',
           overflowY: 'auto',
-          background: 'white',
+          backgroundColor: 'white',
           border: '1px solid #ddd',
           borderRadius: '8px',
           boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
-          padding: '16px',
-          transform: `translateY(${isOpen ? 0 : 'calc(100% + 50px)'})`,
+          padding: '20px',
+          transform: `translateY(${isOpen ? 0 : 'calc(100% + 60px)'})`,
           opacity: isOpen ? 1 : 0,
           pointerEvents: isOpen ? 'auto' : 'none',
           transition: 'transform 0.3s ease, opacity 0.3s ease'
         }}
-        onMouseDown={(e) => e.stopPropagation()}
-        onPointerDown={(e) => e.stopPropagation()}
-        onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
         <div style={{ 
           display: 'flex', 
           justifyContent: 'space-between', 
           alignItems: 'center',
-          marginBottom: '16px'
+          marginBottom: '20px'
         }}>
           <h3 style={{ margin: 0, fontSize: '16px', fontWeight: 600 }}>
-            Advanced Marching Squares Settings - Processing Pipeline
+            Marching Squares Settings
           </h3>
           <button
             onClick={resetToDefaults}
             style={{
-              padding: '4px 12px',
+              ...styles.button,
               backgroundColor: '#f44336',
-              color: 'white',
-              border: 'none',
-              borderRadius: '4px',
-              cursor: 'pointer',
-              fontSize: '12px'
+              color: 'white'
             }}
+            onMouseOver={(e) => e.currentTarget.style.backgroundColor = '#d32f2f'}
+            onMouseOut={(e) => e.currentTarget.style.backgroundColor = '#f44336'}
           >
-            Reset to Defaults
+            Reset All
           </button>
         </div>
 
-        {/* Three Column Layout */}
-        <div style={{ display: 'flex', gap: '16px' }}>
-          {/* Column 1: Binary Marching Squares */}
-          <div style={{ flex: 1, minWidth: '280px' }}>
-            <h4 style={{ 
-              margin: '0 0 12px 0', 
-              fontSize: '14px', 
-              fontWeight: 600,
-              color: '#0000FF',
-              borderBottom: '2px solid #0000FF',
-              paddingBottom: '4px'
-            }}>
-              Stage 1: Binary Marching Squares
-            </h4>
-            
-            <p style={{ fontSize: '11px', color: '#666', marginBottom: '12px' }}>
-              Raw pixelated contours from binary grid
-            </p>
-
-            {/* Threshold */}
-            <div style={{ marginBottom: '12px' }}>
-              <label style={{ 
-                display: 'flex', 
-                justifyContent: 'space-between',
-                alignItems: 'center',
-                fontSize: '12px',
-                color: '#666'
-              }}>
-                <span style={{ display: 'flex', alignItems: 'center' }}>
-                  Threshold
-                  <HelpTooltip text="The value that determines the contour boundary." />
-                </span>
-                <span style={{ fontWeight: 'bold', color: '#333' }}>{threshold.toFixed(2)}</span>
-              </label>
-              <input
-                type="range"
-                min="0"
-                max="1"
-                step="0.05"
-                value={threshold}
-                onChange={(e) => {
-                  const value = parseFloat(e.target.value)
-                  setThreshold(value)
-                  scene?.setThreshold?.(value)
-                }}
-                style={{ width: '100%', cursor: 'pointer' }}
-              />
-            </div>
-
-            {/* Saddle Point Resolution */}
-            <div style={{ marginBottom: '12px' }}>
-              <label style={{ 
-                display: 'block',
-                fontSize: '12px',
-                color: '#666',
-                marginBottom: '4px'
-              }}>
-                Saddle Point Resolution
-                <HelpTooltip text="How ambiguous cases are resolved." />
-              </label>
-              <select
-                value={saddlePointResolution}
-                onChange={(e) => {
-                  const resolution = e.target.value as 'center' | 'gradient' | 'majority'
-                  setSaddlePointResolution(resolution)
-                  scene?.setSaddlePointResolution?.(resolution)
-                }}
-                style={{
-                  width: '100%',
-                  padding: '4px 8px',
-                  fontSize: '12px',
-                  border: '1px solid #ddd',
-                  borderRadius: '4px',
-                  background: 'white',
-                  cursor: 'pointer'
-                }}
-              >
-                <option value="center">Center (Balanced)</option>
-                <option value="gradient">Gradient (Smooth)</option>
-                <option value="majority">Majority (Sharp)</option>
-              </select>
-            </div>
-
-            {/* Grid Alignment */}
-            <div style={{ marginBottom: '12px' }}>
-              <label style={{ 
-                display: 'block',
-                fontSize: '12px',
-                color: '#666',
-                marginBottom: '4px'
-              }}>
-                Grid Alignment
-                <HelpTooltip text="How contours align to the grid." />
-              </label>
-              <select
-                value={alignmentMode}
-                onChange={(e) => {
-                  const mode = e.target.value as 'edges' | 'vertices' | 'center'
-                  setAlignmentMode(mode)
-                  scene?.setAlignmentMode?.(mode)
-                }}
-                style={{
-                  width: '100%',
-                  padding: '4px 8px',
-                  fontSize: '12px',
-                  border: '1px solid #ddd',
-                  borderRadius: '4px',
-                  background: 'white',
-                  cursor: 'pointer'
-                }}
-              >
-                <option value="vertices">Vertices (Pixelated)</option>
-                <option value="edges">Edges (Smooth)</option>
-                <option value="center">Center (Blended)</option>
-              </select>
-            </div>
-
-            {/* Edge Behavior */}
-            <h5 style={{ fontSize: '12px', fontWeight: 600, marginTop: '16px', marginBottom: '8px' }}>
-              Edge Behavior
-            </h5>
-            
-            <label style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '12px', marginBottom: '8px' }}>
-              <input
-                type="checkbox"
-                checked={clampToGrid}
-                onChange={(e) => {
-                  setClampToGrid(e.target.checked)
-                  scene?.setClampToGrid?.(e.target.checked)
-                }}
-              />
-              Clamp to Grid
+        {/* 1. Core Algorithm */}
+        <div style={styles.section}>
+          <h4 style={styles.sectionTitle}>
+            <span style={{ color: '#2196F3' }}>◆</span>
+            Core Algorithm
+          </h4>
+          
+          {renderSlider('Threshold', threshold, (v) => {
+            setThreshold(v)
+            scene.setThreshold?.(v)
+          }, 0, 1, 0.05, false, 'The value that determines the contour boundary')}
+          
+          <div style={styles.control}>
+            <label style={{ ...styles.label, marginBottom: '6px' }}>
+              Interpolation Method
+              <HelpTooltip text="How contour points are positioned along edges" />
             </label>
-            
-            <label style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '12px', marginBottom: '8px' }}>
-              <input
-                type="checkbox"
-                checked={extendToBoundary}
-                onChange={(e) => {
-                  setExtendToBoundary(e.target.checked)
-                  scene?.setExtendToBoundary?.(e.target.checked)
-                }}
-              />
-              Extend to Boundary
-            </label>
-
-            {/* Snap Distance */}
-            <div style={{ marginBottom: '12px' }}>
-              <label style={{ 
-                display: 'flex', 
-                justifyContent: 'space-between',
-                alignItems: 'center',
-                fontSize: '12px',
-                color: '#666'
-              }}>
-                <span>Snap Distance</span>
-                <span style={{ fontWeight: 'bold', color: '#333' }}>{snapDistance.toFixed(2)}</span>
-              </label>
-              <input
-                type="range"
-                min="0"
-                max="0.5"
-                step="0.05"
-                value={snapDistance}
-                onChange={(e) => {
-                  const value = parseFloat(e.target.value)
-                  setSnapDistance(value)
-                  scene?.setSnapDistance?.(value)
-                }}
-                style={{ width: '100%', cursor: 'pointer' }}
-              />
-            </div>
+            <select
+              value={interpolationMethod}
+              onChange={(e) => {
+                const method = e.target.value as typeof interpolationMethod
+                setInterpolationMethod(method)
+                scene.setInterpolationMethod?.(method)
+              }}
+              style={styles.select}
+            >
+              <option value="none">None (Pixelated)</option>
+              <option value="linear">Linear</option>
+              <option value="cubic">Cubic</option>
+            </select>
           </div>
+          
+          <div style={styles.control}>
+            <label style={{ ...styles.label, marginBottom: '6px' }}>
+              Saddle Point Resolution
+              <HelpTooltip text="How ambiguous cases are resolved" />
+            </label>
+            <select
+              value={saddlePointResolution}
+              onChange={(e) => {
+                const resolution = e.target.value as typeof saddlePointResolution
+                setSaddlePointResolution(resolution)
+                scene.setSaddlePointResolution?.(resolution)
+              }}
+              style={styles.select}
+            >
+              <option value="center">Center</option>
+              <option value="gradient">Gradient</option>
+              <option value="majority">Majority</option>
+            </select>
+          </div>
+        </div>
 
-          {/* Column 2: Interpolated Marching Squares */}
-          <div style={{ flex: 1, minWidth: '280px' }}>
-            <h4 style={{ 
-              margin: '0 0 12px 0', 
-              fontSize: '14px', 
-              fontWeight: 600,
-              color: '#FF0000',
-              borderBottom: '2px solid #FF0000',
-              paddingBottom: '4px'
-            }}>
-              Stage 2: Interpolated Marching Squares
+        {/* 2. Scalar Field */}
+        {interpolationMethod !== 'none' && (
+          <div style={styles.section}>
+            <h4 style={styles.sectionTitle}>
+              <span style={{ color: '#FF9800' }}>◆</span>
+              Scalar Field
             </h4>
             
-            <p style={{ fontSize: '11px', color: '#666', marginBottom: '12px' }}>
-              Smooth contours with scalar field processing
-            </p>
-
-            {/* Enable Interpolation */}
-            <label style={{ 
-              display: 'flex',
-              alignItems: 'center',
-              gap: '8px',
-              fontSize: '12px',
-              color: '#666',
-              cursor: 'pointer',
-              marginBottom: '12px'
-            }}>
-              <input
-                type="checkbox"
-                checked={interpolationEnabled}
-                onChange={(e) => {
-                  setInterpolationEnabled(e.target.checked)
-                  if (e.target.checked) {
-                    const method = interpolationMethod === 'none' ? 'linear' : interpolationMethod
-                    setInterpolationMethod(method)
-                    scene?.setInterpolationMethod?.(method)
-                    const scalarMethod = scalarFieldMethod === 'none' ? 'edge-clamping' : scalarFieldMethod
-                    setScalarFieldMethod(scalarMethod)
-                    scene?.setScalarFieldMethod?.(scalarMethod)
-                  } else {
-                    setInterpolationMethod('none')
-                    scene?.setInterpolationMethod?.('none')
-                    setScalarFieldMethod('none')
-                    scene?.setScalarFieldMethod?.('none')
-                  }
-                }}
-                style={{ cursor: 'pointer' }}
-              />
-              Enable Interpolation
-              <HelpTooltip text="Enables smooth interpolation and scalar field processing." />
-            </label>
-
-            {/* Interpolation Method */}
-            <div style={{ marginBottom: '12px', opacity: interpolationEnabled ? 1 : 0.5 }}>
-              <label style={{ 
-                display: 'block',
-                fontSize: '12px',
-                color: interpolationEnabled ? '#666' : '#999',
-                marginBottom: '4px'
-              }}>
-                Interpolation Method
-                <HelpTooltip text="How contour points are positioned along edges." />
-              </label>
-              <select
-                value={interpolationMethod}
-                disabled={!interpolationEnabled}
-                onChange={(e) => {
-                  const method = e.target.value as 'linear' | 'cubic' | 'none'
-                  setInterpolationMethod(method)
-                  scene?.setInterpolationMethod?.(method)
-                }}
-                style={{
-                  width: '100%',
-                  padding: '4px 8px',
-                  fontSize: '12px',
-                  border: '1px solid #ddd',
-                  borderRadius: '4px',
-                  background: interpolationEnabled ? 'white' : '#f5f5f5',
-                  cursor: interpolationEnabled ? 'pointer' : 'not-allowed'
-                }}
-              >
-                <option value="linear">Linear (Smooth)</option>
-                <option value="cubic">Cubic (Smoother)</option>
-              </select>
-            </div>
-
-            {/* Scalar Field Method */}
-            <div style={{ marginBottom: '12px', opacity: interpolationEnabled ? 1 : 0.5 }}>
-              <label style={{ 
-                display: 'block',
-                fontSize: '12px',
-                color: interpolationEnabled ? '#666' : '#999',
-                marginBottom: '4px'
-              }}>
-                Scalar Field Method
-                <HelpTooltip text="Converts binary grid to continuous gradients." />
+            <div style={styles.control}>
+              <label style={{ ...styles.label, marginBottom: '6px' }}>
+                Method
+                <HelpTooltip text="Converts binary grid to continuous gradients" />
               </label>
               <select
                 value={scalarFieldMethod}
-                disabled={!interpolationEnabled}
                 onChange={(e) => {
                   const method = e.target.value as typeof scalarFieldMethod
                   setScalarFieldMethod(method)
-                  scene?.setScalarFieldMethod?.(method)
+                  scene.setScalarFieldMethod?.(method)
                 }}
-                style={{
-                  width: '100%',
-                  padding: '4px 8px',
-                  fontSize: '12px',
-                  border: '1px solid #ddd',
-                  borderRadius: '4px',
-                  background: interpolationEnabled ? 'white' : '#f5f5f5',
-                  cursor: interpolationEnabled ? 'pointer' : 'not-allowed'
-                }}
+                style={styles.select}
               >
-                <option value="edge-clamping">Edge-Clamping</option>
+                <option value="none">None</option>
+                <option value="edge-clamping">Edge Clamping</option>
                 <option value="adaptive-edge-preserving">Adaptive Edge</option>
-                <option value="edge-preserving">Edge-Preserving</option>
-                <option value="gaussian">Gaussian Blur</option>
+                <option value="edge-preserving">Edge Preserving</option>
+                <option value="gaussian">Gaussian</option>
                 <option value="distance">Distance Field</option>
                 <option value="box">Box Blur</option>
               </select>
             </div>
-
-            {/* Scalar Field Radius */}
-            <div style={{ marginBottom: '12px', opacity: interpolationEnabled && scalarFieldMethod !== 'none' ? 1 : 0.5 }}>
-              <label style={{ 
-                display: 'flex', 
-                justifyContent: 'space-between',
-                alignItems: 'center',
-                fontSize: '12px',
-                color: interpolationEnabled && scalarFieldMethod !== 'none' ? '#666' : '#999'
-              }}>
-                <span style={{ display: 'flex', alignItems: 'center' }}>
-                  Scalar Field Radius
-                  <HelpTooltip text="Size of the blur kernel in grid cells." />
-                </span>
-                <span style={{ fontWeight: 'bold', color: interpolationEnabled && scalarFieldMethod !== 'none' ? '#333' : '#999' }}>
-                  {scalarFieldRadius.toFixed(1)}
-                </span>
-              </label>
-              <input
-                type="range"
-                min="0.5"
-                max="3"
-                step="0.1"
-                value={scalarFieldRadius}
-                disabled={!interpolationEnabled || scalarFieldMethod === 'none'}
-                onChange={(e) => {
-                  const radius = parseFloat(e.target.value)
-                  setScalarFieldRadius(radius)
-                  scene?.setScalarFieldRadius?.(radius)
-                }}
-                style={{ 
-                  width: '100%', 
-                  cursor: interpolationEnabled && scalarFieldMethod !== 'none' ? 'pointer' : 'not-allowed',
-                  opacity: interpolationEnabled && scalarFieldMethod !== 'none' ? 1 : 0.5
-                }}
-              />
-            </div>
             
-            {/* Edge Clamp Strength (for edge-clamping method) */}
-            {scalarFieldMethod === 'edge-clamping' && (
-              <div style={{ marginBottom: '12px', opacity: interpolationEnabled ? 1 : 0.5 }}>
-                <label style={{ 
-                  display: 'flex', 
-                  justifyContent: 'space-between',
-                  alignItems: 'center',
-                  fontSize: '12px',
-                  color: interpolationEnabled ? '#666' : '#999'
-                }}>
-                  <span style={{ display: 'flex', alignItems: 'center' }}>
-                    Edge Clamp Strength
-                    <HelpTooltip text="How strongly edges are preserved during blurring." />
-                  </span>
-                  <span style={{ fontWeight: 'bold', color: interpolationEnabled ? '#333' : '#999' }}>
-                    {edgeClampStrength.toFixed(2)}
-                  </span>
-                </label>
-                <input
-                  type="range"
-                  min="0"
-                  max="1"
-                  step="0.05"
-                  value={edgeClampStrength}
-                  disabled={!interpolationEnabled}
-                  onChange={(e) => {
-                    const strength = parseFloat(e.target.value)
-                    setEdgeClampStrength(strength)
-                    scene?.setEdgeClampStrength?.(strength)
-                  }}
-                  style={{ 
-                    width: '100%', 
-                    cursor: interpolationEnabled ? 'pointer' : 'not-allowed',
-                    opacity: interpolationEnabled ? 1 : 0.5
-                  }}
-                />
-              </div>
-            )}
-
-            {/* Edge Clamping */}
-            <h5 style={{ fontSize: '12px', fontWeight: 600, marginTop: '16px', marginBottom: '8px' }}>
-              Edge Clamping
-            </h5>
-            
-            <label style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '12px', marginBottom: '8px' }}>
-              <input
-                type="checkbox"
-                checked={edgeClamping}
-                onChange={(e) => {
-                  setEdgeClamping(e.target.checked)
-                  scene?.setEdgeClamping?.(e.target.checked)
-                }}
-              />
-              Enable Edge Clamping
-            </label>
-
-            {/* Edge Clamp Distance */}
-            <div style={{ marginBottom: '12px', opacity: edgeClamping ? 1 : 0.5 }}>
-              <label style={{ 
-                display: 'flex', 
-                justifyContent: 'space-between',
-                alignItems: 'center',
-                fontSize: '12px',
-                color: edgeClamping ? '#666' : '#999'
-              }}>
-                <span>Edge Clamp Distance</span>
-                <span style={{ fontWeight: 'bold', color: edgeClamping ? '#333' : '#999' }}>
-                  {edgeClampDistance.toFixed(2)}
-                </span>
-              </label>
-              <input
-                type="range"
-                min="0.1"
-                max="2.0"
-                step="0.1"
-                value={edgeClampDistance}
-                disabled={!edgeClamping}
-                onChange={(e) => {
-                  const distance = parseFloat(e.target.value)
-                  setEdgeClampDistance(distance)
-                  scene?.setEdgeClampDistance?.(distance)
-                }}
-                style={{ 
-                  width: '100%', 
-                  cursor: edgeClamping ? 'pointer' : 'not-allowed',
-                  opacity: edgeClamping ? 1 : 0.5
-                }}
-              />
-            </div>
-
-            {/* Corner Treatment */}
-            <div style={{ marginBottom: '12px', opacity: edgeClamping ? 1 : 0.5 }}>
-              <label style={{ 
-                display: 'block',
-                fontSize: '12px',
-                color: edgeClamping ? '#666' : '#999',
-                marginBottom: '4px'
-              }}>
-                Corner Treatment
-              </label>
-              <select
-                value={cornerTreatment}
-                disabled={!edgeClamping}
-                onChange={(e) => {
-                  const treatment = e.target.value as 'trimmed' | 'flared' | 'square'
-                  setCornerTreatment(treatment)
-                  scene?.setCornerTreatment?.(treatment)
-                }}
-                style={{
-                  width: '100%',
-                  padding: '4px 8px',
-                  fontSize: '12px',
-                  border: '1px solid #ddd',
-                  borderRadius: '4px',
-                  background: edgeClamping ? 'white' : '#f5f5f5',
-                  cursor: edgeClamping ? 'pointer' : 'not-allowed'
-                }}
-              >
-                <option value="trimmed">Trimmed</option>
-                <option value="flared">Flared</option>
-                <option value="square">Square</option>
-              </select>
-            </div>
-          </div>
-
-          {/* Column 3: Algorithmically Smoothed */}
-          <div style={{ flex: 1, minWidth: '280px' }}>
-            <h4 style={{ 
-              margin: '0 0 12px 0', 
-              fontSize: '14px', 
-              fontWeight: 600,
-              color: '#00FF00',
-              borderBottom: '2px solid #00FF00',
-              paddingBottom: '4px'
-            }}>
-              Stage 3: Algorithmically Smoothed
-            </h4>
-            
-            <p style={{ fontSize: '11px', color: '#666', marginBottom: '12px' }}>
-              Post-processing smoothing algorithms
-            </p>
-
-            {/* Smoothing Method */}
-            <div style={{ marginBottom: '12px' }}>
-              <label style={{ 
-                display: 'block',
-                fontSize: '12px',
-                color: '#666',
-                marginBottom: '4px'
-              }}>
-                Smoothing Method
-                <HelpTooltip text="Algorithm used to smooth contours." />
-              </label>
-              <select
-                value={smoothingMethod}
-                onChange={(e) => {
-                  const method = e.target.value as typeof smoothingMethod
-                  setSmoothingMethod(method)
-                  scene?.setSmoothingOptions(method, smoothingIterations, smoothingStrength)
-                }}
-                style={{
-                  width: '100%',
-                  padding: '4px 8px',
-                  fontSize: '12px',
-                  border: '1px solid #ddd',
-                  borderRadius: '4px',
-                  background: 'white',
-                  cursor: 'pointer'
-                }}
-              >
-                <option value="basic">Basic</option>
-                <option value="laplacian">Laplacian</option>
-                <option value="chaikin">Chaikin</option>
-                <option value="bilateral">Bilateral</option>
-                <option value="catmull-rom">Catmull-Rom</option>
-                <option value="edge-aware">Edge-Aware</option>
-                <option value="intelligent">Intelligent</option>
-                <option value="selective">Selective</option>
-                <option value="intelligent-selective">Intelligent Selective</option>
-              </select>
-            </div>
-
-            {/* Smoothing Iterations */}
-            <div style={{ marginBottom: '12px' }}>
-              <label style={{ 
-                display: 'flex', 
-                justifyContent: 'space-between',
-                alignItems: 'center',
-                fontSize: '12px',
-                color: '#666'
-              }}>
-                <span>Smoothing Iterations</span>
-                <span style={{ fontWeight: 'bold', color: '#333' }}>{smoothingIterations}</span>
-              </label>
-              <input
-                type="range"
-                min="0"
-                max="5"
-                step="1"
-                value={smoothingIterations}
-                onChange={(e) => {
-                  const iterations = parseInt(e.target.value)
-                  setSmoothingIterations(iterations)
-                  scene?.setSmoothingOptions(smoothingMethod, iterations, smoothingStrength)
-                }}
-                style={{ width: '100%', cursor: 'pointer' }}
-              />
-            </div>
-
-            {/* Smoothing Strength */}
-            <div style={{ marginBottom: '12px' }}>
-              <label style={{ 
-                display: 'flex', 
-                justifyContent: 'space-between',
-                alignItems: 'center',
-                fontSize: '12px',
-                color: '#666'
-              }}>
-                <span>Smoothing Strength</span>
-                <span style={{ fontWeight: 'bold', color: '#333' }}>{smoothingStrength.toFixed(2)}</span>
-              </label>
-              <input
-                type="range"
-                min="0"
-                max="1"
-                step="0.05"
-                value={smoothingStrength}
-                onChange={(e) => {
-                  const strength = parseFloat(e.target.value)
-                  setSmoothingStrength(strength)
-                  scene?.setSmoothingOptions(smoothingMethod, smoothingIterations, strength)
-                }}
-                style={{ width: '100%', cursor: 'pointer' }}
-              />
-            </div>
-
-            {/* Selective Smoothing Options */}
-            {(smoothingMethod === 'selective') && (
+            {scalarFieldMethod !== 'none' && (
               <>
-                <h5 style={{ fontSize: '12px', fontWeight: 600, marginTop: '16px', marginBottom: '8px' }}>
-                  Selective Smoothing Options
-                </h5>
+                {renderSlider('Field Radius', scalarFieldRadius, (v) => {
+                  setScalarFieldRadius(v)
+                  scene.setScalarFieldRadius?.(v)
+                }, 0.5, 3, 0.1, false, 'Size of the blur kernel in grid cells')}
                 
-                <div style={{ marginBottom: '12px' }}>
-                  <label style={{ 
-                    display: 'flex', 
-                    justifyContent: 'space-between',
-                    alignItems: 'center',
-                    fontSize: '12px',
-                    color: '#666'
-                  }}>
-                    <span>Edge Buffer Distance</span>
-                    <span style={{ fontWeight: 'bold', color: '#333' }}>{edgeBufferDistance.toFixed(1)}</span>
-                  </label>
-                  <input
-                    type="range"
-                    min="0"
-                    max="5"
-                    step="0.5"
-                    value={edgeBufferDistance}
-                    onChange={(e) => {
-                      const distance = parseFloat(e.target.value)
-                      setEdgeBufferDistance(distance)
-                      scene?.setEdgeBufferDistance?.(distance)
-                    }}
-                    style={{ width: '100%', cursor: 'pointer' }}
-                  />
-                </div>
-
-                <label style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '12px', marginBottom: '8px' }}>
-                  <input
-                    type="checkbox"
-                    checked={preserveEdgeSegments}
-                    onChange={(e) => {
-                      setPreserveEdgeSegments(e.target.checked)
-                      scene?.setPreserveEdgeSegments?.(e.target.checked)
-                    }}
-                  />
-                  Preserve Edge Segments
-                </label>
-
-                <label style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '12px', marginBottom: '8px' }}>
-                  <input
-                    type="checkbox"
-                    checked={transitionBlending}
-                    onChange={(e) => {
-                      setTransitionBlending(e.target.checked)
-                      scene?.setTransitionBlending?.(e.target.checked)
-                    }}
-                  />
-                  Transition Blending
-                </label>
-              </>
-            )}
-
-            {/* Collision Avoidance */}
-            <h5 style={{ fontSize: '12px', fontWeight: 600, marginTop: '16px', marginBottom: '8px' }}>
-              Collision Avoidance
-            </h5>
-            
-            <label style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '12px', marginBottom: '8px' }}>
-              <input
-                type="checkbox"
-                checked={collisionAvoidance}
-                onChange={(e) => {
-                  setCollisionAvoidance(e.target.checked)
-                  scene?.setCollisionAvoidance(e.target.checked, collisionMinDistance, collisionMethod, collisionIterations)
-                }}
-              />
-              Enable Collision Avoidance
-            </label>
-
-            {collisionAvoidance && (
-              <>
-                <div style={{ marginBottom: '12px' }}>
-                  <label style={{ 
-                    display: 'flex', 
-                    justifyContent: 'space-between',
-                    alignItems: 'center',
-                    fontSize: '12px',
-                    color: '#666'
-                  }}>
-                    <span>Min Distance</span>
-                    <span style={{ fontWeight: 'bold', color: '#333' }}>{collisionMinDistance.toFixed(2)}</span>
-                  </label>
-                  <input
-                    type="range"
-                    min="0.1"
-                    max="2"
-                    step="0.1"
-                    value={collisionMinDistance}
-                    onChange={(e) => {
-                      const distance = parseFloat(e.target.value)
-                      setCollisionMinDistance(distance)
-                      scene?.setCollisionAvoidance(collisionAvoidance, distance, collisionMethod, collisionIterations)
-                    }}
-                    style={{ width: '100%', cursor: 'pointer' }}
-                  />
-                </div>
-
-                <div style={{ marginBottom: '12px' }}>
-                  <label style={{ 
-                    display: 'block',
-                    fontSize: '12px',
-                    color: '#666',
-                    marginBottom: '4px'
-                  }}>
-                    Collision Method
-                  </label>
-                  <select
-                    value={collisionMethod}
-                    onChange={(e) => {
-                      const method = e.target.value as 'push' | 'shrink' | 'hybrid'
-                      setCollisionMethod(method)
-                      scene?.setCollisionAvoidance(collisionAvoidance, collisionMinDistance, method, collisionIterations)
-                    }}
-                    style={{
-                      width: '100%',
-                      padding: '4px 8px',
-                      fontSize: '12px',
-                      border: '1px solid #ddd',
-                      borderRadius: '4px',
-                      background: 'white',
-                      cursor: 'pointer'
-                    }}
-                  >
-                    <option value="repulsion">Repulsion</option>
-                    <option value="shrink">Shrink</option>
-                    <option value="hybrid">Hybrid</option>
-                  </select>
-                </div>
+                {scalarFieldMethod === 'edge-clamping' && (
+                  renderSlider('Edge Clamp Strength', edgeClampStrength, (v) => {
+                    setEdgeClampStrength(v)
+                    scene.setEdgeClampStrength?.(v)
+                  }, 0, 1, 0.05, false, 'How strongly edges are preserved')
+                )}
               </>
             )}
           </div>
-        </div>
+        )}
 
-        {/* Global Settings */}
-        <div style={{ 
-          marginTop: '24px', 
-          paddingTop: '16px', 
-          borderTop: '1px solid #ddd' 
-        }}>
-          <h4 style={{ fontSize: '14px', fontWeight: 600, marginBottom: '12px' }}>
-            Global Settings
+        {/* 3. Grid & Edge Behavior */}
+        <div style={styles.section}>
+          <h4 style={styles.sectionTitle}>
+            <span style={{ color: '#4CAF50' }}>◆</span>
+            Grid & Edge Behavior
           </h4>
           
-          <div style={{ display: 'flex', gap: '16px' }}>
-            {/* Global Offsets */}
-            <div style={{ flex: 1 }}>
-              <h5 style={{ fontSize: '12px', fontWeight: 600, marginBottom: '8px' }}>
-                Global Offsets
-              </h5>
-              
-              <div style={{ marginBottom: '8px' }}>
-                <label style={{ 
-                  display: 'flex', 
-                  justifyContent: 'space-between',
-                  alignItems: 'center',
-                  fontSize: '12px',
-                  color: '#666'
-                }}>
-                  <span>X Offset</span>
-                  <span style={{ fontWeight: 'bold', color: '#333' }}>{globalOffsetX.toFixed(2)}</span>
-                </label>
-                <input
-                  type="range"
-                  min="-0.5"
-                  max="0.5"
-                  step="0.05"
-                  value={globalOffsetX}
-                  onChange={(e) => {
-                    const value = parseFloat(e.target.value)
-                    setGlobalOffsetX(value)
-                    scene?.setContourGlobalOffsets(value, globalOffsetY)
-                  }}
-                  style={{ width: '100%', cursor: 'pointer' }}
-                />
-              </div>
-              
-              <div style={{ marginBottom: '8px' }}>
-                <label style={{ 
-                  display: 'flex', 
-                  justifyContent: 'space-between',
-                  alignItems: 'center',
-                  fontSize: '12px',
-                  color: '#666'
-                }}>
-                  <span>Y Offset</span>
-                  <span style={{ fontWeight: 'bold', color: '#333' }}>{globalOffsetY.toFixed(2)}</span>
-                </label>
-                <input
-                  type="range"
-                  min="-0.5"
-                  max="0.5"
-                  step="0.05"
-                  value={globalOffsetY}
-                  onChange={(e) => {
-                    const value = parseFloat(e.target.value)
-                    setGlobalOffsetY(value)
-                    scene?.setContourGlobalOffsets(globalOffsetX, value)
-                  }}
-                  style={{ width: '100%', cursor: 'pointer' }}
-                />
-              </div>
-            </div>
-
-            {/* View Options */}
-            <div style={{ flex: 1 }}>
-              <h5 style={{ fontSize: '12px', fontWeight: 600, marginBottom: '8px' }}>
-                View Options
-              </h5>
-              
-              <label style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '12px', marginBottom: '8px' }}>
-                <input
-                  type="checkbox"
-                  checked={showRawMarchingSquares}
-                  onChange={(e) => {
-                    setShowRawMarchingSquares(e.target.checked)
-                    scene?.setShowRawMarchingSquares?.(e.target.checked)
-                  }}
-                />
-                Show Raw Marching Squares
-              </label>
-              
-              <label style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '12px', marginBottom: '8px' }}>
-                <input
-                  type="checkbox"
-                  checked={showControlPoints}
-                  onChange={(e) => {
-                    setShowControlPoints(e.target.checked)
-                    scene?.setShowControlPoints?.(e.target.checked)
-                  }}
-                />
-                Show Control Points
-              </label>
-              
-              <label style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '12px', marginBottom: '8px' }}>
-                <input
-                  type="checkbox"
-                  checked={showBlurredField}
-                  onChange={(e) => {
-                    setShowBlurredField(e.target.checked)
-                    scene?.setShowBlurredField?.(e.target.checked)
-                  }}
-                />
-                Show Blurred Field
-              </label>
-            </div>
+          <div style={styles.control}>
+            <label style={{ ...styles.label, marginBottom: '6px' }}>
+              Grid Alignment
+              <HelpTooltip text="How contours align to the grid" />
+            </label>
+            <select
+              value={alignmentMode}
+              onChange={(e) => {
+                const mode = e.target.value as typeof alignmentMode
+                setAlignmentMode(mode)
+                scene.setAlignmentMode?.(mode)
+              }}
+              style={styles.select}
+            >
+              <option value="vertices">Vertices</option>
+              <option value="edges">Edges</option>
+              <option value="center">Center</option>
+            </select>
           </div>
+          
+          <label style={styles.checkbox}>
+            <input
+              type="checkbox"
+              checked={clampToGrid}
+              onChange={(e) => {
+                setClampToGrid(e.target.checked)
+                scene.setClampToGrid?.(e.target.checked)
+              }}
+            />
+            Clamp to Grid
+          </label>
+          
+          <label style={styles.checkbox}>
+            <input
+              type="checkbox"
+              checked={extendToBoundary}
+              onChange={(e) => {
+                setExtendToBoundary(e.target.checked)
+                scene.setExtendToBoundary?.(e.target.checked)
+              }}
+            />
+            Extend to Boundary
+          </label>
+          
+          {renderSlider('Snap Distance', snapDistance, (v) => {
+            setSnapDistance(v)
+            scene.setSnapDistance?.(v)
+          }, 0, 0.5, 0.05)}
+          
+          <h5 style={styles.subsectionTitle}>Edge Clamping</h5>
+          
+          <label style={styles.checkbox}>
+            <input
+              type="checkbox"
+              checked={edgeClamping}
+              onChange={(e) => {
+                setEdgeClamping(e.target.checked)
+                scene.setEdgeClamping?.(e.target.checked)
+              }}
+            />
+            Enable Edge Clamping
+          </label>
+          
+          {edgeClamping && (
+            <>
+              {renderSlider('Edge Distance', edgeClampDistance, (v) => {
+                setEdgeClampDistance(v)
+                scene.setEdgeClampDistance?.(v)
+              }, 0.1, 2.0, 0.1)}
+              
+              <div style={styles.control}>
+                <label style={{ ...styles.label, marginBottom: '6px' }}>
+                  Corner Treatment
+                </label>
+                <select
+                  value={cornerTreatment}
+                  onChange={(e) => {
+                    const treatment = e.target.value as typeof cornerTreatment
+                    setCornerTreatment(treatment)
+                    scene.setCornerTreatment?.(treatment)
+                  }}
+                  style={styles.select}
+                >
+                  <option value="trimmed">Trimmed</option>
+                  <option value="flared">Flared</option>
+                  <option value="square">Square</option>
+                </select>
+              </div>
+            </>
+          )}
+        </div>
+
+        {/* 4. Smoothing */}
+        <div style={styles.section}>
+          <h4 style={styles.sectionTitle}>
+            <span style={{ color: '#9C27B0' }}>◆</span>
+            Smoothing
+          </h4>
+          
+          <div style={styles.control}>
+            <label style={{ ...styles.label, marginBottom: '6px' }}>
+              Method
+              <HelpTooltip text="Algorithm used to smooth contours" />
+            </label>
+            <select
+              value={smoothingMethod}
+              onChange={(e) => {
+                const method = e.target.value as typeof smoothingMethod
+                setSmoothingMethod(method)
+                scene.setSmoothingOptions(method, smoothingIterations, smoothingStrength)
+              }}
+              style={styles.select}
+            >
+              <option value="basic">Basic</option>
+              <option value="laplacian">Laplacian</option>
+              <option value="chaikin">Chaikin</option>
+              <option value="bilateral">Bilateral</option>
+              <option value="catmull-rom">Catmull-Rom</option>
+              <option value="edge-aware">Edge Aware</option>
+              <option value="intelligent">Intelligent</option>
+              <option value="selective">Selective</option>
+            </select>
+          </div>
+          
+          {renderSlider('Iterations', smoothingIterations, (v) => {
+            setSmoothingIterations(v)
+            scene.setSmoothingOptions(smoothingMethod, v, smoothingStrength)
+          }, 0, 5, 1)}
+          
+          {renderSlider('Strength', smoothingStrength, (v) => {
+            setSmoothingStrength(v)
+            scene.setSmoothingOptions(smoothingMethod, smoothingIterations, v)
+          }, 0, 1, 0.05)}
+          
+          {smoothingMethod === 'selective' && (
+            <>
+              <h5 style={styles.subsectionTitle}>Selective Options</h5>
+              
+              {renderSlider('Edge Buffer', edgeBufferDistance, (v) => {
+                setEdgeBufferDistance(v)
+                // scene.setEdgeBufferDistance?.(v)
+              }, 0, 5, 0.5)}
+              
+              <label style={styles.checkbox}>
+                <input
+                  type="checkbox"
+                  checked={preserveEdgeSegments}
+                  onChange={(e) => {
+                    setPreserveEdgeSegments(e.target.checked)
+                    // scene.setPreserveEdgeSegments?.(e.target.checked)
+                  }}
+                />
+                Preserve Edge Segments
+              </label>
+              
+              <label style={styles.checkbox}>
+                <input
+                  type="checkbox"
+                  checked={transitionBlending}
+                  onChange={(e) => {
+                    setTransitionBlending(e.target.checked)
+                    // scene.setTransitionBlending?.(e.target.checked)
+                  }}
+                />
+                Transition Blending
+              </label>
+            </>
+          )}
+        </div>
+
+        {/* 5. Post-Processing */}
+        <div style={styles.section}>
+          <h4 style={styles.sectionTitle}>
+            <span style={{ color: '#E91E63' }}>◆</span>
+            Post-Processing
+          </h4>
+          
+          <label style={styles.checkbox}>
+            <input
+              type="checkbox"
+              checked={collisionAvoidance}
+              onChange={(e) => {
+                setCollisionAvoidance(e.target.checked)
+                scene.setCollisionAvoidance(e.target.checked, collisionMinDistance, collisionMethod, collisionIterations)
+              }}
+            />
+            Collision Avoidance
+          </label>
+          
+          {collisionAvoidance && (
+            <>
+              {renderSlider('Min Distance', collisionMinDistance, (v) => {
+                setCollisionMinDistance(v)
+                scene.setCollisionAvoidance(true, v, collisionMethod, collisionIterations)
+              }, 0.1, 2, 0.1)}
+              
+              <div style={styles.control}>
+                <label style={{ ...styles.label, marginBottom: '6px' }}>
+                  Method
+                </label>
+                <select
+                  value={collisionMethod}
+                  onChange={(e) => {
+                    const method = e.target.value as typeof collisionMethod
+                    setCollisionMethod(method)
+                    scene.setCollisionAvoidance(true, collisionMinDistance, method, collisionIterations)
+                  }}
+                  style={styles.select}
+                >
+                  <option value="repulsion">Repulsion</option>
+                  <option value="shrink">Shrink</option>
+                  <option value="hybrid">Hybrid</option>
+                </select>
+              </div>
+              
+              {renderSlider('Iterations', collisionIterations, (v) => {
+                setCollisionIterations(v)
+                scene.setCollisionAvoidance(true, collisionMinDistance, collisionMethod, v)
+              }, 1, 20, 1)}
+            </>
+          )}
+        </div>
+
+        {/* 6. Global Offsets */}
+        <div style={styles.section}>
+          <h4 style={styles.sectionTitle}>
+            <span style={{ color: '#607D8B' }}>◆</span>
+            Global Offsets
+            <button
+              onClick={zeroOffsets}
+              style={{
+                ...styles.button,
+                marginLeft: 'auto',
+                padding: '4px 8px',
+                fontSize: '11px',
+                backgroundColor: '#607D8B',
+                color: 'white'
+              }}
+              onMouseOver={(e) => e.currentTarget.style.backgroundColor = '#455A64'}
+              onMouseOut={(e) => e.currentTarget.style.backgroundColor = '#607D8B'}
+            >
+              Zero
+            </button>
+          </h4>
+          
+          {renderSlider('X Offset', globalOffsetX, (v) => {
+            setGlobalOffsetX(v)
+            scene.setContourGlobalOffsets(v, globalOffsetY)
+          }, -0.5, 0.5, 0.05)}
+          
+          {renderSlider('Y Offset', globalOffsetY, (v) => {
+            setGlobalOffsetY(v)
+            scene.setContourGlobalOffsets(globalOffsetX, v)
+          }, -0.5, 0.5, 0.05)}
+        </div>
+
+        {/* 7. Debug View */}
+        <div style={styles.section}>
+          <h4 style={styles.sectionTitle}>
+            <span style={{ color: '#795548' }}>◆</span>
+            Debug View
+          </h4>
+          
+          <label style={styles.checkbox}>
+            <input
+              type="checkbox"
+              checked={showRawMarchingSquares}
+              onChange={(e) => {
+                setShowRawMarchingSquares(e.target.checked)
+                scene.setShowRawMarchingSquares?.(e.target.checked)
+              }}
+            />
+            Show Raw Marching Squares
+          </label>
+          
+          <label style={styles.checkbox}>
+            <input
+              type="checkbox"
+              checked={showControlPoints}
+              onChange={(e) => {
+                setShowControlPoints(e.target.checked)
+                scene.setShowControlPoints?.(e.target.checked)
+              }}
+            />
+            Show Control Points
+          </label>
+          
+          <label style={styles.checkbox}>
+            <input
+              type="checkbox"
+              checked={showBlurredField}
+              onChange={(e) => {
+                setShowBlurredField(e.target.checked)
+                scene.setShowBlurredField?.(e.target.checked)
+              }}
+            />
+            Show Blurred Field
+          </label>
         </div>
       </div>
     </div>

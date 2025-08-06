@@ -82,7 +82,6 @@ export class BeamElevationScene extends Phaser.Scene {
   private showRawMarchingSquares = false // Show raw marching squares without smoothing
   private showControlPoints = false // Show marching squares control points in edit mode
   private showBlurredField = false // Show blurred field visualization
-  private showDebugVisualization = false // Show all three line types simultaneously
   // Marching Squares Algorithm Properties
   private interpolationMethod: 'linear' | 'cubic' | 'none' = 'linear'
   private scalarFieldMethod: ScalarFieldMethod = 'edge-preserving'
@@ -105,9 +104,22 @@ export class BeamElevationScene extends Phaser.Scene {
 
   constructor() {
     super({ key: 'BeamElevationScene' })
+    console.log('=== BeamElevationScene CONSTRUCTOR ===')
+  }
+  
+  preload() {
+    console.log('=== BeamElevationScene PRELOAD ===')
   }
 
+  private updateCounter = 0
+  
   update() {
+    // Log first few updates to confirm scene is running
+    if (this.updateCounter < 5) {
+      console.log('=== BeamElevationScene UPDATE ===', this.updateCounter)
+      this.updateCounter++
+    }
+    
     // Update annotation manager effects
     if (this.annotationManager) {
       this.annotationManager.update()
@@ -128,7 +140,6 @@ export class BeamElevationScene extends Phaser.Scene {
     spanLength?: number;
     zoom?: number;
     selectedDefectType?: DefectType;
-    showDebugVisualization?: boolean;
     onCellChange?: (cells: GridCell[]) => void 
   }) {
     this.beamProfile = data.beamProfile
@@ -144,7 +155,6 @@ export class BeamElevationScene extends Phaser.Scene {
     this.onCellChange = data.onCellChange
     this.spanLength = data.spanLength || 96
     this.selectedDefectType = data.selectedDefectType || 'section-loss'
-    this.showDebugVisualization = data.showDebugVisualization || false
     
     console.log('Scene init complete:', {
       appMode: this.appMode,
@@ -178,21 +188,83 @@ export class BeamElevationScene extends Phaser.Scene {
 
     // Expose debug method globally for testing
     (window as any).debugDrawContours = () => this.debugDrawContours()
+    
+    // Expose grid cells for debugging
+    (window as any).debugGridCells = () => {
+      console.log('Grid cells:', this.gridCells.size)
+      this.gridCells.forEach((cell, key) => {
+        console.log(key, {
+          interactive: cell.input ? true : false,
+          visible: cell.visible,
+          x: cell.x,
+          y: cell.y
+        })
+      })
+    }
+    
+    // Test cell click directly
+    (window as any).testCellClick = () => {
+      const firstCell = this.gridCells.values().next().value
+      if (firstCell) {
+        console.log('Manually triggering click on first cell')
+        firstCell.emit('pointerdown')
+      }
+    }
 
+    console.log('=== SCENE CREATE START ===')
     console.log('Scene create() called with:', {
       editMode: this.editMode,
       appMode: this.appMode,
-      showGrid: this.showGrid
+      showGrid: this.showGrid,
+      typeofEditMode: typeof this.editMode,
+      editModeValue: this.editMode === true ? 'true' : this.editMode === false ? 'false' : 'other:' + this.editMode,
+      inputEnabled: this.input.enabled,
+      inputManager: this.input.manager ? 'exists' : 'missing'
+    })
+    console.log('=== SCENE CREATE DETAILS ===', {
+      sceneKey: this.scene.key,
+      isActive: this.scene.isActive(),
+      isVisible: this.scene.isVisible()
     })
 
     const { webHeight, flangeThickness } = this.beamProfile
     
-    // Set up global mouse up handler for paint mode
+    // Set up global mouse up handler for paint mode and panning
     this.input.on('pointerup', () => {
+      console.log('Scene pointerup triggered')
       if (this.appMode === 'edit') {
         this.isMouseDown = false
         this.isPainting = false
         this.paintMode = null
+      }
+      this.isPanning = false
+    })
+    
+    // Combined scene input handler - lower priority to allow cells to handle first
+    this.input.on('pointerdown', (pointer: Phaser.Input.Pointer) => {
+      console.log('Scene pointerdown at:', pointer.x, pointer.y, 'appMode:', this.appMode, 'target:', pointer.event.target)
+      
+      // Don't pan in edit mode at all
+      if (this.appMode === 'edit') {
+        return
+      }
+      
+      // In annotation mode, check if annotation manager should handle this pointer
+      if (this.appMode === 'annotation' && this.annotationManager) {
+        const worldPoint = { x: pointer.worldX, y: pointer.worldY }
+        if (this.annotationManager.shouldHandlePointer(worldPoint)) {
+          console.log('Annotation manager handling pointer, not panning')
+          return
+        }
+      }
+      
+      // Allow panning in view mode or annotation mode when not interacting
+      if (this.appMode === 'view' || this.appMode === 'annotation') {
+        this.isPanning = true
+        this.panStartX = pointer.x
+        this.panStartY = pointer.y
+        this.cameraStartX = this.cameras.main.scrollX
+        this.cameraStartY = this.cameras.main.scrollY
       }
     })
     
@@ -277,8 +349,8 @@ export class BeamElevationScene extends Phaser.Scene {
 
     // Create grid overlay container
     this.gridContainer = this.add.container()
-    // Set grid container depth to be below contour graphics but above beam background
-    this.gridContainer.setDepth(5)
+    // Set grid container depth to be below contour graphics but still interactive
+    this.gridContainer.setDepth(15)
     console.log('Grid creation check:', {
       editMode: this.editMode,
       appMode: this.appMode,
@@ -293,7 +365,12 @@ export class BeamElevationScene extends Phaser.Scene {
       // Force grid container to be visible
       if (this.gridContainer) {
         this.gridContainer.setVisible(true)
-        console.log('Forced grid container visible:', this.gridContainer.visible)
+        console.log('Grid container status:', {
+          visible: this.gridContainer.visible,
+          depth: this.gridContainer.depth,
+          childCount: this.gridContainer.list.length,
+          cellCount: this.gridCells.size
+        })
       }
     } else {
     }
@@ -347,6 +424,23 @@ export class BeamElevationScene extends Phaser.Scene {
       color: '#333',
       fontStyle: 'bold'
     }).setOrigin(0.5)
+
+    // TEST: Add a simple interactive rectangle to verify Phaser interaction works
+    console.log('Creating test rectangle for interaction verification')
+    const testRect = this.add.rectangle(100, 100, 100, 50, 0x00FF00, 0.8)
+    testRect.setInteractive()
+    testRect.on('pointerdown', () => {
+      console.log('TEST RECT CLICKED! Basic Phaser interaction works.')
+      testRect.setFillStyle(0xFF0000, 0.8)
+    })
+    testRect.on('pointerover', () => {
+      console.log('TEST RECT HOVER')
+      testRect.setFillStyle(0x0000FF, 0.8)
+    })
+    testRect.on('pointerout', () => {
+      testRect.setFillStyle(0x00FF00, 0.8)
+    })
+    testRect.setDepth(100) // Make sure it's on top
 
     // Add end labels based on elevation view
     // When looking at an elevation, the ends are perpendicular to the view direction
@@ -587,9 +681,15 @@ export class BeamElevationScene extends Phaser.Scene {
     // In edit mode, show all visualization layers
     if (this.editMode) {
       console.log('Drawing marching squares layers - Edit mode active', {
+        webCellsCount: webCells.length,
         gridHasCells: webCells.length > 0,
         editMode: this.editMode,
-        showDebugVisualization: this.showDebugVisualization
+        graphicsObjects: {
+          lossGraphics: !!this.lossGraphics,
+          rawContourGraphics: !!this.rawContourGraphics,
+          smoothedContourGraphics: !!this.smoothedContourGraphics
+        },
+        gridData: grid.map(row => row.join('')).join('\n')
       })
       
       // 1. Draw blurred field if enabled
@@ -756,7 +856,6 @@ export class BeamElevationScene extends Phaser.Scene {
     console.log('drawMarchingSquaresLayers called', {
       gridSize: `${cols}x${rows}`,
       hasData: grid.some(row => row.some(cell => cell > 0)),
-      showDebugVisualization: this.showDebugVisualization,
       showRawMarchingSquares: this.showRawMarchingSquares,
       graphics: {
         raw: !!this.rawContourGraphics,
@@ -766,7 +865,7 @@ export class BeamElevationScene extends Phaser.Scene {
     })
     
     // When in debug mode, clear all graphics and draw all three line types
-    if (this.showDebugVisualization) {
+    if (false) {
       this.binaryContourGraphics?.clear()
       this.rawContourGraphics?.clear()
       this.smoothedContourGraphics?.clear()
@@ -821,7 +920,11 @@ export class BeamElevationScene extends Phaser.Scene {
     if (this.rawContourGraphics) {
       this.rawContourGraphics.lineStyle(3, 0xFF6B6B, 0.8) // Red, thicker line
       
-      console.log('Drawing raw contours to graphics layer', rawContours.length)
+      console.log('Drawing raw contours to graphics layer', {
+        contoursCount: rawContours.length,
+        graphicsDepth: this.rawContourGraphics.depth,
+        graphicsVisible: this.rawContourGraphics.visible
+      })
       
       rawContours.forEach(contour => {
         const screenContour = contour.points.map(pt => ({
@@ -1320,17 +1423,30 @@ export class BeamElevationScene extends Phaser.Scene {
       this.gridSize - 1,
       height,
       0xffffff,
-      0.1  // Make cells slightly visible with fill
+      0.1  // Slightly visible fill to ensure interactivity
     )
     
-    cell.setStrokeStyle(2, 0xff0000, 1.0)  // Bright red thick border for debugging
+    cell.setStrokeStyle(3, 0xFF0000, 1.0)  // THICK RED BORDER FOR TESTING
     
-    // Make cells interactive in edit mode
-    if (this.editMode) {
-      cell.setInteractive()
-      console.log('Cell made interactive:', { zone, col, row, editMode: this.editMode })
+    // Always make cells interactive - the actual interaction logic will check edit mode
+    // Make rectangle interactive with its bounds
+    cell.setInteractive(new Phaser.Geom.Rectangle(0, 0, cell.width, cell.height), Phaser.Geom.Rectangle.Contains)
+    
+    // Test if setInteractive worked
+    if (!cell.input) {
+      console.error('Cell failed to become interactive!', { zone, col, row })
     } else {
-      console.log('Cell NOT made interactive:', { zone, col, row, editMode: this.editMode })
+      console.log('Cell successfully made interactive:', { 
+        zone, col, row, 
+        editMode: this.editMode, 
+        cellWidth: cell.width,
+        cellHeight: cell.height,
+        cellX: cell.x,
+        cellY: cell.y,
+        hasInput: true,
+        inputEnabled: cell.input.enabled,
+        hitArea: cell.input.hitArea
+      })
     }
     
     cell.setData('col', col)
@@ -1341,6 +1457,12 @@ export class BeamElevationScene extends Phaser.Scene {
     const key = `${zone}_${col}_${row}`
     this.gridCells.set(key, cell)
     this.gridContainer!.add(cell)
+    
+    // Ensure the cell stays interactive after being added to container
+    if (!cell.input || !cell.input.enabled) {
+      console.warn('Cell lost interactivity after adding to container, re-enabling')
+      cell.setInteractive()
+    }
     
     // Restore selected state if cell was previously selected
     if (this.selectedCells.has(key)) {
@@ -1360,9 +1482,22 @@ export class BeamElevationScene extends Phaser.Scene {
   }
   
   private setupCellInteraction(cell: Phaser.GameObjects.Rectangle) {
+    console.log('Setting up cell interaction for cell:', {
+      x: cell.x,
+      y: cell.y,
+      interactive: cell.input ? 'yes' : 'no',
+      visible: cell.visible,
+      alpha: cell.alpha
+    })
+    
     cell.on('pointerdown', () => {
+      console.log('Cell pointerdown event triggered')
+      
       // Only allow interaction in edit mode
-      if (!this.editMode) return
+      if (!this.editMode) {
+        console.log('Not in edit mode, ignoring click. editMode=', this.editMode, 'appMode=', this.appMode)
+        return
+      }
       
       const zone = cell.getData('zone') || 'default'
       const key = `${zone}_${cell.getData('col')}_${cell.getData('row')}`
@@ -1672,7 +1807,7 @@ export class BeamElevationScene extends Phaser.Scene {
     return this.savedAnnotations || []
   }
 
-  updateBeamProfile(profile: BeamProfile, length?: number, editMode?: boolean, showGrid?: boolean, gridOrigin?: 'left' | 'right', showTopFlange?: boolean, gridCells?: GridCell[], elevationView?: 'N' | 'S' | 'E' | 'W', appMode?: AppMode, spanLength?: number, zoom?: number, selectedDefectType?: DefectType, showDebugVisualization?: boolean) {
+  updateBeamProfile(profile: BeamProfile, length?: number, editMode?: boolean, showGrid?: boolean, gridOrigin?: 'left' | 'right', showTopFlange?: boolean, gridCells?: GridCell[], elevationView?: 'N' | 'S' | 'E' | 'W', appMode?: AppMode, spanLength?: number, zoom?: number, selectedDefectType?: DefectType) {
     console.log('updateBeamProfile called with:', {
       appMode,
       currentAppMode: this.appMode,
@@ -1730,7 +1865,6 @@ export class BeamElevationScene extends Phaser.Scene {
         savedAnnotations: this.getCurrentAnnotations(),
         spanLength: this.spanLength,
         selectedDefectType: this.selectedDefectType,
-        showDebugVisualization: this.showDebugVisualization,
         onCellChange: this.onCellChange 
       })
       
@@ -1761,7 +1895,6 @@ export class BeamElevationScene extends Phaser.Scene {
         savedAnnotations: this.getCurrentAnnotations(),
         spanLength: this.spanLength,
         selectedDefectType: this.selectedDefectType,
-        showDebugVisualization: this.showDebugVisualization,
         onCellChange: this.onCellChange 
       })
       
@@ -1839,7 +1972,6 @@ export class BeamElevationScene extends Phaser.Scene {
     this.appMode = appMode || this.appMode
     this.spanLength = spanLength || this.spanLength
     this.selectedDefectType = selectedDefectType || this.selectedDefectType
-    this.showDebugVisualization = showDebugVisualization !== undefined ? showDebugVisualization : this.showDebugVisualization
     this.scene.restart({ 
       beamProfile: profile, 
       beamLength: this.beamLength,
@@ -1853,7 +1985,6 @@ export class BeamElevationScene extends Phaser.Scene {
       savedAnnotations: this.getCurrentAnnotations(),
       spanLength: this.spanLength,
       selectedDefectType: this.selectedDefectType,
-      showDebugVisualization: this.showDebugVisualization,
       onCellChange: this.onCellChange 
     })
   }
@@ -2195,22 +2326,8 @@ export class BeamElevationScene extends Phaser.Scene {
     // Enable multi-touch
     this.input.addPointer(2)
     
-    // Pan support
-    this.input.on('pointerdown', (pointer: Phaser.Input.Pointer) => {
-      // Only allow panning in view mode, or annotation mode when not interacting with annotations
-      const allowPanning = this.appMode === 'view' || 
-        (this.appMode === 'annotation' && 
-         !this.annotationManager?.isCreatingAnnotation && 
-         !this.annotationManager?.isDragging())
-      
-      if (allowPanning) {
-        this.isPanning = true
-        this.panStartX = pointer.x
-        this.panStartY = pointer.y
-        this.cameraStartX = this.cameras.main.scrollX
-        this.cameraStartY = this.cameras.main.scrollY
-      }
-    })
+    // Pan support - moved after grid creation to not interfere
+    // Remove this duplicate handler since we already have one at line 198
     
     this.input.on('pointermove', (pointer: Phaser.Input.Pointer) => {
       if (this.isPanning && pointer.isDown) {
@@ -2221,9 +2338,7 @@ export class BeamElevationScene extends Phaser.Scene {
       }
     })
     
-    this.input.on('pointerup', () => {
-      this.isPanning = false
-    })
+    // Removed duplicate pointerup handler - already handled above
     
     // Pinch to zoom
     let lastPinchDistance = 0
