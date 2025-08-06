@@ -21,6 +21,12 @@ export * from './configuration/ConfigUtils'
 // Export geometry types
 export * from './geometry'
 
+// Export rendering utilities
+export * from './ContourRenderer'
+
+// Export scalar field utilities
+export * from './ScalarField'
+
 // Unified contour processing entry point
 import { MarchingSquaresEngine, ProcessingResult } from './engine/MarchingSquaresEngine'
 import { MarchingSquaresConfig } from './configuration/MarchingSquaresConfig'

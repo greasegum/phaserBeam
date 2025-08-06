@@ -3,9 +3,9 @@ import { BeamProfile, GridCell } from '../types/beam'
 import { AppMode } from '../types/mode'
 import { AnnotationType } from '../types/annotations'
 import { processGrid as marchingSquaresOptimized } from '../core'
-import { MarchingSquaresConfig } from '../core'
-import { binaryToScalarField, ScalarFieldMethod } from '../core/ScalarField'
-import { drawBezierContour, EdgeConstraints } from '../core/BezierRendering'
+import { MarchingSquaresConfig, ContourRenderStyle, ContourStyles, ControlPointStyles, createGridToScreenTransform, renderContours } from '../core'
+import type { ScalarFieldMethod } from '../core/ScalarField'
+import { maskFromSelectedCells } from '../utils/gridMask'
 import { AnnotationManager } from '../annotations/AnnotationManager'
 import { DefectType, DEFECT_STYLES } from '../types/defects'
 import { applyDefectPattern } from '../utils/defectPatterns'
@@ -607,11 +607,8 @@ export class BeamElevationScene extends Phaser.Scene {
       
     } else {
       // View mode - show filled regions with marching squares
-      // Convert binary grid to scalar field for interpolation
-      const scalarGrid = binaryToScalarField(grid, this.scalarFieldMethod, this.scalarFieldRadius, this.edgeClampStrength)
-      
       // Generate contours using the unified core pipeline
-      const { contours } = marchingSquaresOptimized(scalarGrid, {
+      const { contours } = marchingSquaresOptimized(grid, {
         algorithm: {
           threshold: this.threshold,
           saddlePointResolution: this.saddlePointResolution,
@@ -640,41 +637,13 @@ export class BeamElevationScene extends Phaser.Scene {
         performance: { enableCaching: true, interpolationCache: true, quality: 'balanced', maxGridSize: 1000, maxContourPoints: 10000 }
       })
       
-      // Draw filled contours
-      if (this.lossGraphics) {
-        this.lossGraphics!.fillStyle(0xFFB3BA, 0.8)
-        this.lossGraphics!.lineStyle(2, 0xFF6B6B)
+      // Use the new clean rendering API
+      if (this.lossGraphics && contours.length > 0) {
+        const transform = createGridToScreenTransform(this.gridSize, startX, webTop)
         
-        contours.forEach(contour => {
-          const screenContour = contour.points.map(pt => ({
-            x: startX + pt.x * this.gridSize,
-            y: webTop + pt.y * this.gridSize
-          }))
-          
-          // Create edge constraints for bezier curves
-          const edgeConstraints: EdgeConstraints = {
-            leftEdge: startX,
-            rightEdge: startX + this.beamLength * this.gridSize,
-            topEdge: webTop,
-            bottomEdge: webTop + webHeight * this.gridSize,
-            strictEdges: { left: true, right: true, top: true, bottom: true }
-          }
-          
-          if (this.useSmoothCurves && !this.showRawMarchingSquares && screenContour.length > 4 && this.lossGraphics) {
-            drawBezierContour(this.lossGraphics, screenContour, true, edgeConstraints)
-          } else if (this.lossGraphics) {
-            this.lossGraphics!.beginPath()
-            screenContour.forEach((point, index) => {
-              if (index === 0) {
-                this.lossGraphics!.moveTo(point.x, point.y)
-              } else {
-                this.lossGraphics!.lineTo(point.x, point.y)
-              }
-            })
-            this.lossGraphics!.closePath()
-            this.lossGraphics!.fillPath()
-            this.lossGraphics!.strokePath()
-          }
+        renderContours(this.lossGraphics, contours, {
+          style: ContourStyles.filled,
+          transform
         })
       }
     }
@@ -683,13 +652,27 @@ export class BeamElevationScene extends Phaser.Scene {
   private drawBlurredField(grid: number[][], startX: number, webTop: number, webBottom: number, cols: number, rows: number) {
     if (!this.blurredFieldGraphics) return
     
-    // Convert binary grid to scalar field
-    const scalarGrid = binaryToScalarField(grid, this.scalarFieldMethod, this.scalarFieldRadius)
+    // Generate scalar field using core engine
+    const { metadata } = marchingSquaresOptimized(grid, {
+      interpolation: {
+        enabled: true,
+        scalarField: {
+          method: this.scalarFieldMethod,
+          radius: this.scalarFieldRadius
+        }
+      }
+    })
+    
+    // The core engine should provide the scalar field in debug metadata
+    // For now, we'll use a simple binary to scalar conversion
+    const scalarGrid = grid.map(row => 
+      row.map(cell => cell > 0 ? 1 : 0)
+    )
     
     // Draw each cell with gradient based on scalar value
     for (let y = 0; y < rows; y++) {
       for (let x = 0; x < cols; x++) {
-        const value = scalarGrid[y][x]
+        const value = scalarGrid[y] && scalarGrid[y][x] ? scalarGrid[y][x] : 0
         if (value > 0.01) { // Only draw if there's some value
           const alpha = value * 0.5 // Max 50% opacity
           const screenX = startX + x * this.gridSize
@@ -765,112 +748,96 @@ export class BeamElevationScene extends Phaser.Scene {
       }
     })
     
+    const transform = createGridToScreenTransform(this.gridSize, startX, webTop)
+    
     // When in debug mode, clear all graphics and draw all three line types
     if (this.showDebugVisualization) {
       this.binaryContourGraphics?.clear()
       this.rawContourGraphics?.clear()
       this.smoothedContourGraphics?.clear()
       
-      // For now, just draw with default config - we'll enhance this later
-      const { contours: debugContours } = marchingSquaresOptimized(grid, {})
+      // Generate different contour types using the core engine
+      const binaryContours = marchingSquaresOptimized(grid, {
+        interpolation: { enabled: false },
+        smoothing: { enabled: false }
+      }).contours
+      
+      const rawContours = marchingSquaresOptimized(grid, {
+        interpolation: { enabled: true },
+        smoothing: { enabled: false }
+      }).contours
+      
+      const smoothedContours = marchingSquaresOptimized(grid, {
+        interpolation: { enabled: true },
+        smoothing: { enabled: true, algorithm: this.smoothingMethod }
+      }).contours
       
       // Draw binary contours in blue
-      if (this.binaryContourGraphics && debugContours.length > 0) {
-        this.binaryContourGraphics.lineStyle(3, 0x0000FF, 0.8) // Blue
-        debugContours.forEach(contour => {
-          const screenContour = contour.points.map(pt => ({
-            x: startX + pt.x * this.gridSize,
-            y: webTop + pt.y * this.gridSize
-          }))
-          
-          this.binaryContourGraphics!.beginPath()
-          screenContour.forEach((point, index) => {
-            if (index === 0) {
-              this.binaryContourGraphics!.moveTo(point.x, point.y)
-            } else {
-              this.binaryContourGraphics!.lineTo(point.x, point.y)
-            }
-          })
-          this.binaryContourGraphics!.closePath()
-          this.binaryContourGraphics!.strokePath()
+      if (this.binaryContourGraphics && binaryContours.length > 0) {
+        renderContours(this.binaryContourGraphics, binaryContours, {
+          style: ContourStyles.binary,
+          transform
+        })
+      }
+      
+      // Draw raw contours in red
+      if (this.rawContourGraphics && rawContours.length > 0) {
+        renderContours(this.rawContourGraphics, rawContours, {
+          style: ContourStyles.raw,
+          transform
+        })
+      }
+      
+      // Draw smoothed contours in teal
+      if (this.smoothedContourGraphics && smoothedContours.length > 0) {
+        renderContours(this.smoothedContourGraphics, smoothedContours, {
+          style: ContourStyles.smoothed,
+          transform
         })
       }
       
       return // Exit early when in debug mode
     }
     
-    // Normal mode: Clear only the graphics we'll use
-    this.binaryContourGraphics?.clear()
-    this.rawContourGraphics?.clear()
-    this.smoothedContourGraphics?.clear()
-    
-    // Convert binary grid to scalar field
-    const scalarGrid = binaryToScalarField(grid, this.scalarFieldMethod, this.scalarFieldRadius)
-    
-    // Apply marching squares with default config
-    const { contours: rawContours } = marchingSquaresOptimized(scalarGrid, {})
+    // Normal mode: Generate contours with current settings
+    const { contours } = marchingSquaresOptimized(grid, {
+      interpolation: {
+        enabled: this.interpolationMethod !== 'none',
+        method: this.interpolationMethod,
+        scalarField: {
+          method: this.scalarFieldMethod,
+          radius: this.scalarFieldRadius
+        }
+      },
+      smoothing: {
+        enabled: !this.showRawMarchingSquares,
+        algorithm: this.smoothingMethod,
+        iterations: this.smoothingIterations,
+        strength: this.smoothingStrength
+      }
+    })
     
     console.log('Marching squares results', {
       inputGridHasData: grid.some(row => row.some(cell => cell > 0)),
-      scalarGridHasData: scalarGrid.some(row => row.some(cell => cell > 0)),
-      contoursFound: rawContours.length,
-      contourPoints: rawContours.map(c => c.points.length)
+      contoursFound: contours.length,
+      contourPoints: contours.map(c => c.points.length)
     })
     
-    // Draw raw contours
-    if (this.rawContourGraphics) {
-      this.rawContourGraphics.lineStyle(3, 0xFF6B6B, 0.8) // Red, thicker line
-      
-      console.log('Drawing raw contours to graphics layer', rawContours.length)
-      
-      rawContours.forEach(contour => {
-        const screenContour = contour.points.map(pt => ({
-          x: startX + pt.x * this.gridSize,
-          y: webTop + pt.y * this.gridSize
-        }))
-        
-        this.rawContourGraphics!.beginPath()
-        screenContour.forEach((point, index) => {
-          if (index === 0) {
-            this.rawContourGraphics!.moveTo(point.x, point.y)
-          } else {
-            this.rawContourGraphics!.lineTo(point.x, point.y)
-          }
-        })
-        this.rawContourGraphics!.closePath()
-        this.rawContourGraphics!.strokePath()
-        
-        // Draw control points if enabled
-        if (this.showControlPoints && this.controlPointGraphics) {
-          this.controlPointGraphics.fillStyle(0xFFFF00, 0.8) // Yellow
-          screenContour.forEach(point => {
-            this.controlPointGraphics!.fillCircle(point.x, point.y, 3)
-          })
-        }
-      })
-    }
+    // Clear graphics
+    this.rawContourGraphics?.clear()
+    this.smoothedContourGraphics?.clear()
     
-    // Draw smoothed contours if smoothing is enabled
-    if (!this.showRawMarchingSquares && this.smoothedContourGraphics) {
-      // Apply marching squares with smoothing enabled - use same contours for now
-      this.smoothedContourGraphics.lineStyle(3, 0x00FF00, 0.8) // Green, thicker line
-      
-      rawContours.forEach(contour => {
-        const screenContour = contour.points.map(pt => ({
-          x: startX + pt.x * this.gridSize,
-          y: webTop + pt.y * this.gridSize
-        }))
-        
-        this.smoothedContourGraphics!.beginPath()
-        screenContour.forEach((point, index) => {
-          if (index === 0) {
-            this.smoothedContourGraphics!.moveTo(point.x, point.y)
-          } else {
-            this.smoothedContourGraphics!.lineTo(point.x, point.y)
-          }
-        })
-        this.smoothedContourGraphics!.closePath()
-        this.smoothedContourGraphics!.strokePath()
+    // Choose which graphics layer to use based on mode
+    const targetGraphics = this.showRawMarchingSquares ? this.rawContourGraphics : this.smoothedContourGraphics
+    const targetStyle = this.showRawMarchingSquares ? ContourStyles.raw : ContourStyles.smoothed
+    
+    // Render contours using clean API
+    if (targetGraphics && contours.length > 0) {
+      renderContours(targetGraphics, contours, {
+        style: targetStyle,
+        showControlPoints: this.showControlPoints && this.editMode,
+        controlPointStyle: ControlPointStyles.default,
+        transform
       })
     }
   }
@@ -898,84 +865,34 @@ export class BeamElevationScene extends Phaser.Scene {
       }
     })
     
-    // Convert binary grid to scalar field for interpolation
-    const scalarGrid = binaryToScalarField(grid, this.scalarFieldMethod, this.scalarFieldRadius)
-    
-    // Apply marching squares with default config
-    const { contours } = marchingSquaresOptimized(scalarGrid, {})
-    
-    // Clear control points
-    this.controlPointGraphics?.clear()
-    
-    // Draw contours
-    if (this.lossGraphics) {
-      this.lossGraphics!.lineStyle(2, 0xFF6B6B)
-    
-      contours.forEach(contour => {
-      if (contour.points.length < 3) return
-      
-      // Transform contour points to screen coordinates with edge clamping
-      const screenContour = contour.points.map(point => {
-        let x = startX + point.x * this.gridSize
-        let y = webTop + point.y * this.gridSize
-        
-        // Clamp exactly to web edges
-        x = Math.max(startX, x)
-        x = Math.min(startX + this.beamLength * this.gridSize, x)
-        y = Math.max(webTop, y)
-        y = Math.min(webBottom, y)
-        
-        return { x, y }
-      })
-      
-      // Draw the contour
-      if (this.editMode || this.showRawMarchingSquares) {
-        // In edit mode or raw mode, always use linear segments
-        this.lossGraphics!.beginPath()
-        screenContour.forEach((point, index) => {
-          if (index === 0) {
-            this.lossGraphics!.moveTo(point.x, point.y)
-          } else {
-            this.lossGraphics!.lineTo(point.x, point.y)
-          }
-        })
-        this.lossGraphics!.closePath()
-        this.lossGraphics!.strokePath()
-        
-        // Draw control points if requested
-        if (showControlPoints && this.showControlPoints && this.editMode) {
-          this.controlPointGraphics!.fillStyle(0x00FF00, 0.8) // Green control points
-          screenContour.forEach(point => {
-            this.controlPointGraphics!.fillCircle(point.x, point.y, 3)
-          })
+    // Generate contours using unified core pipeline
+    const { contours } = marchingSquaresOptimized(grid, {
+      interpolation: {
+        enabled: this.interpolationMethod !== 'none',
+        method: this.interpolationMethod,
+        scalarField: {
+          method: this.scalarFieldMethod,
+          radius: this.scalarFieldRadius
         }
-      } else {
-        // View mode with smoothing
-        if (this.useSmoothCurves && screenContour.length > 4) {
-          // Create edge constraints for bezier curves
-          const edgeConstraints: EdgeConstraints = {
-            leftEdge: startX,
-            rightEdge: startX + this.beamLength * this.gridSize,
-            topEdge: webTop,
-            bottomEdge: webBottom,
-            strictEdges: { left: true, right: true, top: true, bottom: true }
-          }
-          drawBezierContour(this.lossGraphics!, screenContour, true, edgeConstraints)
-        } else {
-          this.lossGraphics!.beginPath()
-          screenContour.forEach((point, index) => {
-            if (index === 0) {
-              this.lossGraphics!.moveTo(point.x, point.y)
-            } else {
-              this.lossGraphics!.lineTo(point.x, point.y)
-            }
-          })
-          this.lossGraphics!.closePath()
-          this.lossGraphics!.fillPath()
-          this.lossGraphics!.strokePath()
-        }
+      },
+      smoothing: {
+        enabled: !this.showRawMarchingSquares,
+        algorithm: this.smoothingMethod,
+        iterations: this.smoothingIterations,
+        strength: this.smoothingStrength
       }
     })
+    
+    // Use the clean rendering API
+    const transform = createGridToScreenTransform(this.gridSize, startX, webTop)
+    
+    if (contours.length > 0) {
+      renderContours(this.lossGraphics, contours, {
+        style: ContourStyles.raw,
+        showControlPoints,
+        controlPointStyle: ControlPointStyles.default,
+        transform
+      })
     }
   }
   
@@ -1323,15 +1240,8 @@ export class BeamElevationScene extends Phaser.Scene {
       0.1  // Make cells slightly visible with fill
     )
     
-    cell.setStrokeStyle(2, 0xff0000, 1.0)  // Bright red thick border for debugging
-    
-    // Make cells interactive in edit mode
-    if (this.editMode) {
-      cell.setInteractive()
-      console.log('Cell made interactive:', { zone, col, row, editMode: this.editMode })
-    } else {
-      console.log('Cell NOT made interactive:', { zone, col, row, editMode: this.editMode })
-    }
+    cell.setStrokeStyle(1, 0x999999, 0.8)
+    cell.setInteractive()
     
     cell.setData('col', col)
     cell.setData('row', row)
@@ -1361,13 +1271,10 @@ export class BeamElevationScene extends Phaser.Scene {
   
   private setupCellInteraction(cell: Phaser.GameObjects.Rectangle) {
     cell.on('pointerdown', () => {
-      // Only allow interaction in edit mode
       if (!this.editMode) return
       
       const zone = cell.getData('zone') || 'default'
       const key = `${zone}_${cell.getData('col')}_${cell.getData('row')}`
-      
-      console.log('Cell clicked:', { key, editMode: this.editMode, appMode: this.appMode })
       
       // Set paint mode based on current cell state
       if (this.selectedCells.has(key)) {
