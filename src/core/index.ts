@@ -7,25 +7,49 @@
 export { MarchingSquaresEngine } from './engine/MarchingSquaresEngine'
 export type { ProcessingResult } from './engine/MarchingSquaresEngine'
 
-// Export algorithms
+// Core contour processing exports
 export * from './algorithms'
 
-// Export configuration
-export * from './configuration/MarchingSquaresConfig'
-export * from './configuration/MarchingSquaresAlgorithmConfig'
-export * from './configuration/InterpolationConfig'
-export * from './configuration/SmoothingConfig'
-export * from './configuration/PerformanceConfig'
-export * from './configuration/ConfigUtils'
-
-// Export geometry types
+// Geometry utilities
 export * from './geometry'
-
-// Export rendering utilities
-export * from './ContourRenderer'
-
-// Export scalar field utilities
 export * from './ScalarField'
+export * from './ScalarFieldEnhancements'
+export * from './PerformanceMonitor'
+
+// New modular exports
+export * from './grid/mask'
+export * from './fields/scalarFieldGenerator'
+export * from './contours/marchingSquares'
+
+// Grid system
+export * from './grid/GridSystem'
+
+// Rendering system
+export * from './rendering/BeamRenderer'
+
+// Configuration
+export * from './config/SceneConfigManager'
+
+// Rendering components
+
+// Renderer exports
+export * from '../renderers/contours/phaserRenderer'
+
+// Service exports
+export * from '../services/contourService'
+
+// Legacy compatibility exports
+export { renderContours, ContourStyles } from './ContourRenderer'
+
+// BezierRendering exports (avoid Point conflict by being explicit)
+export { 
+  drawBezierContour,
+  createSmoothBezierPath,
+  drawCubicBezierContour,
+  applyTensionSmoothing,
+  interpolateContourPoints
+} from './BezierRendering'
+export type { EdgeConstraints } from './BezierRendering'
 
 // Unified contour processing entry point
 import { MarchingSquaresEngine, ProcessingResult } from './engine/MarchingSquaresEngine'

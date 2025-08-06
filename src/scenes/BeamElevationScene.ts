@@ -2,13 +2,15 @@ import Phaser from 'phaser'
 import { BeamProfile, GridCell } from '../types/beam'
 import { AppMode } from '../types/mode'
 import { AnnotationType } from '../types/annotations'
-import { processGrid as marchingSquaresOptimized } from '../core'
-import { MarchingSquaresConfig, ContourRenderStyle, ContourStyles, ControlPointStyles, createGridToScreenTransform, renderContours } from '../core'
+import { processGrid } from '../core'
+import { MarchingSquaresConfig } from '../core'
 import type { ScalarFieldMethod } from '../core/ScalarField'
 import { maskFromSelectedCells } from '../utils/gridMask'
+import { ContourStyles, ControlPointStyles, createGridToScreenTransform, renderContours } from '../core/ContourRenderer'
 import { AnnotationManager } from '../annotations/AnnotationManager'
 import { DefectType, DEFECT_STYLES } from '../types/defects'
 import { applyDefectPattern } from '../utils/defectPatterns'
+import { SceneConfigManager, SceneConfig, DEFAULT_SCENE_CONFIG } from '../core/config/SceneConfigManager'
 
 export class BeamElevationScene extends Phaser.Scene {
   private beamProfile: BeamProfile | null = null
@@ -102,9 +104,99 @@ export class BeamElevationScene extends Phaser.Scene {
   private edgeClamping = true  // Enable by default for proper web section visualization
   private edgeClampDistance = 0.8  // Slightly larger distance for more aggressive clamping
   private cornerTreatment: 'trimmed' | 'flared' | 'square' = 'flared'
+  
+  // Configuration management
+  private configManager?: SceneConfigManager
 
   constructor() {
     super({ key: 'BeamElevationScene' })
+  }
+
+  /**
+   * Initialize configuration manager with current scene values
+   */
+  private initializeConfigManager(): void {
+    const initialConfig: Partial<SceneConfig> = {
+      showRawMarchingSquares: this.showRawMarchingSquares,
+      showControlPoints: this.showControlPoints,
+      showBlurredField: this.showBlurredField,
+      interpolationMethod: this.interpolationMethod,
+      saddlePointResolution: this.saddlePointResolution,
+      threshold: this.threshold,
+      alignmentMode: this.alignmentMode,
+      clampToGrid: this.clampToGrid,
+      extendToBoundary: this.extendToBoundary,
+      snapDistance: this.snapDistance,
+      smoothingMethod: this.smoothingMethod,
+      smoothingIterations: this.smoothingIterations,
+      smoothingStrength: this.smoothingStrength,
+      edgeClamping: this.edgeClamping,
+      edgeClampStrength: this.edgeClampStrength,
+      edgeClampDistance: this.edgeClampDistance,
+      cornerTreatment: this.cornerTreatment,
+      scalarFieldMethod: this.scalarFieldMethod,
+      scalarFieldRadius: this.scalarFieldRadius,
+      collisionAvoidance: this.collisionAvoidance,
+      collisionMinDistance: this.collisionMinDistance,
+      collisionMethod: this.collisionMethod,
+      collisionIterations: this.collisionIterations
+    }
+
+    this.configManager = new SceneConfigManager(initialConfig, () => this.onConfigChange())
+  }
+
+  /**
+   * Handle configuration changes by updating scene properties and redrawing
+   */
+  private onConfigChange(): void {
+    if (!this.configManager) return
+
+    const config = this.configManager.getConfig()
+    
+    // Update scene properties from config
+    this.showRawMarchingSquares = config.showRawMarchingSquares
+    this.showControlPoints = config.showControlPoints
+    this.showBlurredField = config.showBlurredField
+    this.interpolationMethod = config.interpolationMethod
+    this.saddlePointResolution = config.saddlePointResolution
+    this.threshold = config.threshold
+    this.alignmentMode = config.alignmentMode
+    this.clampToGrid = config.clampToGrid
+    this.extendToBoundary = config.extendToBoundary
+    this.snapDistance = config.snapDistance
+    this.smoothingMethod = config.smoothingMethod
+    this.smoothingIterations = config.smoothingIterations
+    this.smoothingStrength = config.smoothingStrength
+    this.edgeClamping = config.edgeClamping
+    this.edgeClampStrength = config.edgeClampStrength
+    this.edgeClampDistance = config.edgeClampDistance
+    this.cornerTreatment = config.cornerTreatment
+    this.scalarFieldMethod = config.scalarFieldMethod
+    this.scalarFieldRadius = config.scalarFieldRadius
+    this.collisionAvoidance = config.collisionAvoidance
+    this.collisionMinDistance = config.collisionMinDistance
+    this.collisionMethod = config.collisionMethod
+    this.collisionIterations = config.collisionIterations
+
+    // Redraw the scene
+    this.redrawVisualization()
+  }
+
+  /**
+   * Debug method to force contour drawing
+   */
+  public debugDrawContours() {
+    console.log('Debug: Forcing contour redraw', {
+      selectedCells: this.selectedCells.size,
+      editMode: this.editMode,
+      appMode: this.appMode
+    })
+    
+    const sceneWidth = this.cameras.main.width
+    const padding = 100
+    const startX = padding
+    const beamWidth = this.beamLength * this.gridSize
+    this.drawSectionLoss(startX, this.cameras.main.height / 2, beamWidth)
   }
 
   update() {
@@ -175,6 +267,9 @@ export class BeamElevationScene extends Phaser.Scene {
 
   create() {
     if (!this.beamProfile) return
+
+    // Initialize configuration manager
+    this.initializeConfigManager()
 
     // Expose debug method globally for testing
     (window as any).debugDrawContours = () => this.debugDrawContours()
@@ -379,13 +474,13 @@ export class BeamElevationScene extends Phaser.Scene {
     this.add.text(startX, labelY, leftLabel, {
       fontSize: '14px',
       color: '#333',
-      fontWeight: 'bold'
+      fontStyle: 'bold'
     }).setOrigin(0.5)
 
     this.add.text(startX + beamWidth, labelY, rightLabel, {
       fontSize: '14px', 
       color: '#333',
-      fontWeight: 'bold'
+      fontStyle: 'bold'
     }).setOrigin(0.5)
     
     // Setup touch controls for mobile
@@ -608,7 +703,7 @@ export class BeamElevationScene extends Phaser.Scene {
     } else {
       // View mode - show filled regions with marching squares
       // Generate contours using the unified core pipeline
-      const { contours } = marchingSquaresOptimized(grid, {
+      const { contours } = processGrid(grid, {
         algorithm: {
           threshold: this.threshold,
           saddlePointResolution: this.saddlePointResolution,
@@ -653,17 +748,27 @@ export class BeamElevationScene extends Phaser.Scene {
     if (!this.blurredFieldGraphics) return
     
     // Generate scalar field using core engine
-    const { metadata } = marchingSquaresOptimized(grid, {
+    const { contours } = processGrid(grid, {
       interpolation: {
         enabled: true,
+        method: 'linear',
         scalarField: {
           method: this.scalarFieldMethod,
-          radius: this.scalarFieldRadius
+          radius: this.scalarFieldRadius,
+          edgeClamping: {
+            enabled: this.edgeDetectionEnabled,
+            strength: this.edgeClampStrength,
+            distance: this.edgeClampDistance
+          }
+        },
+        transform: {
+          globalOffsetX: 0,
+          globalOffsetY: 0,
+          scale: 1
         }
       }
     })
     
-    // The core engine should provide the scalar field in debug metadata
     // For now, we'll use a simple binary to scalar conversion
     const scalarGrid = grid.map(row => 
       row.map(cell => cell > 0 ? 1 : 0)
@@ -757,19 +862,70 @@ export class BeamElevationScene extends Phaser.Scene {
       this.smoothedContourGraphics?.clear()
       
       // Generate different contour types using the core engine
-      const binaryContours = marchingSquaresOptimized(grid, {
-        interpolation: { enabled: false },
-        smoothing: { enabled: false }
+      const binaryContours = processGrid(grid, {
+        interpolation: { 
+          enabled: false,
+          method: 'none',
+          scalarField: {
+            method: 'none',
+            radius: 1,
+            edgeClamping: { enabled: false, strength: 0, distance: 0 }
+          },
+          transform: { globalOffsetX: 0, globalOffsetY: 0, scale: 1 }
+        },
+        smoothing: { 
+          enabled: false,
+          algorithm: 'basic',
+          iterations: 0,
+          strength: 0,
+          edgePreservation: { enabled: false, bufferDistance: 0, preserveStraightSegments: false, curvatureThreshold: 0 },
+          collision: { enabled: false, method: 'repulsion', minDistance: 0, maxIterations: 0 },
+          filtering: { minContourArea: 0, minContourLength: 0, maxContours: 1000 }
+        }
       }).contours
       
-      const rawContours = marchingSquaresOptimized(grid, {
-        interpolation: { enabled: true },
-        smoothing: { enabled: false }
+      const rawContours = processGrid(grid, {
+        interpolation: { 
+          enabled: true,
+          method: 'linear',
+          scalarField: {
+            method: this.scalarFieldMethod,
+            radius: this.scalarFieldRadius,
+            edgeClamping: { enabled: this.edgeDetectionEnabled, strength: this.edgeClampStrength, distance: this.edgeClampDistance }
+          },
+          transform: { globalOffsetX: 0, globalOffsetY: 0, scale: 1 }
+        },
+        smoothing: { 
+          enabled: false,
+          algorithm: 'basic',
+          iterations: 0,
+          strength: 0,
+          edgePreservation: { enabled: false, bufferDistance: 0, preserveStraightSegments: false, curvatureThreshold: 0 },
+          collision: { enabled: false, method: 'repulsion', minDistance: 0, maxIterations: 0 },
+          filtering: { minContourArea: 0, minContourLength: 0, maxContours: 1000 }
+        }
       }).contours
       
-      const smoothedContours = marchingSquaresOptimized(grid, {
-        interpolation: { enabled: true },
-        smoothing: { enabled: true, algorithm: this.smoothingMethod }
+      const smoothedContours = processGrid(grid, {
+        interpolation: { 
+          enabled: true,
+          method: 'linear',
+          scalarField: {
+            method: this.scalarFieldMethod,
+            radius: this.scalarFieldRadius,
+            edgeClamping: { enabled: this.edgeDetectionEnabled, strength: this.edgeClampStrength, distance: this.edgeClampDistance }
+          },
+          transform: { globalOffsetX: 0, globalOffsetY: 0, scale: 1 }
+        },
+        smoothing: { 
+          enabled: true, 
+          algorithm: this.smoothingMethod,
+          iterations: this.smoothingIterations,
+          strength: this.smoothingStrength,
+          edgePreservation: { enabled: this.preserveEdgeSegments, bufferDistance: this.edgeBufferDistance, preserveStraightSegments: this.preserveStraightSegments, curvatureThreshold: this.curvatureThreshold },
+          collision: { enabled: this.collisionAvoidance, method: this.collisionMethod, minDistance: this.collisionMinDistance, maxIterations: this.collisionIterations },
+          filtering: { minContourArea: 0, minContourLength: 3, maxContours: 1000 }
+        }
       }).contours
       
       // Draw binary contours in blue
@@ -800,20 +956,25 @@ export class BeamElevationScene extends Phaser.Scene {
     }
     
     // Normal mode: Generate contours with current settings
-    const { contours } = marchingSquaresOptimized(grid, {
+    const { contours } = processGrid(grid, {
       interpolation: {
         enabled: this.interpolationMethod !== 'none',
         method: this.interpolationMethod,
         scalarField: {
           method: this.scalarFieldMethod,
-          radius: this.scalarFieldRadius
-        }
+          radius: this.scalarFieldRadius,
+          edgeClamping: { enabled: this.edgeDetectionEnabled, strength: this.edgeClampStrength, distance: this.edgeClampDistance }
+        },
+        transform: { globalOffsetX: 0, globalOffsetY: 0, scale: 1 }
       },
       smoothing: {
         enabled: !this.showRawMarchingSquares,
         algorithm: this.smoothingMethod,
         iterations: this.smoothingIterations,
-        strength: this.smoothingStrength
+        strength: this.smoothingStrength,
+        edgePreservation: { enabled: this.preserveEdgeSegments, bufferDistance: this.edgeBufferDistance, preserveStraightSegments: this.preserveStraightSegments, curvatureThreshold: this.curvatureThreshold },
+        collision: { enabled: this.collisionAvoidance, method: this.collisionMethod, minDistance: this.collisionMinDistance, maxIterations: this.collisionIterations },
+        filtering: { minContourArea: 0, minContourLength: 3, maxContours: 1000 }
       }
     })
     
@@ -866,20 +1027,25 @@ export class BeamElevationScene extends Phaser.Scene {
     })
     
     // Generate contours using unified core pipeline
-    const { contours } = marchingSquaresOptimized(grid, {
+    const { contours } = processGrid(grid, {
       interpolation: {
         enabled: this.interpolationMethod !== 'none',
         method: this.interpolationMethod,
         scalarField: {
           method: this.scalarFieldMethod,
-          radius: this.scalarFieldRadius
-        }
+          radius: this.scalarFieldRadius,
+          edgeClamping: { enabled: this.edgeDetectionEnabled, strength: this.edgeClampStrength, distance: this.edgeClampDistance }
+        },
+        transform: { globalOffsetX: 0, globalOffsetY: 0, scale: 1 }
       },
       smoothing: {
         enabled: !this.showRawMarchingSquares,
         algorithm: this.smoothingMethod,
         iterations: this.smoothingIterations,
-        strength: this.smoothingStrength
+        strength: this.smoothingStrength,
+        edgePreservation: { enabled: this.preserveEdgeSegments, bufferDistance: this.edgeBufferDistance, preserveStraightSegments: this.preserveStraightSegments, curvatureThreshold: this.curvatureThreshold },
+        collision: { enabled: this.collisionAvoidance, method: this.collisionMethod, minDistance: this.collisionMinDistance, maxIterations: this.collisionIterations },
+        filtering: { minContourArea: 0, minContourLength: 3, maxContours: 1000 }
       }
     })
     
@@ -1243,6 +1409,9 @@ export class BeamElevationScene extends Phaser.Scene {
     cell.setStrokeStyle(1, 0x999999, 0.8)
     cell.setInteractive()
     
+    // Ensure the cell is on top for input handling
+    cell.setDepth(1000)
+    
     cell.setData('col', col)
     cell.setData('row', row)
     cell.setData('zone', zone)
@@ -1276,32 +1445,21 @@ export class BeamElevationScene extends Phaser.Scene {
       const zone = cell.getData('zone') || 'default'
       const key = `${zone}_${cell.getData('col')}_${cell.getData('row')}`
       
-      // Set paint mode based on current cell state
+      // Simple toggle logic
       if (this.selectedCells.has(key)) {
-        this.paintMode = 'remove'
         this.selectedCells.delete(key)
         this.cellDefectTypes.delete(key)
-        cell.setFillStyle(0xffffff, 0)
+        this.paintMode = 'remove'
       } else {
-        this.paintMode = 'add'
         this.selectedCells.add(key)
         this.cellDefectTypes.set(key, this.selectedDefectType)
-        this.updateCellAppearance(cell, key)
+        this.paintMode = 'add'
       }
       
       this.isMouseDown = true
       this.isPainting = true
       
-      // Redraw loss graphics
-      const sceneWidth = this.cameras.main.width
-      const padding = 100
-      const startX = padding
-      const beamWidth = this.beamLength * this.gridSize
-      this.drawSectionLoss(startX, this.cameras.main.height / 2, beamWidth)
-      
-      // Update grid cell visibility based on selection
-      this.updateGridCellVisibility()
-      
+      this.redrawVisualization()
       this.notifyCellChange()
     })
 
@@ -1311,37 +1469,20 @@ export class BeamElevationScene extends Phaser.Scene {
       const zone = cell.getData('zone') || 'default'
       const key = `${zone}_${cell.getData('col')}_${cell.getData('row')}`
       
-      // If mouse is down and we're painting, apply the paint mode
+      // Apply paint mode during drag
       if (this.isMouseDown && this.isPainting && this.paintMode) {
         if (this.paintMode === 'add' && !this.selectedCells.has(key)) {
           this.selectedCells.add(key)
           this.cellDefectTypes.set(key, this.selectedDefectType)
-          this.updateCellAppearance(cell, key)
-          
-          // Redraw section loss and notify
-          const sceneWidth = this.cameras.main.width
-          const padding = 100
-          const startX = padding
-          const beamWidth = this.beamLength * this.gridSize
-          this.drawSectionLoss(startX, this.cameras.main.height / 2, beamWidth)
-          this.updateGridCellVisibility()
+          this.redrawVisualization()
           this.notifyCellChange()
         } else if (this.paintMode === 'remove' && this.selectedCells.has(key)) {
           this.selectedCells.delete(key)
           this.cellDefectTypes.delete(key)
-          cell.setFillStyle(0xffffff, 0)
-          
-          // Redraw section loss and notify
-          const sceneWidth = this.cameras.main.width
-          const padding = 100
-          const startX = padding
-          const beamWidth = this.beamLength * this.gridSize
-          this.drawSectionLoss(startX, this.cameras.main.height / 2, beamWidth)
-          this.updateGridCellVisibility()
+          this.redrawVisualization()
           this.notifyCellChange()
         }
       } else if (!this.selectedCells.has(key)) {
-        // Just hover effect
         cell.setFillStyle(0xeeeeee, 0.3)
       }
     })
@@ -1500,7 +1641,7 @@ export class BeamElevationScene extends Phaser.Scene {
     const heightText = this.add.text(dim3X + (this.gridOrigin === 'left' ? -8 : 8), centerY, `${totalHeight.toFixed(3)}"`, {
       fontSize: '13px',
       color: '#333',
-      fontWeight: 'bold'
+      fontStyle: 'bold'
     })
     heightText.setOrigin(0.5, this.gridOrigin === 'left' ? 1 : 0)
     heightText.setRotation(this.gridOrigin === 'left' ? -Math.PI/2 : Math.PI/2)
@@ -1551,6 +1692,27 @@ export class BeamElevationScene extends Phaser.Scene {
     })
     
     this.onCellChange(cells)
+  }
+  
+  private redrawVisualization() {
+    // Update all cell appearances
+    this.gridCells.forEach((cell, key) => {
+      if (this.selectedCells.has(key)) {
+        this.updateCellAppearance(cell, key)
+      } else {
+        cell.setFillStyle(0xffffff, 0)
+      }
+    })
+    
+    // Redraw section loss
+    const sceneWidth = this.cameras.main.width
+    const padding = 100
+    const startX = padding
+    const beamWidth = this.beamLength * this.gridSize
+    this.drawSectionLoss(startX, this.cameras.main.height / 2, beamWidth)
+    
+    // Update grid cell visibility
+    this.updateGridCellVisibility()
   }
   
   private updateGridCellVisibility() {
@@ -1765,321 +1927,6 @@ export class BeamElevationScene extends Phaser.Scene {
     })
   }
   
-  // Public methods to adjust contour alignment
-  public setContourOffsets(offsetX: number, offsetY: number): void {
-    this.contourOffsetX = offsetX
-    this.contourOffsetY = offsetY
-    this.drawSectionLoss(
-      100,
-      this.cameras.main.centerY,
-      this.beamLength * this.gridSize
-    )
-  }
-  
-  public setContourGlobalOffsets(globalOffsetX: number, globalOffsetY: number): void {
-    this.contourGlobalOffsetX = globalOffsetX
-    this.contourGlobalOffsetY = globalOffsetY
-    this.drawSectionLoss(
-      100,
-      this.cameras.main.centerY,
-      this.beamLength * this.gridSize
-    )
-  }
-  
-  public getContourOffsets(): { cellX: number; cellY: number; globalX: number; globalY: number } {
-    return {
-      cellX: this.contourOffsetX,
-      cellY: this.contourOffsetY,
-      globalX: this.contourGlobalOffsetX,
-      globalY: this.contourGlobalOffsetY
-    }
-  }
-  
-  public setContourBuffer(bufferSize: number, bufferValue: number): void {
-    // Buffer size is now permanently 1 for optimal edge processing
-    this.contourBufferSize = 1
-    this.contourBufferValue = 0  // Always 0 for binary fields
-    this.drawSectionLoss(
-      100,
-      this.cameras.main.centerY,
-      this.beamLength * this.gridSize
-    )
-  }
-  
-  public getContourBuffer(): { size: number; value: number } {
-    return {
-      size: this.contourBufferSize,
-      value: this.contourBufferValue
-    }
-  }
-  
-  public setSmoothingOptions(method: 'basic' | 'laplacian' | 'chaikin' | 'bilateral' | 'catmull-rom' | 'edge-aware' | 'intelligent' | 'selective', iterations: number, strength: number): void {
-    this.smoothingMethod = method
-    this.smoothingIterations = iterations
-    this.smoothingStrength = strength
-    this.drawSectionLoss(
-      100,
-      this.cameras.main.centerY,
-      this.beamLength * this.gridSize
-    )
-  }
-  
-  public getSmoothingOptions(): { smoothingMethod: 'basic' | 'laplacian' | 'chaikin' | 'bilateral' | 'catmull-rom' | 'edge-aware' | 'intelligent' | 'selective'; smoothingIterations: number; smoothingStrength: number } {
-    return {
-      smoothingMethod: this.smoothingMethod,
-      smoothingIterations: this.smoothingIterations,
-      smoothingStrength: this.smoothingStrength
-    }
-  }
-  
-  public setCollisionAvoidance(enabled: boolean, minDistance: number, method: 'repulsion' | 'shrink' | 'hybrid', iterations: number): void {
-    this.collisionAvoidance = enabled
-    this.collisionMinDistance = minDistance
-    this.collisionMethod = method
-    this.collisionIterations = iterations
-    this.drawSectionLoss(
-      100,
-      this.cameras.main.centerY,
-      this.beamLength * this.gridSize
-    )
-  }
-  
-  public getCollisionAvoidance(): { collisionAvoidance: boolean; collisionMinDistance: number; collisionMethod: 'repulsion' | 'shrink' | 'hybrid'; collisionIterations: number } {
-    return {
-      collisionAvoidance: this.collisionAvoidance,
-      collisionMinDistance: this.collisionMinDistance,
-      collisionMethod: this.collisionMethod,
-      collisionIterations: this.collisionIterations
-    }
-  }
-  
-  public setShowRawMarchingSquares(show: boolean): void {
-    this.showRawMarchingSquares = show
-    this.drawSectionLoss(
-      100,
-      this.cameras.main.centerY,
-      this.beamLength * this.gridSize
-    )
-  }
-  
-  public getShowRawMarchingSquares(): boolean {
-    return this.showRawMarchingSquares
-  }
-  
-  public setShowControlPoints(show: boolean): void {
-    this.showControlPoints = show
-    this.drawSectionLoss(
-      100,
-      this.cameras.main.centerY,
-      this.beamLength * this.gridSize
-    )
-  }
-  
-  public getShowControlPoints(): boolean {
-    return this.showControlPoints
-  }
-  
-  public setShowBlurredField(show: boolean): void {
-    this.showBlurredField = show
-    this.drawSectionLoss(
-      100,
-      this.cameras.main.centerY,
-      this.beamLength * this.gridSize
-    )
-  }
-  
-  public getShowBlurredField(): boolean {
-    return this.showBlurredField
-  }
-  
-  // Getters for algorithm controls
-  public getInterpolationMethod(): 'linear' | 'cubic' | 'none' {
-    return this.interpolationMethod
-  }
-  
-  public getSaddlePointResolution(): 'center' | 'gradient' | 'majority' {
-    return this.saddlePointResolution
-  }
-  
-  public getThreshold(): number {
-    return this.threshold
-  }
-  
-  public getAlignmentMode(): 'edges' | 'vertices' | 'center' {
-    return this.alignmentMode
-  }
-  
-  public getClampToGrid(): boolean {
-    return this.clampToGrid
-  }
-  
-  public getExtendToBoundary(): boolean {
-    return this.extendToBoundary
-  }
-  
-  public getSnapDistance(): number {
-    return this.snapDistance
-  }
-  
-  // Marching Squares Algorithm Controls
-  public setInterpolationMethod(method: 'linear' | 'cubic' | 'none'): void {
-    this.interpolationMethod = method
-    this.drawSectionLoss(
-      100,
-      this.cameras.main.centerY,
-      this.beamLength * this.gridSize
-    )
-  }
-  
-  public setSaddlePointResolution(resolution: 'center' | 'gradient' | 'majority'): void {
-    this.saddlePointResolution = resolution
-    this.drawSectionLoss(
-      100,
-      this.cameras.main.centerY,
-      this.beamLength * this.gridSize
-    )
-  }
-  
-  public setThreshold(threshold: number): void {
-    this.threshold = threshold
-    this.drawSectionLoss(
-      100,
-      this.cameras.main.centerY,
-      this.beamLength * this.gridSize
-    )
-  }
-  
-  public setAlignmentMode(mode: 'edges' | 'vertices' | 'center'): void {
-    this.alignmentMode = mode
-    this.drawSectionLoss(
-      100,
-      this.cameras.main.centerY,
-      this.beamLength * this.gridSize
-    )
-  }
-  
-  public setClampToGrid(clamp: boolean): void {
-    this.clampToGrid = clamp
-    this.drawSectionLoss(
-      100,
-      this.cameras.main.centerY,
-      this.beamLength * this.gridSize
-    )
-  }
-  
-  public setExtendToBoundary(extend: boolean): void {
-    this.extendToBoundary = extend
-    this.drawSectionLoss(
-      100,
-      this.cameras.main.centerY,
-      this.beamLength * this.gridSize
-    )
-  }
-  
-  public setSnapDistance(distance: number): void {
-    this.snapDistance = distance
-    this.drawSectionLoss(
-      100,
-      this.cameras.main.centerY,
-      this.beamLength * this.gridSize
-    )
-  }
-  
-  // Edge Clamping Controls
-  public getEdgeClamping(): boolean {
-    return this.edgeClamping
-  }
-  
-  public setEdgeClamping(enabled: boolean): void {
-    this.edgeClamping = enabled
-    this.drawSectionLoss(
-      100,
-      this.cameras.main.centerY,
-      this.beamLength * this.gridSize
-    )
-  }
-  
-  public getEdgeClampDistance(): number {
-    return this.edgeClampDistance
-  }
-  
-  public setEdgeClampDistance(distance: number): void {
-    this.edgeClampDistance = distance
-    this.drawSectionLoss(
-      100,
-      this.cameras.main.centerY,
-      this.beamLength * this.gridSize
-    )
-  }
-  
-  public getCornerTreatment(): 'trimmed' | 'flared' | 'square' {
-    return this.cornerTreatment
-  }
-  
-  public setCornerTreatment(treatment: 'trimmed' | 'flared' | 'square'): void {
-    this.cornerTreatment = treatment
-    this.drawSectionLoss(
-      100,
-      this.cameras.main.centerY,
-      this.beamLength * this.gridSize
-    )
-  }
-  
-  // Scalar Field Controls
-  public getScalarFieldMethod(): ScalarFieldMethod {
-    return this.scalarFieldMethod
-  }
-  
-  public setScalarFieldMethod(method: ScalarFieldMethod): void {
-    this.scalarFieldMethod = method
-    this.drawSectionLoss(
-      100,
-      this.cameras.main.centerY,
-      this.beamLength * this.gridSize
-    )
-  }
-  
-  public getScalarFieldRadius(): number {
-    return this.scalarFieldRadius
-  }
-  
-  public setScalarFieldRadius(radius: number): void {
-    this.scalarFieldRadius = radius
-    this.drawSectionLoss(
-      100,
-      this.cameras.main.centerY,
-      this.beamLength * this.gridSize
-    )
-  }
-  
-  // Debug method to force contour drawing
-  public debugDrawContours() {
-    console.log('Debug: Forcing contour redraw', {
-      selectedCells: this.selectedCells.size,
-      editMode: this.editMode,
-      appMode: this.appMode
-    })
-    
-    const sceneWidth = this.cameras.main.width
-    const padding = 100
-    const startX = padding
-    const beamWidth = this.beamLength * this.gridSize
-    this.drawSectionLoss(startX, this.cameras.main.height / 2, beamWidth)
-  }
-  
-  public getEdgeClampStrength(): number {
-    return this.edgeClampStrength
-  }
-  
-  public setEdgeClampStrength(strength: number): void {
-    this.edgeClampStrength = strength
-    this.drawSectionLoss(
-      100,
-      this.cameras.main.centerY,
-      this.beamLength * this.gridSize
-    )
-  }
-  
   private updateAnnotationSnapPoints(): void {
     if (!this.annotationManager) return
     
@@ -2099,11 +1946,21 @@ export class BeamElevationScene extends Phaser.Scene {
   }
   
   private setupTouchControls(): void {
+    // Don't set up global touch controls in edit mode - they interfere with grid interaction
+    if (this.editMode) {
+      return
+    }
+    
     // Enable multi-touch
     this.input.addPointer(2)
     
     // Pan support
     this.input.on('pointerdown', (pointer: Phaser.Input.Pointer) => {
+      // Don't handle ANY pointer events in edit mode - let grid cells handle them
+      if (this.editMode) {
+        return
+      }
+      
       // Only allow panning in view mode, or annotation mode when not interacting with annotations
       const allowPanning = this.appMode === 'view' || 
         (this.appMode === 'annotation' && 
@@ -2167,8 +2024,5 @@ export class BeamElevationScene extends Phaser.Scene {
       this.annotationManager.destroy()
       this.annotationManager = undefined
     }
-    
-    // Call parent shutdown
-    super.shutdown()
   }
 }
