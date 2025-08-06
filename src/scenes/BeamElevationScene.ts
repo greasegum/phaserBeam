@@ -425,6 +425,23 @@ export class BeamElevationScene extends Phaser.Scene {
       fontStyle: 'bold'
     }).setOrigin(0.5)
 
+    // TEST: Add a simple interactive rectangle to verify Phaser interaction works
+    console.log('Creating test rectangle for interaction verification')
+    const testRect = this.add.rectangle(100, 100, 100, 50, 0x00FF00, 0.8)
+    testRect.setInteractive()
+    testRect.on('pointerdown', () => {
+      console.log('TEST RECT CLICKED! Basic Phaser interaction works.')
+      testRect.setFillStyle(0xFF0000, 0.8)
+    })
+    testRect.on('pointerover', () => {
+      console.log('TEST RECT HOVER')
+      testRect.setFillStyle(0x0000FF, 0.8)
+    })
+    testRect.on('pointerout', () => {
+      testRect.setFillStyle(0x00FF00, 0.8)
+    })
+    testRect.setDepth(100) // Make sure it's on top
+
     // Add end labels based on elevation view
     // When looking at an elevation, the ends are perpendicular to the view direction
     let leftLabel: string, rightLabel: string
