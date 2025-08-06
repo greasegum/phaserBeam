@@ -351,6 +351,9 @@ export class BeamElevationScene extends Phaser.Scene {
     this.gridContainer = this.add.container()
     // Set grid container depth to be below contour graphics but still interactive
     this.gridContainer.setDepth(15)
+    
+    // TEST: Check if container blocks interaction
+    console.log('Testing container interaction blocking')
     console.log('Grid creation check:', {
       editMode: this.editMode,
       appMode: this.appMode,
@@ -441,6 +444,41 @@ export class BeamElevationScene extends Phaser.Scene {
       testRect.setFillStyle(0x00FF00, 0.8)
     })
     testRect.setDepth(100) // Make sure it's on top
+    
+    // TEST: Create a grid cell WITHOUT container to see if container is blocking
+    console.log('Creating test grid cell without container')
+    const testCell = this.add.rectangle(250, 100, this.gridSize - 1, this.gridSize - 1, 0xFFFF00, 0.5)
+    testCell.setStrokeStyle(3, 0x0000FF, 1.0)
+    testCell.setInteractive()
+    testCell.on('pointerover', () => {
+      console.log('Test cell hover - NO CONTAINER!')
+      testCell.setFillStyle(0xFF00FF, 0.8)
+    })
+    testCell.on('pointerout', () => {
+      testCell.setFillStyle(0xFFFF00, 0.5)
+    })
+    testCell.on('pointerdown', () => {
+      console.log('Test cell clicked - NO CONTAINER!')
+      testCell.setFillStyle(0x00FFFF, 1.0)
+    })
+    testCell.setDepth(100) // Same depth as test rectangle
+    
+    // TEST: Create a cell IN the container to compare
+    const testCellInContainer = this.add.rectangle(350, 100, this.gridSize - 1, this.gridSize - 1, 0xFF00FF, 0.5)
+    testCellInContainer.setStrokeStyle(3, 0x00FF00, 1.0)
+    testCellInContainer.setInteractive()
+    testCellInContainer.on('pointerover', () => {
+      console.log('Test cell IN CONTAINER hover!')
+      testCellInContainer.setFillStyle(0x00FFFF, 0.8)
+    })
+    testCellInContainer.on('pointerout', () => {
+      testCellInContainer.setFillStyle(0xFF00FF, 0.5)
+    })
+    testCellInContainer.on('pointerdown', () => {
+      console.log('Test cell IN CONTAINER clicked!')
+      testCellInContainer.setFillStyle(0xFFFF00, 1.0)
+    })
+    this.gridContainer!.add(testCellInContainer)
 
     // Add end labels based on elevation view
     // When looking at an elevation, the ends are perpendicular to the view direction
