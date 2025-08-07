@@ -8,7 +8,9 @@
     "build": "vite build",
     "preview": "vite preview",
     "build:analyze": "vite build --mode analyze",
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "vitest",
+    "test:ui": "vitest --ui",
+    "test:coverage": "vitest --coverage"
   },
   "repository": {
     "type": "git",
@@ -27,11 +29,16 @@
     "react-dom": "^19.1.1"
   },
   "devDependencies": {
+    "@types/node": "^24.2.0",
     "@types/react": "^19.1.9",
     "@types/react-dom": "^19.1.7",
     "@vitejs/plugin-react": "^4.2.1",
+    "@vitest/ui": "^3.2.4",
+    "canvas": "^3.1.2",
+    "jsdom": "^26.1.0",
     "terser": "^5.43.1",
     "typescript": "^5.9.2",
-    "vite": "^4.5.3"
+    "vite": "^4.5.3",
+    "vitest": "^3.2.4"
   }
 }

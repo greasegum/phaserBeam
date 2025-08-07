@@ -39,19 +39,22 @@ PhaserBeam combines **React** and **Phaser.js** to create a professional-grade i
 
 ## 🧱 Architecture Overview
 
-**Separation of Concerns**
-The architecture is layered for clarity and performance:
+**Modular Core Architecture**
+The application has been extensively refactored into a clean, modular architecture:
 
-* **React UI Layer**: Setup dialogs, controls, and advanced settings
-* **Phaser Engine Layer**: Interactive grid, real-time feedback, rendering pipeline
-* **Algorithm Layer**: Consolidated marching squares with intelligent defaults
+* **Core Engine Layer**: Unified contour processing pipeline with configurable algorithms
+* **React UI Layer**: Setup dialogs, controls, advanced settings, and annotation tools
+* **Phaser Rendering Layer**: Interactive grid, real-time feedback, and visualization
+* **Algorithm Layer**: Specialized processors for interpolation, marching squares, and smoothing
 
-**Scene and Input Orchestration**
+**Unified Processing Pipeline**
+The `processGrid()` function in `core/engine/MarchingSquaresEngine.ts` serves as the main entry point:
 
-* Grid cells are interactive Phaser rectangles with hover/click/drag events
-* Multiple visualization layers with depth sorting
-* Real-time contour generation and smoothing
-* Paint-mode interaction for rapid area selection
+* **Single source of truth** for all contour generation
+* **Configurable algorithm selection** (interpolation, smoothing methods)
+* **Consistent return format** with `ProcessingResult` interface
+* **Performance monitoring** and optimization built-in
+* **Clean separation** between algorithm logic and UI rendering
 
 ---
 
@@ -64,13 +67,25 @@ The architecture is layered for clarity and performance:
 - Multiple inspection zones (web, flanges)
 - Different elevation views with proper labeling
 
-### ✅ **Consolidated Marching Squares Implementation**
-- **Single, maintainable algorithm** with intelligent defaults
-- **Advanced smoothing methods**: Laplacian, Chaikin, bilateral, edge-aware, Savitzky-Golay
-- **Collision avoidance** between separate contour regions
-- **Edge clamping** to beam boundaries with corner treatment
-- **Scalar field generation** with Gaussian, linear, and step methods
-- **Clean configuration interface** with sensible defaults
+### ✅ **Advanced Annotation System**
+- **Professional dimension lines** with Linear and Ordinate styles
+- **Enhanced annotation effects** with callouts and labels
+- **Interactive annotation toolbar** with tool selection
+- **Annotation mode** separate from grid editing
+- **Export capabilities** for documentation
+
+### ✅ **Unified Core Engine**
+- **Modular algorithm architecture** with specialized processors
+- **Single entry point** via `processGrid()` function
+- **Performance monitoring** and optimization built-in
+- **Configurable processing pipeline** with intelligent defaults
+- **Type-safe configuration** with validation and error handling
+
+### ✅ **Advanced Smoothing Methods**
+- **Multiple smoothing algorithms**: Laplacian, Chaikin, bilateral, edge-aware, Savitzky-Golay
+- **Configurable smoothing strength** and iteration control
+- **Edge-aware processing** to preserve important features
+- **Performance-optimized implementations** with caching
 
 ### ✅ **Professional Visualization**
 - Multiple visualization layers (pixel outlines, blurred fields, raw/smooth contours)
@@ -92,83 +107,140 @@ The architecture is layered for clarity and performance:
 
 ```
 src/
-├── components/           # React UI components
-│   ├── PhaserCanvas.tsx  # Main Phaser integration wrapper
-│   ├── SetupPopup.tsx    # Beam selection and configuration
-│   ├── AdvancedSettings.tsx # Marching squares parameter controls
-│   └── ...               # Additional UI components
-├── scenes/              # Phaser game scenes
-│   └── BeamElevationScene.ts # Main interactive scene (1700+ lines)
-├── types/               # TypeScript definitions
-│   ├── beam.ts          # BeamProfile, GridCell interfaces
-│   └── contourConfig.ts # Marching squares configuration types
-├── utils/               # Core algorithms and utilities
-│   ├── marchingSquares.ts # Consolidated marching squares implementation
-│   ├── beamCatalog.ts   # Structural beam database
-│   ├── contour*.ts      # Smoothing and collision avoidance
-│   └── scalarField.ts   # Field generation methods
-└── core/                # Modular engine architecture
+├── core/                     # Core engine and algorithms
+│   ├── algorithms/           # Specialized algorithm implementations
+│   │   ├── InterpolationAlgorithm.ts
+│   │   ├── MarchingSquaresAlgorithm.ts
+│   │   ├── SmoothingAlgorithm.ts
+│   │   ├── interpolation/    # Interpolation method implementations
+│   │   ├── marching/         # Marching squares variants
+│   │   └── smoothing/        # Smoothing algorithm implementations
+│   ├── configuration/        # Type-safe configuration system
+│   │   ├── MarchingSquaresConfig.ts
+│   │   ├── InterpolationConfig.ts
+│   │   ├── SmoothingConfig.ts
+│   │   ├── PerformanceConfig.ts
+│   │   └── ConfigUtils.ts
+│   ├── engine/              # Core processing engine
+│   │   ├── MarchingSquaresEngine.ts  # Main entry point (processGrid)
+│   │   ├── ContourProcessor.ts
+│   │   └── processors/       # Specialized processors
+│   ├── ScalarField.ts       # Scalar field generation
+│   ├── ScalarFieldEnhancements.ts
+│   ├── BezierRendering.ts   # Bezier curve utilities
+│   └── geometry.ts          # Geometric utilities
+├── components/              # React UI components
+│   ├── PhaserCanvas.tsx     # Main Phaser integration wrapper
+│   ├── SetupPopup.tsx       # Beam selection and configuration
+│   ├── AdvancedSettings.tsx # Algorithm parameter controls
+│   ├── BeamViewer.tsx       # Beam visualization component
+│   ├── AnnotationToolbar.tsx # Annotation tool selection
+│   ├── ModeToolbar.tsx      # Application mode controls
+│   └── ...                  # Additional UI components
+├── annotations/             # Professional annotation system
+│   ├── AnnotationManager.ts
+│   ├── LinearDimensionRenderer.ts
+│   ├── OrdinateDimensionRenderer.ts
+│   ├── CalloutRenderer.ts
+│   └── EnhancedAnnotationEffects.ts
+├── scenes/                  # Phaser game scenes
+│   ├── BeamElevationScene.ts # Main interactive scene
+│   └── GridScene.ts         # Grid management
+├── types/                   # TypeScript definitions
+│   ├── beam.ts              # BeamProfile, GridCell interfaces
+│   ├── contourConfig.ts     # Configuration type definitions
+│   ├── annotations.ts       # Annotation system types
+│   ├── defects.ts          # Defect classification types
+│   └── mode.ts             # Application mode types
+└── utils/                   # Domain-specific utilities
+    ├── beamCatalog.ts       # Structural beam database
+    ├── comprehensiveBeamCatalog.ts
+    ├── defectPatterns.ts    # Defect pattern definitions
+    ├── canvasExport.ts      # Export functionality
+    └── marchingSquares.ts   # Legacy wrapper (compatibility)
 ```
 
 ---
 
-## 🎛️ Marching Squares Configuration
+## 🎛️ Core Engine Configuration
 
-The consolidated marching squares implementation provides a clean interface with intelligent defaults:
+The unified core engine provides a clean, type-safe interface with intelligent defaults:
 
 ```typescript
-import { marchingSquares } from './utils/marchingSquares'
+import { processGrid } from './core/engine/MarchingSquaresEngine'
 
 // Simple usage with defaults
-const contours = marchingSquares(grid)
+const result = await processGrid(gridData)
+const contours = result.contours
 
-// Advanced configuration
-const contours = marchingSquares(grid, {
-  // Core algorithm
-  threshold: 0.5,
-  interpolationMethod: 'linear',
+// Advanced configuration with full control
+const result = await processGrid(gridData, {
+  // Core marching squares algorithm
+  algorithm: {
+    threshold: 0.5,
+    interpolation: 'linear',
+    edgeHandling: 'clamp'
+  },
   
-  // Smoothing
-  smoothing: true,
-  smoothingMethod: 'edge-aware',
-  smoothingStrength: 0.5,
+  // Smoothing configuration
+  smoothing: {
+    enabled: true,
+    method: 'edge-aware',
+    strength: 0.7,
+    iterations: 2
+  },
   
-  // Edge behavior
-  edgeClamping: true,
-  edgeClampDistance: 0.8,
+  // Interpolation settings
+  interpolation: {
+    method: 'cubic',
+    tension: 0.5,
+    samples: 100
+  },
   
-  // Collision avoidance
-  collisionAvoidance: true,
-  collisionMinDistance: 0.5
+  // Performance optimization
+  performance: {
+    enableCaching: true,
+    maxCacheSize: 1000,
+    enableProfiling: false
+  }
 })
 ```
 
-### **Available Configuration Options**
-- **Core Parameters**: threshold, interpolation method, saddle point resolution
-- **Smoothing**: multiple algorithms with strength control
-- **Edge Behavior**: clamping, snapping, boundary extension
-- **Collision Avoidance**: automatic separation of overlapping regions
-- **Validation**: contour repair and filtering options
+### **Configuration Architecture**
+- **Modular configuration system** with separate config objects for each algorithm
+- **Type-safe validation** with comprehensive error reporting
+- **Intelligent defaults** for all parameters
+- **Builder pattern support** for complex configurations
+- **Performance monitoring** and caching built-in
 
 ---
 
-## 🔧 Recent Refactoring (2024)
+## 🔧 Recent Major Refactoring (2025)
 
-**Marching Squares Consolidation**
-The project recently underwent a major refactoring to address technical debt:
+**Core Engine Unification and Modularization**
+The project underwent extensive architectural improvements:
 
-### ✅ **Improvements Made**
-- **Consolidated 5 separate implementations** into a single, maintainable solution
-- **Simplified configuration interface** with intelligent defaults
-- **Maintained full backward compatibility** through legacy exports
-- **Improved type consistency** across all modules
-- **Removed parameter interdependency confusion**
+### ✅ **Structural Improvements**
+- **Unified processing pipeline** with single `processGrid()` entry point
+- **Modular algorithm architecture** with specialized processors
+- **Flattened file structure** eliminating single-file directories
+- **Separation of concerns** between algorithmic logic and utilities
+- **Comprehensive type safety** with validated configuration system
+- **Performance optimization** with caching and profiling capabilities
+
+### ✅ **Code Quality Enhancements**
+- **Eliminated orphaned and deprecated code** across the entire codebase
+- **Consolidated algorithm implementations** removing duplication
+- **Improved maintainability** through clear module boundaries
+- **Enhanced debugging capabilities** with visualization modes
+- **Better error handling** and validation throughout the pipeline
 
 ### ✅ **Benefits Achieved**
-- **Easier maintenance** - single source of truth for marching squares
-- **Better developer experience** - clear, documented configuration options
-- **Preserved functionality** - all existing features continue to work
-- **Cleaner codebase** - removed duplicate and conflicting implementations
+- **Single source of truth** for all contour processing
+- **Cleaner codebase** with logical organization
+- **Easier maintenance** and feature development
+- **Better performance** through optimized algorithms
+- **Enhanced developer experience** with comprehensive type safety
 
 ---
 
@@ -185,27 +257,31 @@ Perfect for **structural engineers** who need to:
 
 ## 📚 Documentation
 
-The project includes extensive technical documentation:
-- `MARCHING_SQUARES_IMPROVEMENTS.md` - Algorithm enhancements
-- `CONTOUR_ALIGNMENT_GUIDE.md` - Alignment strategies
-- `PARAMETER_COMPATIBILITY_ANALYSIS.md` - Parameter interactions
-- `SMOOTHING_ALGORITHMS_GUIDE.md` - Smoothing techniques
-- Additional guides in the `docs/` directory
+The project includes comprehensive technical documentation:
+- `SMOOTHING_ALGORITHMS_GUIDE.md` - Advanced smoothing techniques and implementations
+- `VERTEX_VS_EDGE_ALIGNMENT.md` - Contour alignment strategies and best practices
+- `docs/control-grid-contour-alignment.md` - Grid alignment optimization
+- `docs/coordinate-system-strategy.md` - Coordinate system architecture
+- `core/README.md` - Core engine architecture and usage guide
+- Additional technical guides throughout the codebase
 
 ---
 
 ## 🏗️ Development Status
 
-This is a **production-ready application** with **recently refactored architecture**:
+This is a **production-ready application** with **recently modernized architecture**:
 
-- ✅ Complete core functionality
-- ✅ Consolidated, maintainable algorithms
+- ✅ Complete core functionality with unified processing engine
+- ✅ Modular, maintainable algorithm architecture
 - ✅ Comprehensive structural beam database
-- ✅ Professional-grade contour generation
+- ✅ Professional-grade contour generation and annotation system
 - ✅ Clean, responsive engineering-focused UI
-- ✅ Extensive technical documentation
-- ✅ **Successful refactoring completed** (2024)
+- ✅ Advanced annotation tools with dimension lines and callouts
+- ✅ Debug visualization modes for development and troubleshooting
+- ✅ Type-safe configuration system with validation
+- ✅ Performance optimization with caching and profiling
+- ✅ **Major architectural refactoring completed** (2025)
 
 ---
 
-The application demonstrates exceptional technical depth in computational geometry and is designed specifically for professional structural engineering workflows. The recent refactoring has significantly improved code maintainability while preserving all existing functionality.
+The application demonstrates exceptional technical depth in computational geometry and professional annotation systems, specifically designed for structural engineering workflows. The recent architectural improvements have significantly enhanced code maintainability, performance, and developer experience while expanding functionality.

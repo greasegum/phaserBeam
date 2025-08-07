@@ -1,8 +1,16 @@
 import Phaser from 'phaser'
 import { BeamProfile, GridCell } from '../types/beam'
-import { marchingSquaresOptimized, MarchingSquaresOptions } from '../utils/marchingSquares'
-import { binaryToScalarField, ScalarFieldMethod } from '../utils/scalarField'
-import { drawBezierContour, EdgeConstraints } from '../utils/phaserBezierPath'
+import { AppMode } from '../types/mode'
+import { AnnotationType } from '../types/annotations'
+import { processGrid } from '../core'
+import { MarchingSquaresConfig } from '../core'
+import type { ScalarFieldMethod } from '../core/ScalarField'
+import { maskFromSelectedCells } from '../utils/gridMask'
+import { ContourStyles, ControlPointStyles, createGridToScreenTransform, renderContours } from '../core/ContourRenderer'
+import { AnnotationManager } from '../annotations/AnnotationManager'
+import { DefectType, DEFECT_STYLES } from '../types/defects'
+import { applyDefectPattern } from '../utils/defectPatterns'
+import { SceneConfigManager, SceneConfig, DEFAULT_SCENE_CONFIG } from '../core/config/SceneConfigManager'
 
 export class BeamElevationScene extends Phaser.Scene {
   private beamProfile: BeamProfile | null = null
@@ -13,10 +21,21 @@ export class BeamElevationScene extends Phaser.Scene {
   private gridOrigin: 'left' | 'right' = 'left'
   private showTopFlange = true
   private elevationView: 'N' | 'S' | 'E' | 'W' = 'N'
+  private appMode: AppMode = 'edit'
   private storedCells: GridCell[] = []
   private selectedCells: Set<string> = new Set()
   private gridCells: Map<string, Phaser.GameObjects.Rectangle> = new Map()
+  private cellDefectTypes: Map<string, DefectType> = new Map()
   private onCellChange?: (cells: GridCell[]) => void
+  private spanLength = 96 // inches (8 feet default)
+  private selectedDefectType: DefectType = 'section-loss'
+  
+  // Touch/pan support
+  private isPanning: boolean = false
+  private panStartX: number = 0
+  private panStartY: number = 0
+  private cameraStartX: number = 0
+  private cameraStartY: number = 0
   private beamGraphics?: Phaser.GameObjects.Graphics
   private topFlangeGraphics?: Phaser.GameObjects.Graphics
   private lossGraphics?: Phaser.GameObjects.Graphics
@@ -27,21 +46,25 @@ export class BeamElevationScene extends Phaser.Scene {
   private blurredFieldGraphics?: Phaser.GameObjects.Graphics
   private rawContourGraphics?: Phaser.GameObjects.Graphics
   private smoothedContourGraphics?: Phaser.GameObjects.Graphics
+  private binaryContourGraphics?: Phaser.GameObjects.Graphics // Binary marching squares (no interpolation)
   private dimensionText: Phaser.GameObjects.Text[] = []
   private isMouseDown = false
   private isPainting = false
   private paintMode: 'add' | 'remove' | null = null
+  public annotationManager?: AnnotationManager
+  private savedAnnotations: any[] = [] // Store annotations when switching modes
+  private currentAnnotationType: AnnotationType = 'linear-dimension'
   private useSmoothCurves = true // Enable smooth organic curves
   // Marching squares alignment offsets
-  private contourOffsetX = 0.0 // No offset for proper grid alignment
-  private contourOffsetY = 0.0 // No offset for proper grid alignment
-  private contourGlobalOffsetX = 0 // Default 0 for proper grid alignment
-  private contourGlobalOffsetY = 0 // Default 0 for proper grid alignment
+  private contourOffsetX = 0.5 // Center on edges for proper grid alignment
+  private contourOffsetY = 0.5 // Center on edges for proper grid alignment
+  private contourGlobalOffsetX = -1 // Shift left by 1 cell
+  private contourGlobalOffsetY = -1 // Shift up by 1 cell
   // Marching squares buffer configuration
-  private contourBufferSize = 0 // No buffer for proper grid alignment
+  private contourBufferSize = 1 // Buffer of 1 to ensure proper edge processing
   private contourBufferValue = 0 // Default buffer value
   // Smoothing options
-  private smoothingMethod: 'basic' | 'laplacian' | 'chaikin' | 'bilateral' | 'savitzky-golay' | 'catmull-rom' | 'edge-aware' | 'intelligent' | 'selective' | 'intelligent-selective' = 'edge-aware'
+  private smoothingMethod: 'basic' | 'laplacian' | 'chaikin' | 'bilateral' | 'catmull-rom' | 'edge-aware' | 'intelligent' | 'selective' = 'edge-aware'
   private smoothingIterations = 1
   private smoothingStrength = 0.3
   
@@ -55,23 +78,25 @@ export class BeamElevationScene extends Phaser.Scene {
   // Collision avoidance options
   private collisionAvoidance = false // Default to disabled for simpler behavior
   private collisionMinDistance = 0.5
-  private collisionMethod: 'push' | 'shrink' | 'hybrid' = 'hybrid'
+  private collisionMethod: 'repulsion' | 'shrink' | 'hybrid' = 'hybrid'
   private collisionIterations = 10
   // View mode options
   private showRawMarchingSquares = false // Show raw marching squares without smoothing
   private showControlPoints = false // Show marching squares control points in edit mode
   private showBlurredField = false // Show blurred field visualization
+  private showDebugVisualization = false // Show all three line types simultaneously
   // Marching Squares Algorithm Properties
   private interpolationMethod: 'linear' | 'cubic' | 'none' = 'linear'
   private scalarFieldMethod: ScalarFieldMethod = 'edge-preserving'
   private scalarFieldRadius = 2
+  private edgeClampStrength = 0.95
   private saddlePointResolution: 'center' | 'gradient' | 'majority' = 'center'
   
   // Edge detection parameters
   private edgeDetectionThreshold = 0.1 // Separate threshold for edge detection
   private edgeDetectionEnabled = true // Whether to use edge detection for clamping
   private threshold = 0.5
-  private alignmentMode: 'edges' | 'vertices' | 'center' = 'edges'
+  private alignmentMode: 'edges' | 'vertices' | 'center' = 'edges' // Default to edges for smooth contours
   private clampToGrid = true
   private extendToBoundary = false
   private snapDistance = 0.1
@@ -79,9 +104,106 @@ export class BeamElevationScene extends Phaser.Scene {
   private edgeClamping = true  // Enable by default for proper web section visualization
   private edgeClampDistance = 0.8  // Slightly larger distance for more aggressive clamping
   private cornerTreatment: 'trimmed' | 'flared' | 'square' = 'flared'
+  
+  // Configuration management
+  private configManager?: SceneConfigManager
 
   constructor() {
     super({ key: 'BeamElevationScene' })
+  }
+
+  /**
+   * Initialize configuration manager with current scene values
+   */
+  private initializeConfigManager(): void {
+    const initialConfig: Partial<SceneConfig> = {
+      showRawMarchingSquares: this.showRawMarchingSquares,
+      showControlPoints: this.showControlPoints,
+      showBlurredField: this.showBlurredField,
+      interpolationMethod: this.interpolationMethod,
+      saddlePointResolution: this.saddlePointResolution,
+      threshold: this.threshold,
+      alignmentMode: this.alignmentMode,
+      clampToGrid: this.clampToGrid,
+      extendToBoundary: this.extendToBoundary,
+      snapDistance: this.snapDistance,
+      smoothingMethod: this.smoothingMethod,
+      smoothingIterations: this.smoothingIterations,
+      smoothingStrength: this.smoothingStrength,
+      edgeClamping: this.edgeClamping,
+      edgeClampStrength: this.edgeClampStrength,
+      edgeClampDistance: this.edgeClampDistance,
+      cornerTreatment: this.cornerTreatment,
+      scalarFieldMethod: this.scalarFieldMethod,
+      scalarFieldRadius: this.scalarFieldRadius,
+      collisionAvoidance: this.collisionAvoidance,
+      collisionMinDistance: this.collisionMinDistance,
+      collisionMethod: this.collisionMethod,
+      collisionIterations: this.collisionIterations
+    }
+
+    this.configManager = new SceneConfigManager(initialConfig, () => this.onConfigChange())
+  }
+
+  /**
+   * Handle configuration changes by updating scene properties and redrawing
+   */
+  private onConfigChange(): void {
+    if (!this.configManager) return
+
+    const config = this.configManager.getConfig()
+    
+    // Update scene properties from config
+    this.showRawMarchingSquares = config.showRawMarchingSquares
+    this.showControlPoints = config.showControlPoints
+    this.showBlurredField = config.showBlurredField
+    this.interpolationMethod = config.interpolationMethod
+    this.saddlePointResolution = config.saddlePointResolution
+    this.threshold = config.threshold
+    this.alignmentMode = config.alignmentMode
+    this.clampToGrid = config.clampToGrid
+    this.extendToBoundary = config.extendToBoundary
+    this.snapDistance = config.snapDistance
+    this.smoothingMethod = config.smoothingMethod
+    this.smoothingIterations = config.smoothingIterations
+    this.smoothingStrength = config.smoothingStrength
+    this.edgeClamping = config.edgeClamping
+    this.edgeClampStrength = config.edgeClampStrength
+    this.edgeClampDistance = config.edgeClampDistance
+    this.cornerTreatment = config.cornerTreatment
+    this.scalarFieldMethod = config.scalarFieldMethod
+    this.scalarFieldRadius = config.scalarFieldRadius
+    this.collisionAvoidance = config.collisionAvoidance
+    this.collisionMinDistance = config.collisionMinDistance
+    this.collisionMethod = config.collisionMethod
+    this.collisionIterations = config.collisionIterations
+
+    // Redraw the scene
+    this.redrawVisualization()
+  }
+
+  /**
+   * Debug method to force contour drawing
+   */
+  public debugDrawContours() {
+    console.log('Debug: Forcing contour redraw', {
+      selectedCells: this.selectedCells.size,
+      editMode: this.editMode,
+      appMode: this.appMode
+    })
+    
+    const sceneWidth = this.cameras.main.width
+    const padding = 100
+    const startX = padding
+    const beamWidth = this.beamLength * this.gridSize
+    this.drawSectionLoss(startX, this.cameras.main.height / 2, beamWidth)
+  }
+
+  update() {
+    // Update annotation manager effects
+    if (this.annotationManager) {
+      this.annotationManager.update()
+    }
   }
 
   init(data: { 
@@ -93,6 +215,12 @@ export class BeamElevationScene extends Phaser.Scene {
     showTopFlange?: boolean;
     gridCells?: GridCell[];
     elevationView?: 'N' | 'S' | 'E' | 'W';
+    appMode?: AppMode;
+    savedAnnotations?: any[];
+    spanLength?: number;
+    zoom?: number;
+    selectedDefectType?: DefectType;
+    showDebugVisualization?: boolean;
     onCellChange?: (cells: GridCell[]) => void 
   }) {
     this.beamProfile = data.beamProfile
@@ -102,14 +230,32 @@ export class BeamElevationScene extends Phaser.Scene {
     this.gridOrigin = data.gridOrigin || 'left'
     this.showTopFlange = data.showTopFlange !== undefined ? data.showTopFlange : true
     this.elevationView = data.elevationView || 'N'
+    this.appMode = data.appMode || 'edit'
     this.storedCells = data.gridCells || []
+    this.savedAnnotations = data.savedAnnotations || []
     this.onCellChange = data.onCellChange
+    this.spanLength = data.spanLength || 96
+    this.selectedDefectType = data.selectedDefectType || 'section-loss'
+    this.showDebugVisualization = data.showDebugVisualization || false
+    
+    console.log('Scene init complete:', {
+      appMode: this.appMode,
+      editMode: this.editMode,
+      savedAnnotations: this.savedAnnotations?.length || 0,
+      showGrid: this.showGrid,
+      dataAppMode: data.appMode,
+      dataShowGrid: data.showGrid
+    })
     
     // Initialize selected cells from grid cells
     this.selectedCells.clear()
+    this.cellDefectTypes.clear()
     this.storedCells.forEach(cell => {
       const key = `${cell.zone || 'web'}_${cell.x}_${cell.y}`
       this.selectedCells.add(key)
+      if (cell.defectType) {
+        this.cellDefectTypes.set(key, cell.defectType)
+      }
     })
   }
   
@@ -122,14 +268,47 @@ export class BeamElevationScene extends Phaser.Scene {
   create() {
     if (!this.beamProfile) return
 
+    // Initialize configuration manager
+    this.initializeConfigManager()
+
+    // Expose debug method globally for testing
+    (window as any).debugDrawContours = () => this.debugDrawContours()
+
+    console.log('Scene create() called with:', {
+      editMode: this.editMode,
+      appMode: this.appMode,
+      showGrid: this.showGrid
+    })
+
     const { webHeight, flangeThickness } = this.beamProfile
     
     // Set up global mouse up handler for paint mode
     this.input.on('pointerup', () => {
-      this.isMouseDown = false
-      this.isPainting = false
-      this.paintMode = null
+      if (this.appMode === 'edit') {
+        this.isMouseDown = false
+        this.isPainting = false
+        this.paintMode = null
+      }
     })
+    
+    // Set up keyboard shortcuts for annotation mode
+    if (this.appMode === 'annotation') {
+      this.input.keyboard?.on('keydown-L', () => {
+        this.currentAnnotationType = 'linear-dimension'
+        this.annotationManager?.startCreatingAnnotation('linear-dimension')
+      })
+      this.input.keyboard?.on('keydown-O', () => {
+        this.currentAnnotationType = 'ordinate-dimension'
+        this.annotationManager?.startCreatingAnnotation('ordinate-dimension')
+      })
+      this.input.keyboard?.on('keydown-C', () => {
+        this.currentAnnotationType = 'callout'
+        this.annotationManager?.startCreatingAnnotation('callout')
+      })
+      this.input.keyboard?.on('keydown-ESC', () => {
+        this.annotationManager?.cancelCreation()
+      })
+    }
     
     // Calculate scene dimensions
     const sceneWidth = this.cameras.main.width
@@ -169,20 +348,82 @@ export class BeamElevationScene extends Phaser.Scene {
 
     // Create visualization layers in proper order (bottom to top)
     this.blurredFieldGraphics = this.add.graphics() // Blurred field (bottom)
+    this.blurredFieldGraphics.setDepth(10)
+    
     this.pixelOutlineGraphics = this.add.graphics() // Pixel outline
+    this.pixelOutlineGraphics.setDepth(20)
+    
     this.lossGraphics = this.add.graphics() // Filled regions (for non-edit mode)
+    this.lossGraphics.setDepth(30)
+    
+    this.binaryContourGraphics = this.add.graphics() // Binary marching squares (no interpolation)
+    this.binaryContourGraphics.setDepth(40)
+    
     this.rawContourGraphics = this.add.graphics() // Raw marching squares contours
+    this.rawContourGraphics.setDepth(50)
+    
     this.smoothedContourGraphics = this.add.graphics() // Smoothed contours (top)
+    this.smoothedContourGraphics.setDepth(60)
+    
     this.controlPointGraphics = this.add.graphics() // Control points (topmost)
+    this.controlPointGraphics.setDepth(70)
     
     this.drawSectionLoss(startX, centerY, beamWidth)
 
     // Create grid overlay container
     this.gridContainer = this.add.container()
-    if (this.editMode && this.showGrid) {
+    // Set grid container depth to be below contour graphics but above beam background
+    this.gridContainer.setDepth(5)
+    console.log('Grid creation check:', {
+      editMode: this.editMode,
+      appMode: this.appMode,
+      showGrid: this.showGrid,
+      shouldCreateGrid: (this.editMode || this.appMode === 'annotation') && this.showGrid
+    })
+    if ((this.editMode || this.appMode === 'annotation') && this.showGrid) {
       this.createGrid(startX, centerY, beamWidth)
       // Update grid cell visibility after creating grid
       this.updateGridCellVisibility()
+      
+      // Force grid container to be visible
+      if (this.gridContainer) {
+        this.gridContainer.setVisible(true)
+        console.log('Forced grid container visible:', this.gridContainer.visible)
+      }
+    } else {
+    }
+    
+    // Always initialize annotation manager to display annotations in all modes
+    console.log('Initializing AnnotationManager for all modes')
+    // Calculate beam bottom position
+    const totalHeight = this.beamProfile.webHeight + 2 * this.beamProfile.flangeThickness
+    const beamBottom = centerY + (totalHeight * this.gridSize) / 2
+    
+    this.annotationManager = new AnnotationManager(
+      this,
+      this.gridSize,
+      { x: startX, y: centerY },
+      beamBottom,
+      this.beamLength
+    )
+    
+    // Only enable annotation creation in annotation mode
+    if (this.appMode === 'annotation') {
+      console.log('Annotation mode - enabling annotation creation')
+      this.annotationManager.setInteractive(true)
+      // Update snap points based on grid
+      this.updateAnnotationSnapPoints()
+      
+    } else {
+      console.log('Not in annotation mode - annotations read-only')
+      this.annotationManager.setInteractive(false)
+      
+    }
+    
+    // Restore saved annotations if any
+    if (this.savedAnnotations && this.savedAnnotations.length > 0) {
+      console.log('Restoring', this.savedAnnotations.length, 'saved annotations')
+      this.annotationManager.restoreAnnotations(this.savedAnnotations)
     }
 
     // Add dimension lines and labels
@@ -233,14 +474,17 @@ export class BeamElevationScene extends Phaser.Scene {
     this.add.text(startX, labelY, leftLabel, {
       fontSize: '14px',
       color: '#333',
-      fontWeight: 'bold'
+      fontStyle: 'bold'
     }).setOrigin(0.5)
 
     this.add.text(startX + beamWidth, labelY, rightLabel, {
       fontSize: '14px', 
       color: '#333',
-      fontWeight: 'bold'
+      fontStyle: 'bold'
     }).setOrigin(0.5)
+    
+    // Setup touch controls for mobile
+    this.setupTouchControls()
   }
 
   private drawBeamProfile(startX: number, centerY: number, width: number) {
@@ -292,6 +536,125 @@ export class BeamElevationScene extends Phaser.Scene {
     this.beamGraphics.moveTo(startX, centerY)
     this.beamGraphics.lineTo(startX + width, centerY)
     this.beamGraphics.strokePath()
+    
+    // Draw bearing centerlines (CL-to-CL)
+    if (this.spanLength > 0) {
+      const bearingOffset = (this.beamLength - this.spanLength) / 2
+      const leftBearingX = startX + bearingOffset * this.gridSize
+      const rightBearingX = startX + (this.beamLength - bearingOffset) * this.gridSize
+      
+      // Calculate vertical extent (slightly longer than beam height)
+      const totalBeamHeight = (webHeight + 2 * flangeThickness) * this.gridSize
+      const centerlineExtension = totalBeamHeight * 0.1 // 10% extension on each side
+      const centerlineTop = flangeTop - centerlineExtension
+      const centerlineBottom = flangeBottom + centerlineExtension
+      
+      // Long-short-long dashed line pattern
+      const dashPattern = [12, 4, 4, 4] // long dash, short gap, short dash, short gap
+      
+      // Draw left bearing centerline
+      this.drawDashedLine(leftBearingX, centerlineTop, leftBearingX, centerlineBottom, dashPattern)
+      
+      // Draw right bearing centerline
+      this.drawDashedLine(rightBearingX, centerlineTop, rightBearingX, centerlineBottom, dashPattern)
+    }
+  }
+  
+  private drawDefectPatterns(startX: number, centerY: number, width: number) {
+    if (!this.beamProfile) return
+    
+    const { webHeight, flangeThickness } = this.beamProfile
+    
+    // Group cells by defect type and zone
+    const defectGroups = new Map<string, GridCell[]>()
+    
+    this.selectedCells.forEach(key => {
+      const parts = key.split('_')
+      if (parts.length >= 3) {
+        const zone = parts[0]
+        const col = parseInt(parts[1])
+        const row = parseInt(parts[2])
+        const defectType = this.cellDefectTypes.get(key) || 'section-loss'
+        
+        const groupKey = `${zone}_${defectType}`
+        if (!defectGroups.has(groupKey)) {
+          defectGroups.set(groupKey, [])
+        }
+        
+        defectGroups.get(groupKey)!.push({
+          x: col,
+          y: row,
+          selected: true,
+          zone: zone as any,
+          defectType: defectType
+        })
+      }
+    })
+    
+    // Render each defect group with its pattern
+    defectGroups.forEach((cells, groupKey) => {
+      const [zone, defectType] = groupKey.split('_')
+      const style = DEFECT_STYLES[defectType as DefectType]
+      
+      // Create contiguous regions from cells
+      cells.forEach(cell => {
+        const x = startX + cell.x * this.gridSize
+        let y: number
+        
+        if (zone === 'web') {
+          // Web cells count from bottom
+          const webBottom = centerY + (webHeight * this.gridSize) / 2
+          y = webBottom - (cell.y + 1) * this.gridSize
+        } else if (zone === 'flange-top') {
+          const webTop = centerY - (webHeight * this.gridSize) / 2
+          const flangeTop = webTop - flangeThickness * this.gridSize
+          y = flangeTop + cell.y * this.gridSize
+        } else if (zone === 'flange-bottom') {
+          const webBottom = centerY + (webHeight * this.gridSize) / 2
+          y = webBottom + cell.y * this.gridSize
+        } else {
+          return
+        }
+        
+        // Apply defect pattern to this cell
+        applyDefectPattern(this.lossGraphics!, {
+          x,
+          y,
+          width: this.gridSize,
+          height: this.gridSize
+        }, style)
+      })
+    })
+  }
+  
+  private drawDashedLine(x1: number, y1: number, x2: number, y2: number, dashPattern: number[]) {
+    const dx = x2 - x1
+    const dy = y2 - y1
+    const length = Math.sqrt(dx * dx + dy * dy)
+    const unitX = dx / length
+    const unitY = dy / length
+    
+    let currentPos = 0
+    let dashIndex = 0
+    let drawing = true
+    
+    this.beamGraphics.lineStyle(1, 0x333333, 0.8) // Dark gray centerline
+    
+    while (currentPos < length) {
+      const dashLength = dashPattern[dashIndex % dashPattern.length]
+      const endPos = Math.min(currentPos + dashLength, length)
+      
+      if (drawing) {
+        this.beamGraphics.beginPath()
+        this.beamGraphics.moveTo(x1 + unitX * currentPos, y1 + unitY * currentPos)
+        this.beamGraphics.lineTo(x1 + unitX * endPos, y1 + unitY * endPos)
+        this.beamGraphics.strokePath()
+      }
+      
+      currentPos = endPos
+      dashIndex++
+      drawing = !drawing
+    }
   }
   
   private drawWebSectionLoss(webCells: {x: number, y: number}[], startX: number, centerY: number, width: number) {
@@ -318,6 +681,12 @@ export class BeamElevationScene extends Phaser.Scene {
     
     // In edit mode, show all visualization layers
     if (this.editMode) {
+      console.log('Drawing marching squares layers - Edit mode active', {
+        gridHasCells: webCells.length > 0,
+        editMode: this.editMode,
+        showDebugVisualization: this.showDebugVisualization
+      })
+      
       // 1. Draw blurred field if enabled
       if (this.showBlurredField && this.blurredFieldGraphics) {
         this.drawBlurredField(grid, startX, webTop, webBottom, cols, rows)
@@ -333,81 +702,43 @@ export class BeamElevationScene extends Phaser.Scene {
       
     } else {
       // View mode - show filled regions with marching squares
-      // Convert binary grid to scalar field for interpolation
-      const scalarGrid = binaryToScalarField(grid, this.scalarFieldMethod, this.scalarFieldRadius)
+      // Generate contours using the unified core pipeline
+      const { contours } = processGrid(grid, {
+        algorithm: {
+          threshold: this.threshold,
+          saddlePointResolution: this.saddlePointResolution,
+          alignment: { mode: this.alignmentMode, offsetX: this.contourOffsetX, offsetY: this.contourOffsetY },
+          edgeBehavior: { clampToGrid: this.clampToGrid, extendToBoundary: this.extendToBoundary, snapDistance: this.snapDistance }
+        },
+        interpolation: {
+          enabled: this.interpolationMethod !== 'none',
+          method: this.interpolationMethod,
+          scalarField: {
+            method: this.scalarFieldMethod,
+            radius: this.scalarFieldRadius,
+            edgeClamping: { enabled: this.edgeDetectionEnabled, strength: this.edgeDetectionThreshold, distance: this.edgeClampStrength }
+          },
+          transform: { globalOffsetX: this.contourGlobalOffsetX, globalOffsetY: this.contourGlobalOffsetY, scale: 1 }
+        },
+        smoothing: {
+          enabled: !this.showRawMarchingSquares,
+          algorithm: this.smoothingMethod,
+          iterations: this.smoothingIterations,
+          strength: this.smoothingStrength,
+          edgePreservation: { enabled: this.preserveEdgeSegments, bufferDistance: this.edgeBufferDistance, preserveStraightSegments: this.preserveStraightSegments, curvatureThreshold: this.curvatureThreshold },
+          collision: { enabled: this.collisionAvoidance, method: this.collisionMethod, minDistance: this.collisionMinDistance, maxIterations: this.collisionIterations },
+          filtering: { minContourArea: 0, minContourLength: 3, maxContours: 1000 }
+        },
+        performance: { enableCaching: true, interpolationCache: true, quality: 'balanced', maxGridSize: 1000, maxContourPoints: 10000 }
+      })
       
-      // Apply marching squares
-      const marchingOptions: MarchingSquaresOptions = {
-        threshold: this.threshold,
-        interpolationMethod: (this.smoothingMethod === 'selective' || this.smoothingMethod === 'intelligent-selective') && !this.useInterpolationWithSelective ? 'none' : this.interpolationMethod,
-        saddlePointResolution: this.saddlePointResolution,
-        edgeDetectionThreshold: this.edgeDetectionThreshold,
-        edgeDetectionEnabled: this.edgeDetectionEnabled,
-        smoothing: !this.showRawMarchingSquares,
-        edgeSnapping: true,
-        snapDistance: this.snapDistance,
-        offsetX: this.contourOffsetX,
-        offsetY: this.contourOffsetY,
-        globalOffsetX: this.contourGlobalOffsetX,
-        globalOffsetY: this.contourGlobalOffsetY,
-        bufferSize: this.contourBufferSize,
-        bufferValue: this.contourBufferValue,
-        smoothingMethod: this.smoothingMethod,
-        smoothingIterations: this.smoothingIterations,
-        smoothingStrength: this.smoothingStrength,
-        edgeBufferDistance: this.edgeBufferDistance,
-        preserveEdgeSegments: this.preserveEdgeSegments,
-        transitionBlending: this.transitionBlending,
-        curvatureThreshold: this.curvatureThreshold,
-        preserveStraightSegments: this.preserveStraightSegments,
-        collisionAvoidance: this.collisionAvoidance,
-        collisionMinDistance: this.collisionMinDistance,
-        collisionMethod: this.collisionMethod,
-        collisionIterations: this.collisionIterations,
-        alignmentMode: this.alignmentMode,
-        clampToGrid: this.clampToGrid,
-        edgeClamping: this.edgeClamping,
-        edgeClampDistance: this.edgeClampDistance,
-        cornerTreatment: this.cornerTreatment,
-        extendToBoundary: this.extendToBoundary
-      }
-      const contours = marchingSquaresOptimized(scalarGrid, marchingOptions)
-      
-      // Draw filled contours
-      if (this.lossGraphics) {
-        this.lossGraphics.fillStyle(0xFFB3BA, 0.8)
-        this.lossGraphics.lineStyle(2, 0xFF6B6B)
+      // Use the new clean rendering API
+      if (this.lossGraphics && contours.length > 0) {
+        const transform = createGridToScreenTransform(this.gridSize, startX, webTop)
         
-        contours.forEach(contour => {
-          const screenContour = contour.map(pt => ({
-            x: startX + pt.x * this.gridSize,
-            y: webTop + pt.y * this.gridSize
-          }))
-          
-          // Create edge constraints for bezier curves
-          const edgeConstraints: EdgeConstraints = {
-            leftEdge: startX,
-            rightEdge: startX + this.beamLength * this.gridSize,
-            topEdge: webTop,
-            bottomEdge: webTop + webHeight * this.gridSize,
-            strictEdges: { left: true, right: true, top: true, bottom: true }
-          }
-          
-          if (this.useSmoothCurves && !this.showRawMarchingSquares && screenContour.length > 4 && this.lossGraphics) {
-            drawBezierContour(this.lossGraphics, screenContour, true, edgeConstraints)
-          } else if (this.lossGraphics) {
-            this.lossGraphics.beginPath()
-            screenContour.forEach((point, index) => {
-              if (index === 0) {
-                this.lossGraphics!.moveTo(point.x, point.y)
-              } else {
-                this.lossGraphics!.lineTo(point.x, point.y)
-              }
-            })
-            this.lossGraphics.closePath()
-            this.lossGraphics.fillPath()
-            this.lossGraphics.strokePath()
-          }
+        renderContours(this.lossGraphics, contours, {
+          style: ContourStyles.filled,
+          transform
         })
       }
     }
@@ -416,13 +747,37 @@ export class BeamElevationScene extends Phaser.Scene {
   private drawBlurredField(grid: number[][], startX: number, webTop: number, webBottom: number, cols: number, rows: number) {
     if (!this.blurredFieldGraphics) return
     
-    // Convert binary grid to scalar field
-    const scalarGrid = binaryToScalarField(grid, this.scalarFieldMethod, this.scalarFieldRadius)
+    // Generate scalar field using core engine
+    const { contours } = processGrid(grid, {
+      interpolation: {
+        enabled: true,
+        method: 'linear',
+        scalarField: {
+          method: this.scalarFieldMethod,
+          radius: this.scalarFieldRadius,
+          edgeClamping: {
+            enabled: this.edgeDetectionEnabled,
+            strength: this.edgeClampStrength,
+            distance: this.edgeClampDistance
+          }
+        },
+        transform: {
+          globalOffsetX: 0,
+          globalOffsetY: 0,
+          scale: 1
+        }
+      }
+    })
+    
+    // For now, we'll use a simple binary to scalar conversion
+    const scalarGrid = grid.map(row => 
+      row.map(cell => cell > 0 ? 1 : 0)
+    )
     
     // Draw each cell with gradient based on scalar value
     for (let y = 0; y < rows; y++) {
       for (let x = 0; x < cols; x++) {
-        const value = scalarGrid[y][x]
+        const value = scalarGrid[y] && scalarGrid[y][x] ? scalarGrid[y][x] : 0
         if (value > 0.01) { // Only draw if there's some value
           const alpha = value * 0.5 // Max 50% opacity
           const screenX = startX + x * this.gridSize
@@ -486,102 +841,164 @@ export class BeamElevationScene extends Phaser.Scene {
   }
   
   private drawMarchingSquaresLayers(grid: number[][], startX: number, webTop: number, webBottom: number, cols: number, rows: number) {
-    // Convert binary grid to scalar field
-    const scalarGrid = binaryToScalarField(grid, this.scalarFieldMethod, this.scalarFieldRadius)
-    
-    // Apply marching squares without smoothing first
-    const rawOptions: MarchingSquaresOptions = {
-      threshold: this.threshold,
-      interpolationMethod: this.interpolationMethod,
-      saddlePointResolution: this.saddlePointResolution,
-      smoothing: false, // Always get raw contours first
-      edgeSnapping: true,
-      snapDistance: this.snapDistance,
-      offsetX: this.contourOffsetX,
-      offsetY: this.contourOffsetY,
-      globalOffsetX: this.contourGlobalOffsetX,
-      globalOffsetY: this.contourGlobalOffsetY,
-      bufferSize: this.contourBufferSize,
-      bufferValue: this.contourBufferValue,
-      alignmentMode: this.alignmentMode,
-      clampToGrid: this.clampToGrid,
-      extendToBoundary: this.extendToBoundary
-    }
-    const rawContours = marchingSquaresOptimized(scalarGrid, rawOptions)
-    
-    // Draw raw contours
-    if (this.rawContourGraphics) {
-      this.rawContourGraphics.lineStyle(3, 0xFF6B6B, 0.8) // Red, thicker line
-      
-      rawContours.forEach(contour => {
-        const screenContour = contour.map(pt => ({
-          x: startX + pt.x * this.gridSize,
-          y: webTop + pt.y * this.gridSize
-        }))
-        
-        this.rawContourGraphics.beginPath()
-        screenContour.forEach((point, index) => {
-          if (index === 0) {
-            this.rawContourGraphics.moveTo(point.x, point.y)
-          } else {
-            this.rawContourGraphics.lineTo(point.x, point.y)
-          }
-        })
-        this.rawContourGraphics.closePath()
-        this.rawContourGraphics.strokePath()
-        
-        // Draw control points if enabled
-        if (this.showControlPoints && this.controlPointGraphics) {
-          this.controlPointGraphics.fillStyle(0xFFFF00, 0.8) // Yellow
-          screenContour.forEach(point => {
-            this.controlPointGraphics.fillCircle(point.x, point.y, 3)
-          })
-        }
-      })
-    }
-    
-    // Draw smoothed contours if smoothing is enabled
-    if (!this.showRawMarchingSquares && this.smoothedContourGraphics) {
-      // Apply marching squares with smoothing
-      const smoothOptions: MarchingSquaresOptions = {
-        ...rawOptions,
-        smoothing: true,
-        smoothingMethod: this.smoothingMethod,
-        smoothingIterations: this.smoothingIterations,
-        smoothingStrength: this.smoothingStrength,
-        edgeBufferDistance: this.edgeBufferDistance,
-        preserveEdgeSegments: this.preserveEdgeSegments,
-        transitionBlending: this.transitionBlending,
-        curvatureThreshold: this.curvatureThreshold,
-        preserveStraightSegments: this.preserveStraightSegments,
-        collisionAvoidance: this.collisionAvoidance,
-        collisionMinDistance: this.collisionMinDistance,
-        collisionMethod: this.collisionMethod,
-        collisionIterations: this.collisionIterations,
-        edgeClamping: this.edgeClamping,
-        edgeClampDistance: this.edgeClampDistance,
-        cornerTreatment: this.cornerTreatment
+    console.log('drawMarchingSquaresLayers called', {
+      gridSize: `${cols}x${rows}`,
+      hasData: grid.some(row => row.some(cell => cell > 0)),
+      showDebugVisualization: this.showDebugVisualization,
+      showRawMarchingSquares: this.showRawMarchingSquares,
+      graphics: {
+        raw: !!this.rawContourGraphics,
+        smoothed: !!this.smoothedContourGraphics,
+        binary: !!this.binaryContourGraphics
       }
-      const smoothContours = marchingSquaresOptimized(scalarGrid, smoothOptions)
+    })
+    
+    const transform = createGridToScreenTransform(this.gridSize, startX, webTop)
+    
+    // When in debug mode, clear all graphics and draw all three line types
+    if (this.showDebugVisualization) {
+      this.binaryContourGraphics?.clear()
+      this.rawContourGraphics?.clear()
+      this.smoothedContourGraphics?.clear()
       
-      this.smoothedContourGraphics.lineStyle(3, 0x00FF00, 0.8) // Green, thicker line
+      // Generate different contour types using the core engine
+      const binaryContours = processGrid(grid, {
+        interpolation: { 
+          enabled: false,
+          method: 'none',
+          scalarField: {
+            method: 'none',
+            radius: 1,
+            edgeClamping: { enabled: false, strength: 0, distance: 0 }
+          },
+          transform: { globalOffsetX: 0, globalOffsetY: 0, scale: 1 }
+        },
+        smoothing: { 
+          enabled: false,
+          algorithm: 'basic',
+          iterations: 0,
+          strength: 0,
+          edgePreservation: { enabled: false, bufferDistance: 0, preserveStraightSegments: false, curvatureThreshold: 0 },
+          collision: { enabled: false, method: 'repulsion', minDistance: 0, maxIterations: 0 },
+          filtering: { minContourArea: 0, minContourLength: 0, maxContours: 1000 }
+        }
+      }).contours
       
-      smoothContours.forEach(contour => {
-        const screenContour = contour.map(pt => ({
-          x: startX + pt.x * this.gridSize,
-          y: webTop + pt.y * this.gridSize
-        }))
-        
-        this.smoothedContourGraphics.beginPath()
-        screenContour.forEach((point, index) => {
-          if (index === 0) {
-            this.smoothedContourGraphics.moveTo(point.x, point.y)
-          } else {
-            this.smoothedContourGraphics.lineTo(point.x, point.y)
-          }
+      const rawContours = processGrid(grid, {
+        interpolation: { 
+          enabled: true,
+          method: 'linear',
+          scalarField: {
+            method: this.scalarFieldMethod,
+            radius: this.scalarFieldRadius,
+            edgeClamping: { enabled: this.edgeDetectionEnabled, strength: this.edgeClampStrength, distance: this.edgeClampDistance }
+          },
+          transform: { globalOffsetX: 0, globalOffsetY: 0, scale: 1 }
+        },
+        smoothing: { 
+          enabled: false,
+          algorithm: 'basic',
+          iterations: 0,
+          strength: 0,
+          edgePreservation: { enabled: false, bufferDistance: 0, preserveStraightSegments: false, curvatureThreshold: 0 },
+          collision: { enabled: false, method: 'repulsion', minDistance: 0, maxIterations: 0 },
+          filtering: { minContourArea: 0, minContourLength: 0, maxContours: 1000 }
+        }
+      }).contours
+      
+      const smoothedContours = processGrid(grid, {
+        interpolation: { 
+          enabled: true,
+          method: 'linear',
+          scalarField: {
+            method: this.scalarFieldMethod,
+            radius: this.scalarFieldRadius,
+            edgeClamping: { enabled: this.edgeDetectionEnabled, strength: this.edgeClampStrength, distance: this.edgeClampDistance }
+          },
+          transform: { globalOffsetX: 0, globalOffsetY: 0, scale: 1 }
+        },
+        smoothing: { 
+          enabled: true, 
+          algorithm: this.smoothingMethod,
+          iterations: this.smoothingIterations,
+          strength: this.smoothingStrength,
+          edgePreservation: { enabled: this.preserveEdgeSegments, bufferDistance: this.edgeBufferDistance, preserveStraightSegments: this.preserveStraightSegments, curvatureThreshold: this.curvatureThreshold },
+          collision: { enabled: this.collisionAvoidance, method: this.collisionMethod, minDistance: this.collisionMinDistance, maxIterations: this.collisionIterations },
+          filtering: { minContourArea: 0, minContourLength: 3, maxContours: 1000 }
+        }
+      }).contours
+      
+      // Draw binary contours in blue
+      if (this.binaryContourGraphics && binaryContours.length > 0) {
+        renderContours(this.binaryContourGraphics, binaryContours, {
+          style: ContourStyles.binary,
+          transform
         })
-        this.smoothedContourGraphics.closePath()
-        this.smoothedContourGraphics.strokePath()
+      }
+      
+      // Draw raw contours in red
+      if (this.rawContourGraphics && rawContours.length > 0) {
+        renderContours(this.rawContourGraphics, rawContours, {
+          style: ContourStyles.raw,
+          transform
+        })
+      }
+      
+      // Draw smoothed contours in teal
+      if (this.smoothedContourGraphics && smoothedContours.length > 0) {
+        renderContours(this.smoothedContourGraphics, smoothedContours, {
+          style: ContourStyles.smoothed,
+          transform
+        })
+      }
+      
+      return // Exit early when in debug mode
+    }
+    
+    // Normal mode: Generate contours with current settings
+    const { contours } = processGrid(grid, {
+      interpolation: {
+        enabled: this.interpolationMethod !== 'none',
+        method: this.interpolationMethod,
+        scalarField: {
+          method: this.scalarFieldMethod,
+          radius: this.scalarFieldRadius,
+          edgeClamping: { enabled: this.edgeDetectionEnabled, strength: this.edgeClampStrength, distance: this.edgeClampDistance }
+        },
+        transform: { globalOffsetX: 0, globalOffsetY: 0, scale: 1 }
+      },
+      smoothing: {
+        enabled: !this.showRawMarchingSquares,
+        algorithm: this.smoothingMethod,
+        iterations: this.smoothingIterations,
+        strength: this.smoothingStrength,
+        edgePreservation: { enabled: this.preserveEdgeSegments, bufferDistance: this.edgeBufferDistance, preserveStraightSegments: this.preserveStraightSegments, curvatureThreshold: this.curvatureThreshold },
+        collision: { enabled: this.collisionAvoidance, method: this.collisionMethod, minDistance: this.collisionMinDistance, maxIterations: this.collisionIterations },
+        filtering: { minContourArea: 0, minContourLength: 3, maxContours: 1000 }
+      }
+    })
+    
+    console.log('Marching squares results', {
+      inputGridHasData: grid.some(row => row.some(cell => cell > 0)),
+      contoursFound: contours.length,
+      contourPoints: contours.map(c => c.points.length)
+    })
+    
+    // Clear graphics
+    this.rawContourGraphics?.clear()
+    this.smoothedContourGraphics?.clear()
+    
+    // Choose which graphics layer to use based on mode
+    const targetGraphics = this.showRawMarchingSquares ? this.rawContourGraphics : this.smoothedContourGraphics
+    const targetStyle = this.showRawMarchingSquares ? ContourStyles.raw : ContourStyles.smoothed
+    
+    // Render contours using clean API
+    if (targetGraphics && contours.length > 0) {
+      renderContours(targetGraphics, contours, {
+        style: targetStyle,
+        showControlPoints: this.showControlPoints && this.editMode,
+        controlPointStyle: ControlPointStyles.default,
+        transform
       })
     }
   }
@@ -609,117 +1026,40 @@ export class BeamElevationScene extends Phaser.Scene {
       }
     })
     
-    // Convert binary grid to scalar field for interpolation
-    const scalarGrid = binaryToScalarField(grid, this.scalarFieldMethod, this.scalarFieldRadius)
-    
-    // Apply marching squares
-    const marchingOptions: MarchingSquaresOptions = {
-              threshold: this.threshold,
-        interpolationMethod: (this.smoothingMethod === 'selective' || this.smoothingMethod === 'intelligent-selective') && !this.useInterpolationWithSelective ? 'none' : this.interpolationMethod,
-        saddlePointResolution: this.saddlePointResolution,
-        edgeDetectionThreshold: this.edgeDetectionThreshold,
-        edgeDetectionEnabled: this.edgeDetectionEnabled,
-        alignmentMode: this.alignmentMode,
-        smoothing: !this.showRawMarchingSquares && !this.editMode,
-        edgeSnapping: this.clampToGrid,
-        extendToBoundary: this.extendToBoundary,
-        snapDistance: this.snapDistance,
-        offsetX: this.contourOffsetX,
-        offsetY: this.contourOffsetY,
-        globalOffsetX: this.contourGlobalOffsetX,
-        globalOffsetY: this.contourGlobalOffsetY,
-        bufferSize: this.contourBufferSize,
-        bufferValue: this.contourBufferValue,
-        smoothingMethod: this.smoothingMethod,
-        smoothingIterations: this.smoothingIterations,
-        smoothingStrength: this.smoothingStrength,
-        edgeBufferDistance: this.edgeBufferDistance,
-        preserveEdgeSegments: this.preserveEdgeSegments,
-        transitionBlending: this.transitionBlending,
-        curvatureThreshold: this.curvatureThreshold,
-        preserveStraightSegments: this.preserveStraightSegments,
-        collisionAvoidance: this.collisionAvoidance,
-      collisionMinDistance: this.collisionMinDistance,
-      collisionMethod: this.collisionMethod,
-      collisionIterations: this.collisionIterations,
-      edgeClamping: this.edgeClamping,
-      edgeClampDistance: this.edgeClampDistance,
-      cornerTreatment: this.cornerTreatment
-    }
-    
-    const contours = marchingSquaresOptimized(scalarGrid, marchingOptions)
-    
-    // Clear control points
-    this.controlPointGraphics.clear()
-    
-    // Draw contours
-    this.lossGraphics.lineStyle(2, 0xFF6B6B)
-    
-    contours.forEach(contour => {
-      if (contour.length < 3) return
-      
-      // Transform contour points to screen coordinates with edge clamping
-      const screenContour = contour.map(point => {
-        let x = startX + point.x * this.gridSize
-        let y = webTop + point.y * this.gridSize
-        
-        // Clamp exactly to web edges
-        x = Math.max(startX, x)
-        x = Math.min(startX + this.beamLength * this.gridSize, x)
-        y = Math.max(webTop, y)
-        y = Math.min(webBottom, y)
-        
-        return { x, y }
-      })
-      
-      // Draw the contour
-      if (this.editMode || this.showRawMarchingSquares) {
-        // In edit mode or raw mode, always use linear segments
-        this.lossGraphics.beginPath()
-        screenContour.forEach((point, index) => {
-          if (index === 0) {
-            this.lossGraphics.moveTo(point.x, point.y)
-          } else {
-            this.lossGraphics.lineTo(point.x, point.y)
-          }
-        })
-        this.lossGraphics.closePath()
-        this.lossGraphics.strokePath()
-        
-        // Draw control points if requested
-        if (showControlPoints && this.showControlPoints && this.editMode) {
-          this.controlPointGraphics.fillStyle(0x00FF00, 0.8) // Green control points
-          screenContour.forEach(point => {
-            this.controlPointGraphics.fillCircle(point.x, point.y, 3)
-          })
-        }
-      } else {
-        // View mode with smoothing
-        if (this.useSmoothCurves && screenContour.length > 4) {
-          // Create edge constraints for bezier curves
-          const edgeConstraints: EdgeConstraints = {
-            leftEdge: startX,
-            rightEdge: startX + this.beamLength * this.gridSize,
-            topEdge: webTop,
-            bottomEdge: webBottom,
-            strictEdges: { left: true, right: true, top: true, bottom: true }
-          }
-          drawBezierContour(this.lossGraphics, screenContour, true, edgeConstraints)
-        } else {
-          this.lossGraphics.beginPath()
-          screenContour.forEach((point, index) => {
-            if (index === 0) {
-              this.lossGraphics.moveTo(point.x, point.y)
-            } else {
-              this.lossGraphics.lineTo(point.x, point.y)
-            }
-          })
-          this.lossGraphics.closePath()
-          this.lossGraphics.fillPath()
-          this.lossGraphics.strokePath()
-        }
+    // Generate contours using unified core pipeline
+    const { contours } = processGrid(grid, {
+      interpolation: {
+        enabled: this.interpolationMethod !== 'none',
+        method: this.interpolationMethod,
+        scalarField: {
+          method: this.scalarFieldMethod,
+          radius: this.scalarFieldRadius,
+          edgeClamping: { enabled: this.edgeDetectionEnabled, strength: this.edgeClampStrength, distance: this.edgeClampDistance }
+        },
+        transform: { globalOffsetX: 0, globalOffsetY: 0, scale: 1 }
+      },
+      smoothing: {
+        enabled: !this.showRawMarchingSquares,
+        algorithm: this.smoothingMethod,
+        iterations: this.smoothingIterations,
+        strength: this.smoothingStrength,
+        edgePreservation: { enabled: this.preserveEdgeSegments, bufferDistance: this.edgeBufferDistance, preserveStraightSegments: this.preserveStraightSegments, curvatureThreshold: this.curvatureThreshold },
+        collision: { enabled: this.collisionAvoidance, method: this.collisionMethod, minDistance: this.collisionMinDistance, maxIterations: this.collisionIterations },
+        filtering: { minContourArea: 0, minContourLength: 3, maxContours: 1000 }
       }
     })
+    
+    // Use the clean rendering API
+    const transform = createGridToScreenTransform(this.gridSize, startX, webTop)
+    
+    if (contours.length > 0) {
+      renderContours(this.lossGraphics, contours, {
+        style: ContourStyles.raw,
+        showControlPoints,
+        controlPointStyle: ControlPointStyles.default,
+        transform
+      })
+    }
   }
   
   private drawRectangularOutlines(webCells: {x: number, y: number}[], startX: number, webBottom: number) {
@@ -792,37 +1132,37 @@ export class BeamElevationScene extends Phaser.Scene {
       // Check each edge
       // Top edge
       if (!regionSet.has(`${cell.x},${cell.y + 1}`)) {
-        this.lossGraphics.beginPath()
-        this.lossGraphics.moveTo(x, y)
-        this.lossGraphics.lineTo(x + cellWidth, y)
-        this.lossGraphics.strokePath()
+        this.lossGraphics!.beginPath()
+        this.lossGraphics!.moveTo(x, y)
+        this.lossGraphics!.lineTo(x + cellWidth, y)
+        this.lossGraphics!.strokePath()
       }
       
       // Bottom edge
       if (!regionSet.has(`${cell.x},${cell.y - 1}`)) {
-        this.lossGraphics.beginPath()
-        this.lossGraphics.moveTo(x, y + this.gridSize)
-        this.lossGraphics.lineTo(x + cellWidth, y + this.gridSize)
-        this.lossGraphics.strokePath()
+        this.lossGraphics!.beginPath()
+        this.lossGraphics!.moveTo(x, y + this.gridSize)
+        this.lossGraphics!.lineTo(x + cellWidth, y + this.gridSize)
+        this.lossGraphics!.strokePath()
       }
       
       // Left edge - only draw if not at beam edge or if neighbor exists
       if (!regionSet.has(`${cell.x - 1},${cell.y}`)) {
         if (cell.x !== 0) {
-          this.lossGraphics.beginPath()
-          this.lossGraphics.moveTo(x, y)
-          this.lossGraphics.lineTo(x, y + this.gridSize)
-          this.lossGraphics.strokePath()
+          this.lossGraphics!.beginPath()
+          this.lossGraphics!.moveTo(x, y)
+          this.lossGraphics!.lineTo(x, y + this.gridSize)
+          this.lossGraphics!.strokePath()
         }
       }
       
       // Right edge - only draw if not at beam edge or if neighbor exists
       if (!regionSet.has(`${cell.x + 1},${cell.y}`)) {
         if (cell.x !== maxCol) {
-          this.lossGraphics.beginPath()
-          this.lossGraphics.moveTo(x + cellWidth, y)
-          this.lossGraphics.lineTo(x + cellWidth, y + this.gridSize)
-          this.lossGraphics.strokePath()
+          this.lossGraphics!.beginPath()
+          this.lossGraphics!.moveTo(x + cellWidth, y)
+          this.lossGraphics!.lineTo(x + cellWidth, y + this.gridSize)
+          this.lossGraphics!.strokePath()
         }
       }
     })
@@ -835,6 +1175,7 @@ export class BeamElevationScene extends Phaser.Scene {
     this.lossGraphics?.clear()
     this.pixelOutlineGraphics?.clear()
     this.blurredFieldGraphics?.clear()
+    this.binaryContourGraphics?.clear()
     this.rawContourGraphics?.clear()
     this.smoothedContourGraphics?.clear()
     this.controlPointGraphics?.clear()
@@ -864,9 +1205,14 @@ export class BeamElevationScene extends Phaser.Scene {
       }
     })
     
-    // Draw web section loss using marching squares
-    if (allWebCells.length > 0) {
-      this.drawWebSectionLoss(allWebCells, startX, centerY, width)
+    // In view mode, render defects with their patterns
+    if (this.appMode === 'view' && !this.editMode) {
+      this.drawDefectPatterns(startX, centerY, width)
+    } else {
+      // Draw web section loss using marching squares
+      if (allWebCells.length > 0) {
+        this.drawWebSectionLoss(allWebCells, startX, centerY, width)
+      }
     }
     
     // Draw flange section loss
@@ -886,7 +1232,12 @@ export class BeamElevationScene extends Phaser.Scene {
     if (!this.lossGraphics) return
     
     // Set fill style
-    this.lossGraphics.fillStyle(0xFFB3BA, 0.8)
+    this.lossGraphics!.fillStyle(0xFFB3BA, 0.8)
+    
+    // In annotation mode, draw with outlines like edit mode
+    if (this.appMode === 'annotation' || this.editMode) {
+      this.lossGraphics!.lineStyle(2, 0xFF6B6B)
+    }
     
     // Fill individual cells with proper edge extension
     flangeCells.forEach(cell => {
@@ -905,11 +1256,11 @@ export class BeamElevationScene extends Phaser.Scene {
         cellWidth = beamRight - x
       }
       
-      this.lossGraphics.fillRect(x, flangeY, cellWidth, flangeThickness * this.gridSize)
+      this.lossGraphics!.fillRect(x, flangeY, cellWidth, flangeThickness * this.gridSize)
     })
     
     // Draw outlines - darker red for flanges
-    this.lossGraphics.lineStyle(2, 0xCC5555)
+    this.lossGraphics!.lineStyle(2, 0xCC5555)
     
     // Create a set for quick lookup
     const cellSet = new Set(flangeCells.map(c => c.x))
@@ -959,31 +1310,31 @@ export class BeamElevationScene extends Phaser.Scene {
       }
       
       // Top edge
-      this.lossGraphics.beginPath()
-      this.lossGraphics.moveTo(leftX, flangeY)
-      this.lossGraphics.lineTo(rightX, flangeY)
-      this.lossGraphics.strokePath()
+      this.lossGraphics!.beginPath()
+      this.lossGraphics!.moveTo(leftX, flangeY)
+      this.lossGraphics!.lineTo(rightX, flangeY)
+      this.lossGraphics!.strokePath()
       
       // Bottom edge
-      this.lossGraphics.beginPath()
-      this.lossGraphics.moveTo(leftX, flangeY + height)
-      this.lossGraphics.lineTo(rightX, flangeY + height)
-      this.lossGraphics.strokePath()
+      this.lossGraphics!.beginPath()
+      this.lossGraphics!.moveTo(leftX, flangeY + height)
+      this.lossGraphics!.lineTo(rightX, flangeY + height)
+      this.lossGraphics!.strokePath()
       
       // Left edge - only draw if not at beam edge
       if (segment[0] !== 0) {
-        this.lossGraphics.beginPath()
-        this.lossGraphics.moveTo(leftX, flangeY)
-        this.lossGraphics.lineTo(leftX, flangeY + height)
-        this.lossGraphics.strokePath()
+        this.lossGraphics!.beginPath()
+        this.lossGraphics!.moveTo(leftX, flangeY)
+        this.lossGraphics!.lineTo(leftX, flangeY + height)
+        this.lossGraphics!.strokePath()
       }
       
       // Right edge - only draw if not at beam edge
       if (segment[segment.length - 1] !== Math.ceil(this.beamLength) - 1) {
-        this.lossGraphics.beginPath()
-        this.lossGraphics.moveTo(rightX, flangeY)
-        this.lossGraphics.lineTo(rightX, flangeY + height)
-        this.lossGraphics.strokePath()
+        this.lossGraphics!.beginPath()
+        this.lossGraphics!.moveTo(rightX, flangeY)
+        this.lossGraphics!.lineTo(rightX, flangeY + height)
+        this.lossGraphics!.strokePath()
       }
     })
   }
@@ -1052,11 +1403,15 @@ export class BeamElevationScene extends Phaser.Scene {
       this.gridSize - 1,
       height,
       0xffffff,
-      0
+      0.1  // Make cells slightly visible with fill
     )
     
     cell.setStrokeStyle(1, 0x999999, 0.8)
     cell.setInteractive()
+    
+    // Ensure the cell is on top for input handling
+    cell.setDepth(1000)
+    
     cell.setData('col', col)
     cell.setData('row', row)
     cell.setData('zone', zone)
@@ -1068,12 +1423,21 @@ export class BeamElevationScene extends Phaser.Scene {
     
     // Restore selected state if cell was previously selected
     if (this.selectedCells.has(key)) {
-      cell.setFillStyle(0x888888, 0.3)
+      this.updateCellAppearance(cell, key)
     }
     
     this.setupCellInteraction(cell)
   }
 
+  private updateCellAppearance(cell: Phaser.GameObjects.Rectangle, key: string) {
+    const defectType = this.cellDefectTypes.get(key) || 'section-loss'
+    const style = DEFECT_STYLES[defectType]
+    
+    // For now, use a simplified fill color based on defect type
+    // In view mode, we'll render the full patterns
+    cell.setFillStyle(style.fillColor, 0.3)
+  }
+  
   private setupCellInteraction(cell: Phaser.GameObjects.Rectangle) {
     cell.on('pointerdown', () => {
       if (!this.editMode) return
@@ -1081,30 +1445,21 @@ export class BeamElevationScene extends Phaser.Scene {
       const zone = cell.getData('zone') || 'default'
       const key = `${zone}_${cell.getData('col')}_${cell.getData('row')}`
       
-      // Set paint mode based on current cell state
+      // Simple toggle logic
       if (this.selectedCells.has(key)) {
-        this.paintMode = 'remove'
         this.selectedCells.delete(key)
-        cell.setFillStyle(0xffffff, 0)
+        this.cellDefectTypes.delete(key)
+        this.paintMode = 'remove'
       } else {
-        this.paintMode = 'add'
         this.selectedCells.add(key)
-        cell.setFillStyle(0x888888, 0.3) // Light gray to indicate selection
+        this.cellDefectTypes.set(key, this.selectedDefectType)
+        this.paintMode = 'add'
       }
       
       this.isMouseDown = true
       this.isPainting = true
       
-      // Redraw loss graphics
-      const sceneWidth = this.cameras.main.width
-      const padding = 100
-      const startX = padding
-      const beamWidth = this.beamLength * this.gridSize
-      this.drawSectionLoss(startX, this.cameras.main.height / 2, beamWidth)
-      
-      // Update grid cell visibility based on selection
-      this.updateGridCellVisibility()
-      
+      this.redrawVisualization()
       this.notifyCellChange()
     })
 
@@ -1114,35 +1469,20 @@ export class BeamElevationScene extends Phaser.Scene {
       const zone = cell.getData('zone') || 'default'
       const key = `${zone}_${cell.getData('col')}_${cell.getData('row')}`
       
-      // If mouse is down and we're painting, apply the paint mode
+      // Apply paint mode during drag
       if (this.isMouseDown && this.isPainting && this.paintMode) {
         if (this.paintMode === 'add' && !this.selectedCells.has(key)) {
           this.selectedCells.add(key)
-          cell.setFillStyle(0x888888, 0.3)
-          
-          // Redraw section loss and notify
-          const sceneWidth = this.cameras.main.width
-          const padding = 100
-          const startX = padding
-          const beamWidth = this.beamLength * this.gridSize
-          this.drawSectionLoss(startX, this.cameras.main.height / 2, beamWidth)
-          this.updateGridCellVisibility()
+          this.cellDefectTypes.set(key, this.selectedDefectType)
+          this.redrawVisualization()
           this.notifyCellChange()
         } else if (this.paintMode === 'remove' && this.selectedCells.has(key)) {
           this.selectedCells.delete(key)
-          cell.setFillStyle(0xffffff, 0)
-          
-          // Redraw section loss and notify
-          const sceneWidth = this.cameras.main.width
-          const padding = 100
-          const startX = padding
-          const beamWidth = this.beamLength * this.gridSize
-          this.drawSectionLoss(startX, this.cameras.main.height / 2, beamWidth)
-          this.updateGridCellVisibility()
+          this.cellDefectTypes.delete(key)
+          this.redrawVisualization()
           this.notifyCellChange()
         }
       } else if (!this.selectedCells.has(key)) {
-        // Just hover effect
         cell.setFillStyle(0xeeeeee, 0.3)
       }
     })
@@ -1301,7 +1641,7 @@ export class BeamElevationScene extends Phaser.Scene {
     const heightText = this.add.text(dim3X + (this.gridOrigin === 'left' ? -8 : 8), centerY, `${totalHeight.toFixed(3)}"`, {
       fontSize: '13px',
       color: '#333',
-      fontWeight: 'bold'
+      fontStyle: 'bold'
     })
     heightText.setOrigin(0.5, this.gridOrigin === 'left' ? 1 : 0)
     heightText.setRotation(this.gridOrigin === 'left' ? -Math.PI/2 : Math.PI/2)
@@ -1345,12 +1685,34 @@ export class BeamElevationScene extends Phaser.Scene {
           y,
           selected: true,
           severity: 1,
-          zone: zone as 'web' | 'flange-top' | 'flange-bottom'
+          zone: zone as 'web' | 'flange-top' | 'flange-bottom',
+          defectType: this.cellDefectTypes.get(key) || 'section-loss'
         })
       }
     })
     
     this.onCellChange(cells)
+  }
+  
+  private redrawVisualization() {
+    // Update all cell appearances
+    this.gridCells.forEach((cell, key) => {
+      if (this.selectedCells.has(key)) {
+        this.updateCellAppearance(cell, key)
+      } else {
+        cell.setFillStyle(0xffffff, 0)
+      }
+    })
+    
+    // Redraw section loss
+    const sceneWidth = this.cameras.main.width
+    const padding = 100
+    const startX = padding
+    const beamWidth = this.beamLength * this.gridSize
+    this.drawSectionLoss(startX, this.cameras.main.height / 2, beamWidth)
+    
+    // Update grid cell visibility
+    this.updateGridCellVisibility()
   }
   
   private updateGridCellVisibility() {
@@ -1366,7 +1728,53 @@ export class BeamElevationScene extends Phaser.Scene {
     })
   }
 
-  updateBeamProfile(profile: BeamProfile, length?: number, editMode?: boolean, showGrid?: boolean, gridOrigin?: 'left' | 'right', showTopFlange?: boolean, gridCells?: GridCell[], elevationView?: 'N' | 'S' | 'E' | 'W') {
+  private getCurrentAnnotations(): any[] {
+    // Always save current annotations before getting them
+    if (this.annotationManager) {
+      const annotations = this.annotationManager.getAnnotations()
+      console.log('Getting current annotations from manager:', annotations.length)
+      // Update savedAnnotations with current state
+      this.savedAnnotations = annotations
+      return annotations
+    }
+    console.log('No annotation manager, returning saved annotations:', this.savedAnnotations?.length || 0)
+    return this.savedAnnotations || []
+  }
+
+  updateBeamProfile(profile: BeamProfile, length?: number, editMode?: boolean, showGrid?: boolean, gridOrigin?: 'left' | 'right', showTopFlange?: boolean, gridCells?: GridCell[], elevationView?: 'N' | 'S' | 'E' | 'W', appMode?: AppMode, spanLength?: number, zoom?: number, selectedDefectType?: DefectType, showDebugVisualization?: boolean) {
+    console.log('updateBeamProfile called with:', {
+      appMode,
+      currentAppMode: this.appMode,
+      editMode,
+      currentEditMode: this.editMode,
+      showGrid,
+      currentShowGrid: this.showGrid
+    })
+    
+    // IMPORTANT: Check app mode FIRST before other checks to ensure mode switching works
+    // Check if we're changing app mode
+    if (appMode !== undefined && appMode !== this.appMode) {
+      console.log('App mode changing from', this.appMode, 'to', appMode, '- restarting scene')
+      // Need to restart scene to initialize/destroy annotation manager
+      this.appMode = appMode
+      this.scene.restart({ 
+        beamProfile: profile, 
+        beamLength: this.beamLength || length || 120,
+        editMode: editMode !== undefined ? editMode : this.editMode,
+        showGrid: showGrid !== undefined ? showGrid : this.showGrid,
+        gridOrigin: gridOrigin !== undefined ? gridOrigin : this.gridOrigin,
+        showTopFlange: showTopFlange !== undefined ? showTopFlange : this.showTopFlange,
+        gridCells: gridCells || this.storedCells,
+        elevationView: elevationView || this.elevationView,
+        appMode: this.appMode,
+        savedAnnotations: this.getCurrentAnnotations(),
+        spanLength: spanLength || this.spanLength,
+        selectedDefectType: selectedDefectType || this.selectedDefectType,
+        onCellChange: this.onCellChange 
+      })
+      return
+    }
+    
     // Check if we just need to toggle grid origin
     if (profile.id === this.beamProfile?.id && 
         length === this.beamLength && 
@@ -1387,6 +1795,11 @@ export class BeamElevationScene extends Phaser.Scene {
         showTopFlange: this.showTopFlange,
         gridCells: gridCells || this.storedCells,
         elevationView: elevationView || this.elevationView,
+        appMode: this.appMode,
+        savedAnnotations: this.getCurrentAnnotations(),
+        spanLength: this.spanLength,
+        selectedDefectType: this.selectedDefectType,
+        showDebugVisualization: this.showDebugVisualization,
         onCellChange: this.onCellChange 
       })
       
@@ -1413,6 +1826,11 @@ export class BeamElevationScene extends Phaser.Scene {
         showTopFlange: this.showTopFlange,
         gridCells: gridCells || this.storedCells,
         elevationView: elevationView || this.elevationView,
+        appMode: this.appMode,
+        savedAnnotations: this.getCurrentAnnotations(),
+        spanLength: this.spanLength,
+        selectedDefectType: this.selectedDefectType,
+        showDebugVisualization: this.showDebugVisualization,
         onCellChange: this.onCellChange 
       })
       
@@ -1430,7 +1848,9 @@ export class BeamElevationScene extends Phaser.Scene {
       
       // Toggle grid visibility
       if (this.gridContainer) {
-        this.gridContainer.setVisible(this.editMode && this.showGrid)
+        const shouldShow = (this.editMode || this.appMode === 'annotation') && this.showGrid
+        console.log('Toggling grid visibility:', { shouldShow, editMode: this.editMode, appMode: this.appMode, showGrid: this.showGrid })
+        this.gridContainer.setVisible(shouldShow)
       }
       
       // Redraw section loss with appropriate style
@@ -1456,7 +1876,9 @@ export class BeamElevationScene extends Phaser.Scene {
       
       // Toggle grid visibility
       if (this.gridContainer) {
-        this.gridContainer.setVisible(this.editMode && this.showGrid)
+        const shouldShow = (this.editMode || this.appMode === 'annotation') && this.showGrid
+        console.log('Toggling grid visibility:', { shouldShow, editMode: this.editMode, appMode: this.appMode, showGrid: this.showGrid })
+        this.gridContainer.setVisible(shouldShow)
       }
       
       // Redraw section loss with appropriate style
@@ -1472,6 +1894,8 @@ export class BeamElevationScene extends Phaser.Scene {
       return
     }
     
+    // App mode check has been moved to the beginning of the method
+    
     // Otherwise restart the scene
     this.beamProfile = profile
     this.beamLength = length || this.beamLength
@@ -1481,6 +1905,10 @@ export class BeamElevationScene extends Phaser.Scene {
     this.showTopFlange = showTopFlange !== undefined ? showTopFlange : this.showTopFlange
     this.storedCells = gridCells || this.storedCells
     this.elevationView = elevationView || this.elevationView
+    this.appMode = appMode || this.appMode
+    this.spanLength = spanLength || this.spanLength
+    this.selectedDefectType = selectedDefectType || this.selectedDefectType
+    this.showDebugVisualization = showDebugVisualization !== undefined ? showDebugVisualization : this.showDebugVisualization
     this.scene.restart({ 
       beamProfile: profile, 
       beamLength: this.beamLength,
@@ -1490,293 +1918,111 @@ export class BeamElevationScene extends Phaser.Scene {
       showTopFlange: this.showTopFlange,
       gridCells: this.storedCells,
       elevationView: this.elevationView,
+      appMode: this.appMode,
+      savedAnnotations: this.getCurrentAnnotations(),
+      spanLength: this.spanLength,
+      selectedDefectType: this.selectedDefectType,
+      showDebugVisualization: this.showDebugVisualization,
       onCellChange: this.onCellChange 
     })
   }
   
-  // Public methods to adjust contour alignment
-  public setContourOffsets(offsetX: number, offsetY: number): void {
-    this.contourOffsetX = offsetX
-    this.contourOffsetY = offsetY
-    this.drawSectionLoss(
-      100,
-      this.cameras.main.centerY,
-      this.beamLength * this.gridSize
-    )
+  private updateAnnotationSnapPoints(): void {
+    if (!this.annotationManager) return
+    
+    const cells: { x: number, y: number, width: number, height: number }[] = []
+    
+    // Collect all grid cells for snap points
+    this.gridCells.forEach((cell, key) => {
+      cells.push({
+        x: cell.x,
+        y: cell.y,
+        width: cell.width,
+        height: cell.height
+      })
+    })
+    
+    this.annotationManager.updateSnapPoints(cells)
   }
   
-  public setContourGlobalOffsets(globalOffsetX: number, globalOffsetY: number): void {
-    this.contourGlobalOffsetX = globalOffsetX
-    this.contourGlobalOffsetY = globalOffsetY
-    this.drawSectionLoss(
-      100,
-      this.cameras.main.centerY,
-      this.beamLength * this.gridSize
-    )
-  }
-  
-  public getContourOffsets(): { cellX: number; cellY: number; globalX: number; globalY: number } {
-    return {
-      cellX: this.contourOffsetX,
-      cellY: this.contourOffsetY,
-      globalX: this.contourGlobalOffsetX,
-      globalY: this.contourGlobalOffsetY
+  private setupTouchControls(): void {
+    // Don't set up global touch controls in edit mode - they interfere with grid interaction
+    if (this.editMode) {
+      return
     }
+    
+    // Enable multi-touch
+    this.input.addPointer(2)
+    
+    // Pan support
+    this.input.on('pointerdown', (pointer: Phaser.Input.Pointer) => {
+      // Don't handle ANY pointer events in edit mode - let grid cells handle them
+      if (this.editMode) {
+        return
+      }
+      
+      // Only allow panning in view mode, or annotation mode when not interacting with annotations
+      const allowPanning = this.appMode === 'view' || 
+        (this.appMode === 'annotation' && 
+         !this.annotationManager?.isCreatingAnnotation && 
+         !this.annotationManager?.isDragging())
+      
+      if (allowPanning) {
+        this.isPanning = true
+        this.panStartX = pointer.x
+        this.panStartY = pointer.y
+        this.cameraStartX = this.cameras.main.scrollX
+        this.cameraStartY = this.cameras.main.scrollY
+      }
+    })
+    
+    this.input.on('pointermove', (pointer: Phaser.Input.Pointer) => {
+      if (this.isPanning && pointer.isDown) {
+        const deltaX = this.panStartX - pointer.x
+        const deltaY = this.panStartY - pointer.y
+        this.cameras.main.scrollX = this.cameraStartX + deltaX
+        this.cameras.main.scrollY = this.cameraStartY + deltaY
+      }
+    })
+    
+    this.input.on('pointerup', () => {
+      this.isPanning = false
+    })
+    
+    // Pinch to zoom
+    let lastPinchDistance = 0
+    
+    this.input.on('pointermove', (pointer: Phaser.Input.Pointer) => {
+      if (this.input.pointer1.isDown && this.input.pointer2.isDown) {
+        const distance = Phaser.Math.Distance.Between(
+          this.input.pointer1.x,
+          this.input.pointer1.y,
+          this.input.pointer2.x,
+          this.input.pointer2.y
+        )
+        
+        if (lastPinchDistance > 0) {
+          const delta = distance - lastPinchDistance
+          const zoomFactor = 1 + (delta * 0.01)
+          const currentZoom = this.cameras.main.zoom
+          const newZoom = Phaser.Math.Clamp(currentZoom * zoomFactor, 0.5, 2)
+          this.cameras.main.setZoom(newZoom)
+        }
+        
+        lastPinchDistance = distance
+      } else {
+        lastPinchDistance = 0
+      }
+    })
   }
   
-  public setContourBuffer(bufferSize: number, bufferValue: number): void {
-    this.contourBufferSize = bufferSize
-    this.contourBufferValue = bufferValue
-    this.drawSectionLoss(
-      100,
-      this.cameras.main.centerY,
-      this.beamLength * this.gridSize
-    )
-  }
-  
-  public getContourBuffer(): { size: number; value: number } {
-    return {
-      size: this.contourBufferSize,
-      value: this.contourBufferValue
+  shutdown(): void {
+    // Save annotations before destroying
+    if (this.annotationManager) {
+      this.savedAnnotations = this.annotationManager.getAnnotations()
+      console.log('Saving', this.savedAnnotations.length, 'annotations before shutdown')
+      this.annotationManager.destroy()
+      this.annotationManager = undefined
     }
-  }
-  
-  public setSmoothingOptions(method: 'basic' | 'laplacian' | 'chaikin' | 'bilateral' | 'savitzky-golay' | 'catmull-rom' | 'edge-aware' | 'intelligent', iterations: number, strength: number): void {
-    this.smoothingMethod = method
-    this.smoothingIterations = iterations
-    this.smoothingStrength = strength
-    this.drawSectionLoss(
-      100,
-      this.cameras.main.centerY,
-      this.beamLength * this.gridSize
-    )
-  }
-  
-  public getSmoothingOptions(): { smoothingMethod: 'basic' | 'laplacian' | 'chaikin' | 'bilateral' | 'savitzky-golay' | 'catmull-rom' | 'edge-aware' | 'intelligent'; smoothingIterations: number; smoothingStrength: number } {
-    return {
-      smoothingMethod: this.smoothingMethod,
-      smoothingIterations: this.smoothingIterations,
-      smoothingStrength: this.smoothingStrength
-    }
-  }
-  
-  public setCollisionAvoidance(enabled: boolean, minDistance: number, method: 'push' | 'shrink' | 'hybrid', iterations: number): void {
-    this.collisionAvoidance = enabled
-    this.collisionMinDistance = minDistance
-    this.collisionMethod = method
-    this.collisionIterations = iterations
-    this.drawSectionLoss(
-      100,
-      this.cameras.main.centerY,
-      this.beamLength * this.gridSize
-    )
-  }
-  
-  public getCollisionAvoidance(): { collisionAvoidance: boolean; collisionMinDistance: number; collisionMethod: 'push' | 'shrink' | 'hybrid'; collisionIterations: number } {
-    return {
-      collisionAvoidance: this.collisionAvoidance,
-      collisionMinDistance: this.collisionMinDistance,
-      collisionMethod: this.collisionMethod,
-      collisionIterations: this.collisionIterations
-    }
-  }
-  
-  public setShowRawMarchingSquares(show: boolean): void {
-    this.showRawMarchingSquares = show
-    this.drawSectionLoss(
-      100,
-      this.cameras.main.centerY,
-      this.beamLength * this.gridSize
-    )
-  }
-  
-  public getShowRawMarchingSquares(): boolean {
-    return this.showRawMarchingSquares
-  }
-  
-  public setShowControlPoints(show: boolean): void {
-    this.showControlPoints = show
-    this.drawSectionLoss(
-      100,
-      this.cameras.main.centerY,
-      this.beamLength * this.gridSize
-    )
-  }
-  
-  public getShowControlPoints(): boolean {
-    return this.showControlPoints
-  }
-  
-  public setShowBlurredField(show: boolean): void {
-    this.showBlurredField = show
-    this.drawSectionLoss(
-      100,
-      this.cameras.main.centerY,
-      this.beamLength * this.gridSize
-    )
-  }
-  
-  public getShowBlurredField(): boolean {
-    return this.showBlurredField
-  }
-  
-  // Getters for algorithm controls
-  public getInterpolationMethod(): 'linear' | 'cubic' | 'none' {
-    return this.interpolationMethod
-  }
-  
-  public getSaddlePointResolution(): 'center' | 'gradient' | 'majority' {
-    return this.saddlePointResolution
-  }
-  
-  public getThreshold(): number {
-    return this.threshold
-  }
-  
-  public getAlignmentMode(): 'edges' | 'vertices' | 'center' {
-    return this.alignmentMode
-  }
-  
-  public getClampToGrid(): boolean {
-    return this.clampToGrid
-  }
-  
-  public getExtendToBoundary(): boolean {
-    return this.extendToBoundary
-  }
-  
-  public getSnapDistance(): number {
-    return this.snapDistance
-  }
-  
-  // Marching Squares Algorithm Controls
-  public setInterpolationMethod(method: 'linear' | 'cubic' | 'none'): void {
-    this.interpolationMethod = method
-    this.drawSectionLoss(
-      100,
-      this.cameras.main.centerY,
-      this.beamLength * this.gridSize
-    )
-  }
-  
-  public setSaddlePointResolution(resolution: 'center' | 'gradient' | 'majority'): void {
-    this.saddlePointResolution = resolution
-    this.drawSectionLoss(
-      100,
-      this.cameras.main.centerY,
-      this.beamLength * this.gridSize
-    )
-  }
-  
-  public setThreshold(threshold: number): void {
-    this.threshold = threshold
-    this.drawSectionLoss(
-      100,
-      this.cameras.main.centerY,
-      this.beamLength * this.gridSize
-    )
-  }
-  
-  public setAlignmentMode(mode: 'edges' | 'vertices' | 'center'): void {
-    this.alignmentMode = mode
-    this.drawSectionLoss(
-      100,
-      this.cameras.main.centerY,
-      this.beamLength * this.gridSize
-    )
-  }
-  
-  public setClampToGrid(clamp: boolean): void {
-    this.clampToGrid = clamp
-    this.drawSectionLoss(
-      100,
-      this.cameras.main.centerY,
-      this.beamLength * this.gridSize
-    )
-  }
-  
-  public setExtendToBoundary(extend: boolean): void {
-    this.extendToBoundary = extend
-    this.drawSectionLoss(
-      100,
-      this.cameras.main.centerY,
-      this.beamLength * this.gridSize
-    )
-  }
-  
-  public setSnapDistance(distance: number): void {
-    this.snapDistance = distance
-    this.drawSectionLoss(
-      100,
-      this.cameras.main.centerY,
-      this.beamLength * this.gridSize
-    )
-  }
-  
-  // Edge Clamping Controls
-  public getEdgeClamping(): boolean {
-    return this.edgeClamping
-  }
-  
-  public setEdgeClamping(enabled: boolean): void {
-    this.edgeClamping = enabled
-    this.drawSectionLoss(
-      100,
-      this.cameras.main.centerY,
-      this.beamLength * this.gridSize
-    )
-  }
-  
-  public getEdgeClampDistance(): number {
-    return this.edgeClampDistance
-  }
-  
-  public setEdgeClampDistance(distance: number): void {
-    this.edgeClampDistance = distance
-    this.drawSectionLoss(
-      100,
-      this.cameras.main.centerY,
-      this.beamLength * this.gridSize
-    )
-  }
-  
-  public getCornerTreatment(): 'trimmed' | 'flared' | 'square' {
-    return this.cornerTreatment
-  }
-  
-  public setCornerTreatment(treatment: 'trimmed' | 'flared' | 'square'): void {
-    this.cornerTreatment = treatment
-    this.drawSectionLoss(
-      100,
-      this.cameras.main.centerY,
-      this.beamLength * this.gridSize
-    )
-  }
-  
-  // Scalar Field Controls
-  public getScalarFieldMethod(): ScalarFieldMethod {
-    return this.scalarFieldMethod
-  }
-  
-  public setScalarFieldMethod(method: ScalarFieldMethod): void {
-    this.scalarFieldMethod = method
-    this.drawSectionLoss(
-      100,
-      this.cameras.main.centerY,
-      this.beamLength * this.gridSize
-    )
-  }
-  
-  public getScalarFieldRadius(): number {
-    return this.scalarFieldRadius
-  }
-  
-  public setScalarFieldRadius(radius: number): void {
-    this.scalarFieldRadius = radius
-    this.drawSectionLoss(
-      100,
-      this.cameras.main.centerY,
-      this.beamLength * this.gridSize
-    )
   }
 }
