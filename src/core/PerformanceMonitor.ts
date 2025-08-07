@@ -24,6 +24,10 @@ export class PerformanceMonitor {
     return duration
   }
   
+  getTime(label: string): number {
+    return this.metrics.get(label) || 0
+  }
+  
   getMetrics(): Record<string, number> {
     const result: Record<string, number> = {}
     this.metrics.forEach((value, key) => {

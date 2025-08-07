@@ -45,6 +45,8 @@ export class MarchingSquaresEngine {
     this.algorithmImpl = new MarchingSquaresAlgorithm(this.config.algorithm)
     this.interpolationImpl = new InterpolationAlgorithm(this.config.interpolation)
     this.smoothingImpl = new SmoothingAlgorithm(this.config.smoothing)
+    
+    // Initialize performance monitor
     this.monitor = new PerformanceMonitor()
   }
   
@@ -61,6 +63,11 @@ export class MarchingSquaresEngine {
         contours: [],
         metrics: { total: 0, extraction: 0, interpolation: 0, smoothing: 0 }
       }
+    }
+    
+    // Ensure monitor is initialized
+    if (!this.monitor) {
+      this.monitor = new PerformanceMonitor()
     }
     
     this.monitor.start('total')
