@@ -339,8 +339,90 @@ export class BeamElevationScene extends Phaser.Scene {
     this.beamRenderer = new BeamRenderer(this)
     this.interactionController = new InteractionController(this)
     
-    // Configure modules
-    this.initializeModules()
+    // Configure modules inline to avoid method call issues
+    if (this.beamProfile && this.gridSystem && this.beamRenderer && this.interactionController) {
+      // Configure GridSystem
+      const gridConfig: Partial<GridSystemConfig> = {
+        gridSize: this.gridSize,
+        showGrid: this.showGrid,
+        editMode: this.editMode,
+        showTopFlange: this.showTopFlange,
+        gridOrigin: this.gridOrigin,
+        elevationView: this.elevationView
+      }
+      this.gridSystem.initialize(this.beamProfile, gridConfig)
+      
+      // Set up GridSystem callbacks
+      this.gridSystem.onCellChange = (cells) => {
+        if (this.onCellChange) {
+          this.onCellChange(cells)
+        }
+        this.redrawVisualization()
+      }
+      
+      // Restore stored cells if any
+      if (this.storedCells.length > 0) {
+        this.gridSystem.setSelectedCells(this.storedCells)
+      }
+      
+      // Configure BeamRenderer
+      const renderConfig: Partial<BeamRenderConfig> = {
+        gridSize: this.gridSize,
+        showTopFlange: this.showTopFlange,
+        showBinaryContour: this.showRawMarchingSquares,
+        showRawContour: false,
+        showSmoothedContour: !this.showRawMarchingSquares,
+        showControlPoints: this.showControlPoints,
+        showPixelOutline: false,
+        showBlurredField: this.showBlurredField,
+        editMode: this.editMode,
+        contourOffsetX: this.contourOffsetX,
+        contourOffsetY: this.contourOffsetY,
+        contourGlobalOffsetX: this.contourGlobalOffsetX,
+        contourGlobalOffsetY: this.contourGlobalOffsetY
+      }
+      this.beamRenderer.setBeamProfile(this.beamProfile)
+      this.beamRenderer.updateConfig(renderConfig)
+      
+      // Configure InteractionController
+      const interactionState: Partial<InteractionState> = {
+        editMode: this.editMode,
+        appMode: this.appMode,
+        selectedDefectType: this.selectedDefectType,
+        isMouseDown: false,
+        isPainting: false,
+        paintMode: null
+      }
+      this.interactionController.initialize()
+      this.interactionController.updateConfig(interactionState)
+      
+      // Connect InteractionController to GridSystem
+      this.interactionController.setCellCallbacks({
+        onCellPointerDown: (key, defectType) => {
+          if (this.gridSystem) {
+            this.gridSystem.selectCell(key, defectType)
+          }
+        },
+        onCellPointerOver: (key, defectType) => {
+          if (this.gridSystem && this.interactionController?.isPainting()) {
+            const paintMode = this.interactionController.getPaintMode()
+            if (paintMode === 'add') {
+              this.gridSystem.selectCell(key, defectType)
+            } else if (paintMode === 'remove') {
+              this.gridSystem.deselectCell(key)
+            }
+          }
+        },
+        onCellPointerOut: (key) => {
+          // Optional: handle pointer out
+        }
+      })
+      
+      // Set up annotation manager if in annotation mode
+      if (this.appMode === 'annotation' && this.annotationManager) {
+        this.interactionController.setAnnotationManager(this.annotationManager)
+      }
+    }
 
     // Expose debug method globally for testing
     (window as any).debugDrawContours = () => this.debugDrawContours()
