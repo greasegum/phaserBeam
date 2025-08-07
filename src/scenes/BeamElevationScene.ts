@@ -157,23 +157,18 @@ export class BeamElevationScene extends Phaser.Scene {
     
     // Connect InteractionController to GridSystem
     this.interactionController.setCellCallbacks({
-      onCellPointerDown: (key, defectType) => {
+      onCellSelect: (key, defectType) => {
         if (this.gridSystem) {
           this.gridSystem.selectCell(key, defectType)
         }
       },
-      onCellPointerOver: (key, defectType) => {
-        if (this.gridSystem && this.interactionController?.isPainting()) {
-          const paintMode = this.interactionController.getPaintMode()
-          if (paintMode === 'add') {
-            this.gridSystem.selectCell(key, defectType)
-          } else if (paintMode === 'remove') {
-            this.gridSystem.deselectCell(key)
-          }
+      onCellDeselect: (key) => {
+        if (this.gridSystem) {
+          this.gridSystem.deselectCell(key)
         }
       },
-      onCellPointerOut: (key) => {
-        // Optional: handle pointer out
+      onRedrawNeeded: () => {
+        this.redrawVisualization()
       }
     })
     
@@ -249,10 +244,29 @@ export class BeamElevationScene extends Phaser.Scene {
     this.collisionMethod = config.collisionMethod
     this.collisionIterations = config.collisionIterations
 
+    // Update BeamRenderer configuration
+    if (this.beamRenderer) {
+      const renderConfig: Partial<BeamRenderConfig> = {
+        showBinaryContour: this.showRawMarchingSquares,
+        showRawContour: false,
+        showSmoothedContour: !this.showRawMarchingSquares,
+        showControlPoints: this.showControlPoints,
+        showBlurredField: this.showBlurredField
+      }
+      this.beamRenderer.updateConfig(renderConfig)
+    }
+    
     // Redraw the scene
     this.redrawVisualization()
   }
 
+  /**
+   * Get the configuration manager for external access
+   */
+  public getConfigManager(): SceneConfigManager | undefined {
+    return this.configManager
+  }
+  
   /**
    * Debug method to force contour drawing
    */
@@ -395,23 +409,18 @@ export class BeamElevationScene extends Phaser.Scene {
       
       // Connect InteractionController to GridSystem
       this.interactionController.setCellCallbacks({
-        onCellPointerDown: (key, defectType) => {
+        onCellSelect: (key, defectType) => {
           if (this.gridSystem) {
             this.gridSystem.selectCell(key, defectType)
           }
         },
-        onCellPointerOver: (key, defectType) => {
-          if (this.gridSystem && this.interactionController?.isPainting()) {
-            const paintMode = this.interactionController.getPaintMode()
-            if (paintMode === 'add') {
-              this.gridSystem.selectCell(key, defectType)
-            } else if (paintMode === 'remove') {
-              this.gridSystem.deselectCell(key)
-            }
+        onCellDeselect: (key) => {
+          if (this.gridSystem) {
+            this.gridSystem.deselectCell(key)
           }
         },
-        onCellPointerOut: (key) => {
-          // Optional: handle pointer out
+        onRedrawNeeded: () => {
+          this.redrawVisualization()
         }
       })
       
