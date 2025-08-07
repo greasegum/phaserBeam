@@ -13,7 +13,9 @@ export default defineConfig({
       '@types': path.resolve(import.meta.url, './src/types'),
       '@core': path.resolve(import.meta.url, './src/core'),
       '@components': path.resolve(import.meta.url, './src/components'),
-      '@utils': path.resolve(import.meta.url, './src/utils')
+      '@utils': path.resolve(import.meta.url, './src/utils'),
+      // Mock Phaser to avoid WebGL issues in tests
+      'phaser': path.resolve(import.meta.url, './src/test/mocks/phaser.ts')
     }
   }
 })
