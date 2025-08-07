@@ -194,8 +194,8 @@ export class BeamInspectionService {
       const zone = cell.zone || 'web'
       defectsByZone.set(zone, (defectsByZone.get(zone) || 0) + 1)
       
-      // Count critical defects (holes and severe corrosion)
-      if (defectType === 'hole' || defectType === 'severe-corrosion') {
+      // Count critical defects (holes only)
+      if (defectType === 'hole') {
         criticalDefects++
       }
     })

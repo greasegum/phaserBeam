@@ -31,12 +31,8 @@ const ANNOTATION_TOOLS: { type: AnnotationType; label: string; shortcut: string 
 ]
 
 const DEFECT_INFO: Record<DefectType, { label: string, description: string }> = {
-  'hole': { label: 'Hole', description: 'Complete penetration' },
-  'pinholes': { label: 'Pinholes', description: 'Small perforations' },
-  'surface-rust': { label: 'Surface Rust', description: 'Surface corrosion' },
-  'paper-thin': { label: 'Paper Thin', description: 'Extreme thinning' },
   'section-loss': { label: 'Section Loss', description: 'Material loss' },
-  'pitting': { label: 'Pitting', description: 'Localized corrosion' }
+  'hole': { label: 'Hole', description: 'Complete penetration' }
 }
 
 export const ModeToolbar: React.FC<ModeToolbarProps> = ({

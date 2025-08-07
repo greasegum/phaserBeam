@@ -241,17 +241,10 @@ export class ExportService {
         case 'hole':
           ctx.fillStyle = 'rgba(0, 0, 0, 0.8)'
           break
-        case 'severe-corrosion':
-          ctx.fillStyle = 'rgba(139, 0, 0, 0.6)'
-          break
-        case 'moderate-corrosion':
-          ctx.fillStyle = 'rgba(255, 140, 0, 0.5)'
-          break
-        case 'light-corrosion':
-          ctx.fillStyle = 'rgba(255, 255, 0, 0.4)'
-          break
+        case 'section-loss':
         default:
           ctx.fillStyle = 'rgba(255, 0, 0, 0.3)'
+          break
       }
       
       const x = startX + cell.x * gridSize
@@ -451,14 +444,9 @@ export class ExportService {
         case 'hole':
           fillColor = 'rgba(0, 0, 0, 0.8)'
           break
-        case 'severe-corrosion':
-          fillColor = 'rgba(139, 0, 0, 0.6)'
-          break
-        case 'moderate-corrosion':
-          fillColor = 'rgba(255, 140, 0, 0.5)'
-          break
-        case 'light-corrosion':
-          fillColor = 'rgba(255, 255, 0, 0.4)'
+        case 'section-loss':
+        default:
+          fillColor = 'rgba(255, 0, 0, 0.3)'
           break
       }
       

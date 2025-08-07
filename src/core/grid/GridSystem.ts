@@ -312,13 +312,9 @@ export class GridSystem {
     const defectType = this.cellDefectTypes.get(key) || 'section-loss'
     
     // TODO: Import DEFECT_STYLES from types/defects and use proper styling
-    const defectColors: Record<DefectType, number> = {
-      'hole': 0xFFFFFF,
-      'pinholes': 0xFFB3D9,
-      'surface-rust': 0xFFA500,
-      'paper-thin': 0xFF6B6B,
-      'section-loss': 0xff6b6b,
-      'pitting': 0x8B4513
+    const defectColors: Record<string, number> = {
+      'section-loss': 0xFFB3D9,
+      'hole': 0xFFFFFF
     }
     
     const color = defectColors[defectType] || defectColors['section-loss']
