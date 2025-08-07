@@ -18,7 +18,6 @@ export const DefectToolbar: React.FC<DefectToolbarProps> = ({ visible, selectedD
   const renderPatternPreview = (defectType: DefectType) => {
     const style = DEFECT_STYLES[defectType]
     if (!style) {
-      console.warn(`No style found for defect type: ${defectType}`)
       return <div style={{ width: 30, height: 30, backgroundColor: '#ccc' }} />
     }
     const size = 30

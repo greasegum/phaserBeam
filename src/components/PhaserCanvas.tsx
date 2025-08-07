@@ -2,7 +2,7 @@ import React, { useEffect, useRef, useState } from 'react'
 import Phaser from 'phaser'
 import { BeamElevationScene } from '../scenes/BeamElevationScene'
 import { BeamProfile, GridCell } from '../types/beam'
-import { AdvancedSettings } from './AdvancedSettings'
+import { Configuration } from './Configuration'
 import { AppMode } from '../types/mode'
 import { AnnotationType } from '../types/annotations'
 import { DefectType } from '../types/defects'
@@ -223,7 +223,7 @@ export const PhaserCanvas: React.FC<PhaserCanvasProps> = ({
       <div ref={scrollContainerRef} style={{ width: '100%', height: '100%', overflow: 'auto', position: 'relative' }}>
         <div ref={containerRef} style={{ minWidth: '100%', height: '100%' }} />
       </div>
-      <AdvancedSettings scene={currentScene} />
+      <Configuration scene={currentScene} />
     </>
   )
 }
