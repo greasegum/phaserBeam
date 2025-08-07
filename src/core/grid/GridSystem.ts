@@ -37,6 +37,7 @@ export class GridSystem {
   private scene: Phaser.Scene
   private beamProfile: BeamProfile | null = null
   private gridContainer: Phaser.GameObjects.Container | null = null
+  private currentGridSize: number = 30 // Store current grid size
   
   // Grid state
   private selectedCells: Set<string> = new Set()
@@ -88,6 +89,9 @@ export class GridSystem {
 
     const { startX, centerY, gridSize, beamLength } = dimensions
     const { webHeight, flangeThickness } = this.beamProfile
+    
+    // Store the grid size for use in cell creation
+    this.currentGridSize = gridSize
     
     // Calculate beam section boundaries
     const webTop = centerY - (webHeight * gridSize) / 2
@@ -155,18 +159,18 @@ export class GridSystem {
     if (!this.beamProfile || !this.gridContainer) return
 
     const height = customHeight !== undefined ? customHeight - 1 : 
-                  (isLinear ? this.beamProfile.flangeThickness * 30 - 1 : 30 - 1) // TODO: Make gridSize configurable
+                  (isLinear ? this.beamProfile.flangeThickness * this.currentGridSize - 1 : this.currentGridSize - 1)
     
     const cell = this.scene.add.rectangle(
-      x + 30 / 2, // TODO: Make gridSize configurable
+      x + this.currentGridSize / 2,
       y + height / 2,
-      30 - 1, // TODO: Make gridSize configurable
+      this.currentGridSize - 1, // 1px gap between cells
       height,
       0xffffff,
-      0.2  // Make cells more visible with fill
+      0.05  // Very subtle fill
     )
     
-    cell.setStrokeStyle(2, 0x666666, 1.0) // Darker, thicker, fully opaque stroke
+    cell.setStrokeStyle(0.5, 0xcccccc, 0.5) // Thin, light gray, semi-transparent stroke
     cell.setInteractive()
     cell.setDepth(10) // Relative depth within container
     
@@ -235,7 +239,7 @@ export class GridSystem {
       const key = `${zone}_${col}_${row}`
       
       if (!this.selectedCells.has(key)) {
-        cell.setFillStyle(0xeeeeee, 0.3) // Hover effect
+        cell.setFillStyle(0xeeeeee, 0.15) // Subtle hover effect
       }
     })
 
@@ -248,7 +252,7 @@ export class GridSystem {
       const key = `${zone}_${col}_${row}`
       
       if (!this.selectedCells.has(key)) {
-        cell.setFillStyle(0xffffff, 0.1) // Reset to default
+        cell.setFillStyle(0xffffff, 0.05) // Reset to default subtle fill
       }
     })
   }
@@ -414,10 +418,10 @@ export class GridSystem {
     this.gridCells.forEach((cell, key) => {
       if (this.selectedCells.has(key)) {
         // Hide stroke for selected cells (section loss areas)
-        cell.setStrokeStyle(0, 0x999999, 0)
+        cell.setStrokeStyle(0, 0xcccccc, 0)
       } else {
         // Show stroke for non-selected cells
-        cell.setStrokeStyle(1, 0x999999, 0.8)
+        cell.setStrokeStyle(0.5, 0xcccccc, 0.5)
       }
     })
   }

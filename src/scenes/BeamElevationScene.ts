@@ -507,7 +507,7 @@ export class BeamElevationScene extends Phaser.Scene {
         startX,
         centerY,
         width: beamWidth,
-        gridSize: 30, // Grid cell size
+        gridSize: this.gridSize, // Use the calculated grid size for proper alignment
         beamLength: this.beamLength
       }
       this.gridSystem.createGrid(gridDimensions)
