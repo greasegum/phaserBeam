@@ -841,9 +841,7 @@ export class BeamElevationScene extends Phaser.Scene {
     
     // Generate and draw contours if needed
     const selectedCells = this.gridSystem.getSelectedCells()
-    console.log('Redrawing visualization, selected cells:', selectedCells.length)
     if (selectedCells.length > 0) {
-      console.log('Generating contours for', selectedCells.length, 'cells')
       this.generateAndDrawContours(dimensions, selectedCells)
     }
   }
@@ -856,7 +854,6 @@ export class BeamElevationScene extends Phaser.Scene {
     
     // Separate web cells for contour generation
     const webCells = selectedCells.filter(cell => cell.zone === 'web')
-    console.log('Web cells for contours:', webCells.length, 'out of', selectedCells.length, 'total cells')
     if (webCells.length === 0) return
     
     // Generate grid for marching squares
@@ -889,11 +886,6 @@ export class BeamElevationScene extends Phaser.Scene {
     }
     
     const result = processGrid(grid, config)
-    console.log('Marching squares result:', {
-      binaryContours: result.binaryContours?.length || 0,
-      rawContours: result.rawContours?.length || 0,
-      smoothedContours: result.smoothedContours?.length || 0
-    })
     
     // Create contour data for renderer
     const contourData: ContourData = {
@@ -906,7 +898,6 @@ export class BeamElevationScene extends Phaser.Scene {
     }
     
     // Draw contours using renderer
-    console.log('Drawing contours with BeamRenderer')
     this.beamRenderer.drawContours(contourData, dimensions)
   }
   
