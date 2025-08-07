@@ -9,6 +9,7 @@ import { ZoomControl } from './components/ZoomControl'
 import { DefectType } from './types/defects'
 import { exportCanvasAsPNG, exportCanvasAsSVG } from './utils/canvasExport'
 import { BeamElevationScene } from './scenes/BeamElevationScene'
+import { VectorExportDialog } from './components/VectorExportDialog'
 
 export default function App() {
   const [selectedBeam, setSelectedBeam] = useState<BeamProfile | null>(null)
@@ -29,6 +30,7 @@ export default function App() {
   const [selectedDefectType, setSelectedDefectType] = useState<DefectType>('section-loss')
   const [currentScene, setCurrentScene] = useState<BeamElevationScene | null>(null)
   const [showDebugVisualization, setShowDebugVisualization] = useState<boolean>(false)
+  const [showExportDialog, setShowExportDialog] = useState<boolean>(false)
   
   useEffect(() => {
     const checkMobile = () => {
@@ -171,6 +173,27 @@ export default function App() {
           >
             New Inspection
           </button>
+          <button
+            onClick={() => setShowExportDialog(true)}
+            style={{
+              padding: '6px 12px',
+              backgroundColor: '#4CAF50',
+              color: 'white',
+              border: 'none',
+              borderRadius: '4px',
+              cursor: 'pointer',
+              fontSize: '14px',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px'
+            }}
+            disabled={!selectedBeam}
+          >
+            <svg width="16" height="16" fill="currentColor" viewBox="0 0 24 24">
+              <path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z"/>
+            </svg>
+            Export
+          </button>
         </div>
       </header>
       
@@ -251,6 +274,17 @@ export default function App() {
       <ZoomControl
         currentZoom={currentZoom}
         onZoomChange={setCurrentZoom}
+      />
+      
+      {/* Export Dialog */}
+      <VectorExportDialog
+        isOpen={showExportDialog}
+        onClose={() => setShowExportDialog(false)}
+        beamProfile={selectedBeam}
+        beamLength={beamLength}
+        cells={gridCells}
+        gridSize={currentScene?.gridSize || 30}
+        annotations={currentScene?.getAnnotations?.() || []}
       />
     </div>
   )
