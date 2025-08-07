@@ -832,6 +832,8 @@ export class BeamElevationScene extends Phaser.Scene {
   private redrawVisualization() {
     if (!this.beamProfile || !this.beamRenderer || !this.gridSystem) return
     
+    console.log(`[BeamElevationScene] Redrawing visualization`)
+    
     // Update grid visualization
     if (this.gridSystem) {
       this.gridSystem.updateCellVisibility()
@@ -868,8 +870,11 @@ export class BeamElevationScene extends Phaser.Scene {
   private generateAndDrawContours(dimensions: BeamDimensions, selectedCells: GridCell[]) {
     if (!this.beamRenderer || !this.beamProfile) return
     
+    console.log(`[BeamElevationScene] Generating contours for ${selectedCells.length} cells`)
+    
     // Separate web cells for contour generation
     const webCells = selectedCells.filter(cell => cell.zone === 'web')
+    console.log(`[BeamElevationScene] Web cells for contours: ${webCells.length}`)
     if (webCells.length === 0) return
     
     // Generate grid for marching squares

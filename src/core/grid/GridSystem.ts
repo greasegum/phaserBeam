@@ -212,12 +212,18 @@ export class GridSystem {
    */
   private setupCellInteraction(cell: Phaser.GameObjects.Rectangle): void {
     cell.on('pointerdown', () => {
-      if (!this.config.editMode) return
+      console.log(`[GridSystem] Cell clicked, editMode: ${this.config.editMode}`)
+      if (!this.config.editMode) {
+        console.log(`[GridSystem] Not in edit mode, ignoring click`)
+        return
+      }
       
       const zone = cell.getData('zone') || 'web'
       const col = cell.getData('col')
       const row = cell.getData('row')
       const key = `${zone}_${col}_${row}`
+      
+      console.log(`[GridSystem] Cell interaction: ${key}, currently selected: ${this.selectedCells.has(key)}`)
       
       // Toggle cell selection
       if (this.selectedCells.has(key)) {
@@ -261,13 +267,19 @@ export class GridSystem {
    * Select a grid cell
    */
   selectCell(key: string, defectType: DefectType = 'section-loss'): void {
+    console.log(`[GridSystem] Selecting cell: ${key}, defectType: ${defectType}`)
     this.selectedCells.add(key)
     this.cellDefectTypes.set(key, defectType)
     
     const cell = this.gridCells.get(key)
     if (cell) {
+      console.log(`[GridSystem] Updating appearance for cell: ${key}`)
       this.updateCellAppearance(cell, key)
+    } else {
+      console.warn(`[GridSystem] Cell not found: ${key}`)
     }
+    
+    console.log(`[GridSystem] Total selected cells: ${this.selectedCells.size}`)
     
     // Notify of change
     this.notifyCellChange()
@@ -465,8 +477,10 @@ export class GridSystem {
    * Notify listeners of cell changes
    */
   private notifyCellChange(): void {
+    console.log(`[GridSystem] notifyCellChange called, callback exists: ${!!this.onCellChangeCallback}`)
     if (this.onCellChangeCallback) {
       const cells = this.getSelectedCells()
+      console.log(`[GridSystem] Notifying with ${cells.length} cells`)
       this.onCellChangeCallback(cells)
     }
   }
