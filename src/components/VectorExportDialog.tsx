@@ -10,6 +10,7 @@ interface VectorExportDialogProps {
   cells: GridCell[]
   gridSize: number
   annotations?: any[]
+  initialFormat?: 'svg' | 'pdf' | 'dxf'
 }
 
 export const VectorExportDialog: React.FC<VectorExportDialogProps> = ({
@@ -19,9 +20,17 @@ export const VectorExportDialog: React.FC<VectorExportDialogProps> = ({
   beamLength,
   cells,
   gridSize,
-  annotations
+  annotations,
+  initialFormat = 'svg'
 }) => {
-  const [format, setFormat] = useState<'svg' | 'pdf' | 'dxf'>('svg')
+  const [format, setFormat] = useState<'svg' | 'pdf' | 'dxf'>(initialFormat)
+  
+  // Update format when initialFormat changes (when dialog reopens)
+  React.useEffect(() => {
+    if (isOpen) {
+      setFormat(initialFormat)
+    }
+  }, [isOpen, initialFormat])
   const [scale, setScale] = useState(1)
   const [includeGrid, setIncludeGrid] = useState(true)
   const [includeAnnotations, setIncludeAnnotations] = useState(true)

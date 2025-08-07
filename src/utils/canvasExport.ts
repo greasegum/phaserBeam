@@ -2,10 +2,24 @@ import Phaser from 'phaser'
 
 export function exportCanvasAsPNG(scene: Phaser.Scene, filename: string = 'beam-inspection.png') {
   // Get the game canvas
-  const canvas = scene.game.canvas
+  const sourceCanvas = scene.game.canvas
+  
+  // Create a new canvas with white background
+  const exportCanvas = document.createElement('canvas')
+  const ctx = exportCanvas.getContext('2d')!
+  
+  exportCanvas.width = sourceCanvas.width
+  exportCanvas.height = sourceCanvas.height
+  
+  // Fill with white background
+  ctx.fillStyle = '#ffffff'
+  ctx.fillRect(0, 0, exportCanvas.width, exportCanvas.height)
+  
+  // Draw the game canvas on top
+  ctx.drawImage(sourceCanvas, 0, 0)
   
   // Convert to data URL
-  const dataURL = canvas.toDataURL('image/png')
+  const dataURL = exportCanvas.toDataURL('image/png')
   
   // Create a download link
   const link = document.createElement('a')

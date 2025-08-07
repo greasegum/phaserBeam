@@ -31,6 +31,7 @@ export default function App() {
   const [currentScene, setCurrentScene] = useState<BeamElevationScene | null>(null)
   const [showDebugVisualization, setShowDebugVisualization] = useState<boolean>(false)
   const [showExportDialog, setShowExportDialog] = useState<boolean>(false)
+  const [selectedExportFormat, setSelectedExportFormat] = useState<'svg' | 'pdf' | 'dxf'>('svg')
   
   useEffect(() => {
     const checkMobile = () => {
@@ -54,25 +55,28 @@ export default function App() {
   }
   
   const handleExport = (format: 'pdf' | 'png' | 'svg') => {
-    if (!currentScene) {
-      alert('Scene not ready. Please wait a moment and try again.')
+    if (!selectedBeam) {
+      alert('Please select a beam profile first.')
       return
     }
     
-    const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, -5)
-    const beamName = selectedBeam?.name.replace(/\s+/g, '-') || 'beam'
-    
-    switch (format) {
-      case 'png':
-        exportCanvasAsPNG(currentScene, `${beamName}-inspection-${timestamp}.png`)
-        break
-      case 'svg':
-        exportCanvasAsSVG(currentScene, `${beamName}-inspection-${timestamp}.svg`)
-        break
-      case 'pdf':
-        alert('PDF export coming soon! This will generate a professional report with beam details, defect summary, and inspection notes.')
-        break
+    // For PNG, use the old direct export for now (it's simpler)
+    if (format === 'png' && currentScene) {
+      const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, -5)
+      const beamName = selectedBeam?.name.replace(/\s+/g, '-') || 'beam'
+      exportCanvasAsPNG(currentScene, `${beamName}-inspection-${timestamp}.png`)
+      return
     }
+    
+    // For vector formats, open the export dialog
+    const formatMap: Record<string, 'svg' | 'pdf' | 'dxf'> = {
+      'svg': 'svg',
+      'pdf': 'pdf',
+      'dxf': 'dxf'
+    }
+    
+    setSelectedExportFormat(formatMap[format] || 'svg')
+    setShowExportDialog(true)
   }
 
   if (showSetup) {
@@ -173,27 +177,6 @@ export default function App() {
           >
             New Inspection
           </button>
-          <button
-            onClick={() => setShowExportDialog(true)}
-            style={{
-              padding: '6px 12px',
-              backgroundColor: '#4CAF50',
-              color: 'white',
-              border: 'none',
-              borderRadius: '4px',
-              cursor: 'pointer',
-              fontSize: '14px',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '6px'
-            }}
-            disabled={!selectedBeam}
-          >
-            <svg width="16" height="16" fill="currentColor" viewBox="0 0 24 24">
-              <path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z"/>
-            </svg>
-            Export
-          </button>
         </div>
       </header>
       
@@ -285,6 +268,7 @@ export default function App() {
         cells={gridCells}
         gridSize={currentScene?.gridSize || 30}
         annotations={currentScene?.getAnnotations?.() || []}
+        initialFormat={selectedExportFormat}
       />
     </div>
   )
