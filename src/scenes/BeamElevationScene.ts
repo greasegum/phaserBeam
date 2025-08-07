@@ -70,7 +70,6 @@ export class BeamElevationScene extends Phaser.Scene {
   private showRawMarchingSquares = false // Show raw marching squares without smoothing
   private showControlPoints = false // Show marching squares control points in edit mode
   private showBlurredField = false // Show blurred field visualization
-  private showDebugVisualization = false // Show all three line types simultaneously
   // Marching Squares Algorithm Properties
   private interpolationMethod: 'linear' | 'cubic' | 'none' = 'linear'
   private scalarFieldMethod: ScalarFieldMethod = 'edge-preserving'
@@ -290,7 +289,6 @@ export class BeamElevationScene extends Phaser.Scene {
     spanLength?: number;
     zoom?: number;
     selectedDefectType?: DefectType;
-    showDebugVisualization?: boolean;
     onCellChange?: (cells: GridCell[]) => void 
   }) {
     this.beamProfile = data.beamProfile
@@ -306,7 +304,6 @@ export class BeamElevationScene extends Phaser.Scene {
     this.onCellChange = data.onCellChange
     this.spanLength = data.spanLength || 96
     this.selectedDefectType = data.selectedDefectType || 'section-loss'
-    this.showDebugVisualization = data.showDebugVisualization || false
     
     console.log('Scene init complete:', {
       appMode: this.appMode,
@@ -835,7 +832,7 @@ export class BeamElevationScene extends Phaser.Scene {
     
     // Generate and draw contours if needed
     const selectedCells = this.gridSystem.getSelectedCells()
-    if (selectedCells.length > 0 && this.editMode) {
+    if (selectedCells.length > 0) {
       this.generateAndDrawContours(dimensions, selectedCells)
     }
   }
@@ -924,7 +921,7 @@ export class BeamElevationScene extends Phaser.Scene {
     return this.savedAnnotations || []
   }
 
-  updateBeamProfile(profile: BeamProfile, length?: number, editMode?: boolean, showGrid?: boolean, gridOrigin?: 'left' | 'right', showTopFlange?: boolean, gridCells?: GridCell[], elevationView?: 'N' | 'S' | 'E' | 'W', appMode?: AppMode, spanLength?: number, zoom?: number, selectedDefectType?: DefectType, showDebugVisualization?: boolean) {
+  updateBeamProfile(profile: BeamProfile, length?: number, editMode?: boolean, showGrid?: boolean, gridOrigin?: 'left' | 'right', showTopFlange?: boolean, gridCells?: GridCell[], elevationView?: 'N' | 'S' | 'E' | 'W', appMode?: AppMode, spanLength?: number, zoom?: number, selectedDefectType?: DefectType) {
     console.log('updateBeamProfile called with:', {
       appMode,
       currentAppMode: this.appMode,
@@ -982,7 +979,6 @@ export class BeamElevationScene extends Phaser.Scene {
         savedAnnotations: this.getCurrentAnnotations(),
         spanLength: this.spanLength,
         selectedDefectType: this.selectedDefectType,
-        showDebugVisualization: this.showDebugVisualization,
         onCellChange: this.onCellChange 
       })
       
@@ -1013,7 +1009,6 @@ export class BeamElevationScene extends Phaser.Scene {
         savedAnnotations: this.getCurrentAnnotations(),
         spanLength: this.spanLength,
         selectedDefectType: this.selectedDefectType,
-        showDebugVisualization: this.showDebugVisualization,
         onCellChange: this.onCellChange 
       })
       
@@ -1079,7 +1074,6 @@ export class BeamElevationScene extends Phaser.Scene {
     this.appMode = appMode || this.appMode
     this.spanLength = spanLength || this.spanLength
     this.selectedDefectType = selectedDefectType || this.selectedDefectType
-    this.showDebugVisualization = showDebugVisualization !== undefined ? showDebugVisualization : this.showDebugVisualization
     this.scene.restart({ 
       beamProfile: profile, 
       beamLength: this.beamLength,
@@ -1093,7 +1087,6 @@ export class BeamElevationScene extends Phaser.Scene {
       savedAnnotations: this.getCurrentAnnotations(),
       spanLength: this.spanLength,
       selectedDefectType: this.selectedDefectType,
-      showDebugVisualization: this.showDebugVisualization,
       onCellChange: this.onCellChange 
     })
   }

@@ -11,8 +11,6 @@ interface UnifiedSettingsPanelProps {
   onToggleTopFlange: (show: boolean) => void
   gridOrigin: 'left' | 'right'
   onToggleGridOrigin: (origin: 'left' | 'right') => void
-  showDebugVisualization: boolean
-  onToggleDebugVisualization: (show: boolean) => void
 }
 
 type TabType = 'general' | 'rendering' | 'debug'
@@ -32,8 +30,6 @@ export const UnifiedSettingsPanel: React.FC<UnifiedSettingsPanelProps> = ({
   onToggleTopFlange,
   gridOrigin,
   onToggleGridOrigin,
-  showDebugVisualization,
-  onToggleDebugVisualization
 }) => {
   const [activeTab, setActiveTab] = useState<TabType>('general')
   
@@ -350,64 +346,24 @@ export const UnifiedSettingsPanel: React.FC<UnifiedSettingsPanelProps> = ({
             cursor: 'pointer'
           }}>
             <div>
-              <div style={{ fontSize: '14px', color: '#111827' }}>Debug Visualization</div>
+              <div style={{ fontSize: '14px', color: '#111827' }}>Contour Display</div>
               <div style={{ fontSize: '12px', color: '#6B7280', marginTop: '2px' }}>
-                Show contour generation details
+                Control how contours are shown
               </div>
             </div>
-            <input
-              type="checkbox"
-              checked={showDebugVisualization}
-              onChange={e => onToggleDebugVisualization(e.target.checked)}
-              style={{ width: '20px', height: '20px', cursor: 'pointer' }}
-            />
+            <div style={{ fontSize: '13px', color: '#4B5563' }}>
+              Always Enabled
+            </div>
           </label>
           
-          {showDebugVisualization && (
-            <>
-              <label style={{
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'space-between',
-                cursor: 'pointer',
-                paddingLeft: '24px'
-              }}>
-                <span style={{ fontSize: '13px', color: '#6B7280' }}>Raw Marching Squares</span>
-                <input
-                  type="checkbox"
-                  style={{ width: '18px', height: '18px', cursor: 'pointer' }}
-                />
-              </label>
-              
-              <label style={{
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'space-between',
-                cursor: 'pointer',
-                paddingLeft: '24px'
-              }}>
-                <span style={{ fontSize: '13px', color: '#6B7280' }}>Control Points</span>
-                <input
-                  type="checkbox"
-                  style={{ width: '18px', height: '18px', cursor: 'pointer' }}
-                />
-              </label>
-              
-              <label style={{
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'space-between',
-                cursor: 'pointer',
-                paddingLeft: '24px'
-              }}>
-                <span style={{ fontSize: '13px', color: '#6B7280' }}>Scalar Field</span>
-                <input
-                  type="checkbox"
-                  style={{ width: '18px', height: '18px', cursor: 'pointer' }}
-                />
-              </label>
-            </>
-          )}
+          <div style={{
+            paddingLeft: '24px',
+            fontSize: '12px',
+            color: '#6B7280',
+            lineHeight: '1.5'
+          }}>
+            Marching squares contours are always displayed when defects are present.
+          </div>
         </div>
       </div>
       
