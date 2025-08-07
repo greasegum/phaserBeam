@@ -284,6 +284,9 @@ export class GridSystem {
     if (cell) {
       cell.setFillStyle(0xffffff, 0.1) // Reset to default
     }
+    
+    // Notify of change
+    this.notifyCellChange()
   }
 
   /**
