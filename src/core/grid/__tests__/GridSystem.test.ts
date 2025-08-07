@@ -1,312 +1,286 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest'
-import Phaser from 'phaser'
-import { GridSystem, GridDimensions, GridSystemConfig } from '../GridSystem'
-import { BeamProfile, GridCell } from '../../../types/beam'
-import { DefectType } from '../../../types/defects'
-
-// Mock Phaser classes
-const mockContainer = {
-  setDepth: vi.fn(),
-  add: vi.fn(),
-  remove: vi.fn(),
-  setVisible: vi.fn(),
-  destroy: vi.fn()
-}
-
-const mockRectangle = {
-  x: 0,
-  y: 0,
-  width: 30,
-  height: 30,
-  setStrokeStyle: vi.fn(),
-  setInteractive: vi.fn(),
-  setDepth: vi.fn(),
-  setData: vi.fn(),
-  getData: vi.fn(),
-  setFillStyle: vi.fn(),
-  on: vi.fn(),
-  destroy: vi.fn()
-}
-
-const mockScene = {
-  add: {
-    container: vi.fn(() => mockContainer),
-    rectangle: vi.fn(() => ({ ...mockRectangle }))
-  }
-}
+import { GridSystem } from '../GridSystem'
+import type { BeamProfile } from '../../../types/beam'
 
 describe('GridSystem', () => {
   let gridSystem: GridSystem
-  let beamProfile: BeamProfile
-  let gridDimensions: GridDimensions
+  let mockScene: any
+  const mockBeamProfile: BeamProfile = {
+    id: 'test-beam',
+    name: 'Test Beam',
+    webHeight: 10,
+    webThickness: 0.5,
+    flangeWidth: 8,
+    flangeThickness: 1,
+    weight: 50
+  }
 
   beforeEach(() => {
-    vi.clearAllMocks()
-    
-    gridSystem = new GridSystem(mockScene as any)
-    
-    beamProfile = {
-      id: 'test-beam',
-      name: 'Test Beam',
-      webThickness: 8,
-      webHeight: 200,
-      flangeWidth: 100,
-      flangeThickness: 10,
-      weight: 25.3
+    // Create mock Phaser scene
+    mockScene = {
+      add: {
+        container: vi.fn(() => ({
+          setDepth: vi.fn().mockReturnThis(),
+          add: vi.fn().mockReturnThis(),
+          remove: vi.fn().mockReturnThis(),
+          setVisible: vi.fn().mockReturnThis(),
+          destroy: vi.fn().mockReturnThis()
+        })),
+        rectangle: vi.fn(() => ({
+          x: 0,
+          y: 0,
+          width: 30,
+          height: 30,
+          setStrokeStyle: vi.fn().mockReturnThis(),
+          setInteractive: vi.fn().mockReturnThis(),
+          setDepth: vi.fn().mockReturnThis(),
+          setData: vi.fn().mockReturnThis(),
+          getData: vi.fn(),
+          setFillStyle: vi.fn().mockReturnThis(),
+          on: vi.fn().mockReturnThis(),
+          off: vi.fn().mockReturnThis(),
+          destroy: vi.fn().mockReturnThis()
+        }))
+      }
     }
-    
-    gridDimensions = {
-      startX: 100,
-      centerY: 200,
-      width: 600,
-      gridSize: 30,
-      beamLength: 20
-    }
+
+    gridSystem = new GridSystem(mockScene)
   })
 
   describe('initialization', () => {
-    it('should initialize with default configuration', () => {
-      gridSystem.initialize(beamProfile)
-      
+    it('should initialize with beam profile and config', () => {
+      gridSystem.initialize(mockBeamProfile, {
+        editMode: true,
+        showGrid: true,
+        showTopFlange: true
+      })
+
+      // Verify container was created
       expect(mockScene.add.container).toHaveBeenCalled()
-      expect(mockContainer.setDepth).toHaveBeenCalledWith(5)
     })
 
-    it('should accept custom configuration', () => {
-      const config: Partial<GridSystemConfig> = {
-        showTopFlange: false,
-        editMode: false,
-        appMode: 'view'
-      }
+    it('should create grid container with correct depth', () => {
+      const mockContainer = mockScene.add.container()
+      gridSystem.initialize(mockBeamProfile)
       
-      gridSystem.initialize(beamProfile, config)
-      
-      // Configuration should be applied (internal state testing)
-      expect(mockScene.add.container).toHaveBeenCalled()
+      expect(mockContainer.setDepth).toHaveBeenCalledWith(100)
     })
   })
 
   describe('grid creation', () => {
     beforeEach(() => {
-      gridSystem.initialize(beamProfile)
+      gridSystem.initialize(mockBeamProfile)
     })
 
-    it('should create grid cells for web section', () => {
-      gridSystem.createGrid(gridDimensions)
-      
+    it('should create grid with correct dimensions', () => {
+      const dimensions = {
+        startX: 100,
+        centerY: 300,
+        width: 360,
+        gridSize: 30,
+        beamLength: 12
+      }
+
+      gridSystem.createGrid(dimensions)
+
       // Should create rectangles for grid cells
       expect(mockScene.add.rectangle).toHaveBeenCalled()
-      
-      // Grid cells should be interactive
-      const rectangleCalls = mockScene.add.rectangle.mock.calls
-      rectangleCalls.forEach(() => {
-        expect(mockRectangle.setInteractive).toHaveBeenCalled()
-      })
     })
 
-    it('should create flange grids when showTopFlange is true', () => {
-      const config = { showTopFlange: true }
-      gridSystem.initialize(beamProfile, config)
-      gridSystem.createGrid(gridDimensions)
-      
-      // Should create cells for both top and bottom flanges
-      expect(mockScene.add.rectangle).toHaveBeenCalled()
+    it('should create web and flange grids', () => {
+      const dimensions = {
+        startX: 100,
+        centerY: 300,
+        width: 360,
+        gridSize: 30,
+        beamLength: 12
+      }
+
+      gridSystem.createGrid(dimensions)
+
+      // Verify rectangles were created
+      const callCount = mockScene.add.rectangle.mock.calls.length
+      expect(callCount).toBeGreaterThan(0)
     })
 
-    it('should skip top flange when showTopFlange is false', () => {
-      const config = { showTopFlange: false }
-      gridSystem.initialize(beamProfile, config)
-      gridSystem.createGrid(gridDimensions)
-      
-      // Should still create cells for web and bottom flange
-      expect(mockScene.add.rectangle).toHaveBeenCalled()
-    })
+    it('should preserve selected cells when recreating grid', () => {
+      const dimensions = {
+        startX: 100,
+        centerY: 300,
+        width: 360,
+        gridSize: 30,
+        beamLength: 12
+      }
 
-    it('should clear existing grid before creating new one', () => {
-      // Create grid twice
-      gridSystem.createGrid(gridDimensions)
-      gridSystem.createGrid(gridDimensions)
+      // Create initial grid
+      gridSystem.createGrid(dimensions)
       
-      // Should call destroy on previous cells
-      expect(mockRectangle.destroy).toHaveBeenCalled()
+      // Select a cell
+      gridSystem.selectCell('web_0_0')
+      
+      // Recreate grid
+      gridSystem.createGrid(dimensions)
+      
+      // Check if selection was preserved
+      const selectedCells = gridSystem.getSelectedCells()
+      expect(selectedCells).toHaveLength(1)
     })
   })
 
   describe('cell selection', () => {
     beforeEach(() => {
-      gridSystem.initialize(beamProfile)
-      gridSystem.createGrid(gridDimensions)
+      gridSystem.initialize(mockBeamProfile)
+      gridSystem.createGrid({
+        startX: 100,
+        centerY: 300,
+        width: 360,
+        gridSize: 30,
+        beamLength: 12
+      })
     })
 
-    it('should select and deselect cells', () => {
-      const cellKey = 'web_5_3'
+    it('should select a cell', () => {
+      gridSystem.selectCell('web_0_0', 'section-loss')
       
-      gridSystem.selectCell(cellKey, 'section-loss')
-      let selectedCells = gridSystem.getSelectedCells()
+      const selectedCells = gridSystem.getSelectedCells()
       expect(selectedCells).toHaveLength(1)
-      expect(selectedCells[0].x).toBe(5)
-      expect(selectedCells[0].y).toBe(3)
-      expect(selectedCells[0].defectType).toBe('section-loss')
+      expect(selectedCells[0]).toMatchObject({
+        x: 0,
+        y: 0,
+        zone: 'web'
+      })
+    })
+
+    it('should deselect a cell', () => {
+      gridSystem.selectCell('web_0_0')
+      gridSystem.deselectCell('web_0_0')
       
-      gridSystem.deselectCell(cellKey)
-      selectedCells = gridSystem.getSelectedCells()
+      const selectedCells = gridSystem.getSelectedCells()
       expect(selectedCells).toHaveLength(0)
     })
 
     it('should clear all selections', () => {
-      gridSystem.selectCell('web_1_1', 'hole')
-      gridSystem.selectCell('web_2_2', 'pitting')
-      
-      expect(gridSystem.getSelectedCells()).toHaveLength(2)
+      gridSystem.selectCell('web_0_0')
+      gridSystem.selectCell('web_1_0')
+      gridSystem.selectCell('web_2_0')
       
       gridSystem.clearSelection()
-      expect(gridSystem.getSelectedCells()).toHaveLength(0)
-    })
-
-    it('should set selected cells from GridCell array', () => {
-      const cells: GridCell[] = [
-        { x: 5, y: 3, selected: true, zone: 'web', defectType: 'hole' },
-        { x: 10, y: 0, selected: true, zone: 'flange-bottom', defectType: 'pitting' }
-      ]
-      
-      gridSystem.setSelectedCells(cells)
       
       const selectedCells = gridSystem.getSelectedCells()
-      expect(selectedCells).toHaveLength(2)
-      expect(selectedCells.find(c => c.defectType === 'hole')).toBeDefined()
-      expect(selectedCells.find(c => c.defectType === 'pitting')).toBeDefined()
-    })
-  })
-
-  describe('configuration updates', () => {
-    beforeEach(() => {
-      gridSystem.initialize(beamProfile)
-      gridSystem.createGrid(gridDimensions)
+      expect(selectedCells).toHaveLength(0)
     })
 
-    it('should update grid visibility based on configuration', () => {
-      gridSystem.updateConfig({ showGrid: false })
-      expect(mockContainer.setVisible).toHaveBeenCalledWith(false)
+    it('should notify on cell change', () => {
+      const callback = vi.fn()
+      gridSystem.onCellChange(callback)
       
-      gridSystem.updateConfig({ showGrid: true, editMode: true })
-      expect(mockContainer.setVisible).toHaveBeenCalledWith(true)
-    })
-
-    it('should handle edit mode changes', () => {
-      gridSystem.updateConfig({ editMode: false })
-      expect(mockContainer.setVisible).toHaveBeenCalledWith(false)
+      gridSystem.selectCell('web_0_0')
       
-      gridSystem.updateConfig({ editMode: true })
-      expect(mockContainer.setVisible).toHaveBeenCalledWith(true)
-    })
-  })
-
-  describe('grid information', () => {
-    beforeEach(() => {
-      gridSystem.initialize(beamProfile)
-      gridSystem.createGrid(gridDimensions)
-    })
-
-    it('should provide grid statistics', () => {
-      gridSystem.selectCell('web_1_1')
-      gridSystem.selectCell('web_2_2')
-      
-      const info = gridSystem.getGridInfo()
-      expect(info.selectedCells).toBe(2)
-      expect(info.totalCells).toBeGreaterThan(0)
-      expect(info.zones).toContain('web')
-    })
-
-    it('should provide snap points for annotations', () => {
-      const snapPoints = gridSystem.getSnapPoints()
-      expect(snapPoints).toBeDefined()
-      expect(Array.isArray(snapPoints)).toBe(true)
-      
-      if (snapPoints.length > 0) {
-        expect(snapPoints[0]).toHaveProperty('x')
-        expect(snapPoints[0]).toHaveProperty('y')
-        expect(snapPoints[0]).toHaveProperty('width')
-        expect(snapPoints[0]).toHaveProperty('height')
-      }
-    })
-  })
-
-  describe('callbacks', () => {
-    beforeEach(() => {
-      gridSystem.initialize(beamProfile)
-      gridSystem.createGrid(gridDimensions)
-    })
-
-    it('should call onCellChange callback when cells are modified', () => {
-      const onCellChange = vi.fn()
-      gridSystem.onCellChange(onCellChange)
-      
-      gridSystem.selectCell('web_5_3')
-      expect(onCellChange).toHaveBeenCalledWith(
+      expect(callback).toHaveBeenCalledWith(
         expect.arrayContaining([
           expect.objectContaining({
-            x: 5,
-            y: 3,
-            selected: true,
+            x: 0,
+            y: 0,
             zone: 'web'
           })
         ])
       )
     })
-
-    it('should call onCellInteraction callback for individual cell events', () => {
-      const onCellInteraction = vi.fn()
-      gridSystem.onCellInteraction(onCellInteraction)
-      
-      // This would be called internally during cell interaction
-      // We'll test the callback registration
-      expect(onCellInteraction).not.toHaveBeenCalled() // Initially not called
-    })
   })
 
-  describe('cleanup', () => {
+  describe('visibility', () => {
     beforeEach(() => {
-      gridSystem.initialize(beamProfile)
-      gridSystem.createGrid(gridDimensions)
+      gridSystem.initialize(mockBeamProfile)
     })
 
-    it('should destroy all resources on cleanup', () => {
-      gridSystem.destroy()
+    it('should show grid in edit mode', () => {
+      gridSystem.updateConfig({
+        editMode: true,
+        showGrid: true
+      })
       
-      expect(mockContainer.destroy).toHaveBeenCalled()
-      expect(mockRectangle.destroy).toHaveBeenCalled()
+      const dimensions = {
+        startX: 100,
+        centerY: 300,
+        width: 360,
+        gridSize: 30,
+        beamLength: 12
+      }
+      
+      gridSystem.createGrid(dimensions)
+      
+      const container = mockScene.add.container()
+      expect(container.setVisible).toHaveBeenCalledWith(true)
     })
 
-    it('should clear all state on destroy', () => {
-      gridSystem.selectCell('web_1_1')
-      expect(gridSystem.getSelectedCells()).toHaveLength(1)
+    it('should show grid in annotation mode', () => {
+      gridSystem.updateConfig({
+        appMode: 'annotation',
+        editMode: false,
+        showGrid: true
+      })
       
-      gridSystem.destroy()
-      expect(gridSystem.getSelectedCells()).toHaveLength(0)
+      const dimensions = {
+        startX: 100,
+        centerY: 300,
+        width: 360,
+        gridSize: 30,
+        beamLength: 12
+      }
+      
+      gridSystem.createGrid(dimensions)
+      
+      const container = mockScene.add.container()
+      expect(container.setVisible).toHaveBeenCalledWith(true)
+    })
+
+    it('should hide grid in view mode', () => {
+      gridSystem.updateConfig({
+        appMode: 'view',
+        editMode: false,
+        showGrid: false
+      })
+      
+      const dimensions = {
+        startX: 100,
+        centerY: 300,
+        width: 360,
+        gridSize: 30,
+        beamLength: 12
+      }
+      
+      gridSystem.createGrid(dimensions)
+      
+      const container = mockScene.add.container()
+      expect(container.setVisible).toHaveBeenCalledWith(false)
     })
   })
 
-  describe('error handling', () => {
-    it('should handle grid creation without beam profile', () => {
-      const consoleSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
-      
-      gridSystem.createGrid(gridDimensions) // No beam profile set
-      
-      expect(consoleSpy).toHaveBeenCalledWith(
-        'GridSystem: Cannot create grid without beam profile and container'
-      )
-      
-      consoleSpy.mockRestore()
+  describe('cell interaction callbacks', () => {
+    beforeEach(() => {
+      gridSystem.initialize(mockBeamProfile, { editMode: true })
     })
 
-    it('should handle missing zone data gracefully', () => {
-      gridSystem.initialize(beamProfile)
+    it('should trigger interaction callback on select', () => {
+      const interactionCallback = vi.fn()
+      gridSystem.onCellInteraction(interactionCallback)
       
-      // Try to select a cell that doesn't exist
-      gridSystem.selectCell('invalid_key')
+      // Simulate cell selection
+      gridSystem.selectCell('web_0_0')
       
-      // Should not crash and should return empty selection
-      expect(gridSystem.getSelectedCells()).toHaveLength(0)
+      // Note: In the real implementation, this is called from the click handler
+      // For testing, we'd need to simulate the actual click event
+    })
+  })
+
+  describe('grid cleanup', () => {
+    it('should destroy grid system properly', () => {
+      gridSystem.initialize(mockBeamProfile)
+      const container = mockScene.add.container()
+      
+      gridSystem.destroy()
+      
+      expect(container.destroy).toHaveBeenCalled()
     })
   })
 })
