@@ -24,6 +24,7 @@
   },
   "homepage": "https://github.com/greasegum/phaserBeam#readme",
   "dependencies": {
+    "2": "^3.0.0",
     "phaser": "^3.90.0",
     "react": "^19.1.1",
     "react-dom": "^19.1.1"
