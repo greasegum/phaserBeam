@@ -84,7 +84,7 @@ export class MarchingSquaresEngine {
       if (edgeConstraints && edgeConstraints.length > 0) {
         this.smoothingImpl.setEdgeConstraints(edgeConstraints)
       }
-      const processedContours = this.smoothingImpl.processContours(rawContours)
+      const processedContours = this.smoothingImpl.smoothContours(rawContours)
       this.monitor.end('smoothing')
       
       this.monitor.end('total')
