@@ -70,7 +70,7 @@ export class GridSystem {
     // Create grid container if it doesn't exist
     if (!this.gridContainer) {
       this.gridContainer = this.scene.add.container()
-      this.gridContainer.setDepth(5) // Below contours but above beam background
+      this.gridContainer.setDepth(100) // High depth to ensure visibility
     }
   }
 
@@ -98,12 +98,6 @@ export class GridSystem {
     const cols = Math.ceil(beamLength)
     const webRows = Math.ceil(webHeight)
     
-    console.log('GridSystem: Creating grid', {
-      cols,
-      webRows,
-      showTopFlange: this.config.showTopFlange,
-      boundaries: { webTop, webBottom, flangeTop }
-    })
     
     // Create web grid (2D)
     this.createWebGrid(startX, webTop, webBottom, gridSize, cols, webRows)
@@ -117,7 +111,6 @@ export class GridSystem {
     // Make grid visible if configured
     this.setVisible(this.shouldShowGrid())
     
-    console.log(`GridSystem: Created ${this.gridCells.size} grid cells`)
   }
 
   /**
@@ -170,12 +163,12 @@ export class GridSystem {
       30 - 1, // TODO: Make gridSize configurable
       height,
       0xffffff,
-      0.1  // Make cells slightly visible with fill
+      0.2  // Make cells more visible with fill
     )
     
-    cell.setStrokeStyle(1, 0x999999, 0.8)
+    cell.setStrokeStyle(2, 0x666666, 1.0) // Darker, thicker, fully opaque stroke
     cell.setInteractive()
-    cell.setDepth(1000) // Ensure cells are on top for input handling
+    cell.setDepth(10) // Relative depth within container
     
     // Store cell data
     cell.setData('col', col)
@@ -394,6 +387,8 @@ export class GridSystem {
   setVisible(visible: boolean): void {
     if (this.gridContainer) {
       this.gridContainer.setVisible(visible)
+      // Also ensure container has proper depth
+      this.gridContainer.setDepth(100)
     }
   }
 

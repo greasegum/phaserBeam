@@ -507,8 +507,8 @@ export class BeamElevationScene extends Phaser.Scene {
         startX,
         centerY,
         width: beamWidth,
-        cols: Math.ceil(this.beamLength),
-        webRows: Math.ceil(this.beamProfile.webHeight)
+        gridSize: 30, // Grid cell size
+        beamLength: this.beamLength
       }
       this.gridSystem.createGrid(gridDimensions)
       
@@ -1032,7 +1032,6 @@ export class BeamElevationScene extends Phaser.Scene {
       // Toggle grid visibility using GridSystem
       if (this.gridSystem) {
         const shouldShow = (this.editMode || this.appMode === 'annotation') && this.showGrid
-        console.log('Toggling grid visibility:', { shouldShow, editMode: this.editMode, appMode: this.appMode, showGrid: this.showGrid })
         this.gridSystem.setVisible(shouldShow)
         this.gridSystem.updateConfig({ showGrid: this.showGrid })
       }
@@ -1055,7 +1054,6 @@ export class BeamElevationScene extends Phaser.Scene {
       // Toggle grid visibility using GridSystem
       if (this.gridSystem) {
         const shouldShow = (this.editMode || this.appMode === 'annotation') && this.showGrid
-        console.log('Toggling grid visibility:', { shouldShow, editMode: this.editMode, appMode: this.appMode, showGrid: this.showGrid })
         this.gridSystem.setVisible(shouldShow)
         this.gridSystem.updateConfig({ editMode: this.editMode })
       }
