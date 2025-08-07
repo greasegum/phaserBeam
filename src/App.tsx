@@ -10,6 +10,12 @@ import { DefectType } from './types/defects'
 import { exportCanvasAsPNG, exportCanvasAsSVG } from './utils/canvasExport'
 import { BeamElevationScene } from './scenes/BeamElevationScene'
 import { VectorExportDialog } from './components/VectorExportDialog'
+import { PNGExportDialog } from './components/export/PNGExportDialog'
+import { SVGExportDialog } from './components/export/SVGExportDialog'
+import { PDFExportDialog } from './components/export/PDFExportDialog'
+import { ReportExportDialog } from './components/export/ReportExportDialog'
+import { ShareDialog } from './components/export/ShareDialog'
+import { PrintDialog } from './components/export/PrintDialog'
 
 export default function App() {
   const [selectedBeam, setSelectedBeam] = useState<BeamProfile | null>(null)
@@ -31,6 +37,14 @@ export default function App() {
   const [currentScene, setCurrentScene] = useState<BeamElevationScene | null>(null)
   const [showExportDialog, setShowExportDialog] = useState<boolean>(false)
   const [selectedExportFormat, setSelectedExportFormat] = useState<'svg' | 'pdf' | 'dxf'>('svg')
+  
+  // Individual export dialog states
+  const [showPNGDialog, setShowPNGDialog] = useState<boolean>(false)
+  const [showSVGDialog, setShowSVGDialog] = useState<boolean>(false)
+  const [showPDFDialog, setShowPDFDialog] = useState<boolean>(false)
+  const [showReportDialog, setShowReportDialog] = useState<boolean>(false)
+  const [showShareDialog, setShowShareDialog] = useState<boolean>(false)
+  const [showPrintDialog, setShowPrintDialog] = useState<boolean>(false)
   
   useEffect(() => {
     const checkMobile = () => {
@@ -54,29 +68,117 @@ export default function App() {
     setGridCells(cells)
   }
   
-  const handleExport = (format: 'pdf' | 'png' | 'svg') => {
-    if (!selectedBeam) {
-      alert('Please select a beam profile first.')
-      return
-    }
+  // Individual export handlers
+  const handleExportPNG = (options: any) => {
+    if (!currentScene || !selectedBeam) return
     
-    // For PNG, use the old direct export for now (it's simpler)
-    if (format === 'png' && currentScene) {
-      const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, -5)
-      const beamName = selectedBeam?.name.replace(/\s+/g, '-') || 'beam'
-      exportCanvasAsPNG(currentScene, `${beamName}-inspection-${timestamp}.png`)
-      return
-    }
+    const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, -5)
+    const beamName = selectedBeam.name.replace(/\s+/g, '-')
     
-    // For vector formats, open the export dialog
-    const formatMap: Record<string, 'svg' | 'pdf' | 'dxf'> = {
-      'svg': 'svg',
-      'pdf': 'pdf',
-      'dxf': 'dxf'
-    }
+    // Apply options like scale, background color, etc.
+    // For now, use simple export
+    exportCanvasAsPNG(currentScene, `${beamName}-inspection-${timestamp}.png`)
+  }
+  
+  const handleExportSVG = (options: any) => {
+    if (!currentScene || !selectedBeam) return
     
-    setSelectedExportFormat(formatMap[format] || 'svg')
+    // Use the existing VectorExportDialog for SVG
+    setSelectedExportFormat('svg')
     setShowExportDialog(true)
+    setShowSVGDialog(false)
+  }
+  
+  const handleExportPDF = (options: any) => {
+    if (!currentScene || !selectedBeam) return
+    
+    // Use the existing VectorExportDialog for PDF
+    setSelectedExportFormat('pdf')
+    setShowExportDialog(true)
+    setShowPDFDialog(false)
+  }
+  
+  const handleExportReport = (options: any) => {
+    if (!selectedBeam) return
+    
+    const { format, includeHeader, includeBeamProperties, includeSectionLossMatrix, includeStatistics, coordinateSystem } = options
+    
+    // Generate report content based on format
+    let content = ''
+    const timestamp = new Date().toISOString()
+    const beamName = selectedBeam.name
+    
+    if (format === 'matlab') {
+      content = `% Beam Section Loss Analysis\n`
+      content += `% Generated: ${timestamp}\n`
+      content += `% Beam: ${beamName}\n`
+      content += `% Length: ${beamLength}" (${(beamLength/12).toFixed(1)} ft)\n\n`
+      
+      if (includeBeamProperties) {
+        content += `% Beam Properties\n`
+        content += `webHeight = ${selectedBeam.webHeight}; % inches\n`
+        content += `webThickness = ${selectedBeam.webThickness}; % inches\n`
+        content += `flangeWidth = ${selectedBeam.flangeWidth}; % inches\n`
+        content += `flangeThickness = ${selectedBeam.flangeThickness}; % inches\n\n`
+      }
+      
+      if (includeSectionLossMatrix) {
+        content += `% Section Loss Matrix\n`
+        content += `% Coordinates: ${coordinateSystem}\n`
+        content += `sectionLoss = [\n`
+        
+        // Group cells by row for matrix representation
+        const cellsByRow = new Map<number, GridCell[]>()
+        gridCells.forEach(cell => {
+          const row = cell.y
+          if (!cellsByRow.has(row)) cellsByRow.set(row, [])
+          cellsByRow.get(row)!.push(cell)
+        })
+        
+        // Create matrix representation
+        const sortedRows = Array.from(cellsByRow.keys()).sort((a, b) => a - b)
+        sortedRows.forEach(row => {
+          const cells = cellsByRow.get(row)!.sort((a, b) => a.x - b.x)
+          content += `  % Row ${row}: `
+          cells.forEach(cell => {
+            content += `[${cell.x},${cell.y}] `
+          })
+          content += `\n`
+        })
+        content += `];\n\n`
+      }
+      
+      if (includeStatistics) {
+        const totalCells = gridCells.length
+        const webCells = gridCells.filter(c => c.zone === 'web').length
+        const flangeCells = gridCells.filter(c => c.zone === 'flange').length
+        
+        content += `% Statistics\n`
+        content += `totalDefects = ${totalCells};\n`
+        content += `webDefects = ${webCells};\n`
+        content += `flangeDefects = ${flangeCells};\n`
+        content += `sectionLossPercentage = ${((totalCells * 1 * 1) / (selectedBeam.webHeight * beamLength) * 100).toFixed(2)}; % percent\n`
+      }
+    }
+    
+    // Download the file
+    const blob = new Blob([content], { type: 'text/plain' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `${beamName.replace(/\s+/g, '-')}-analysis-${timestamp.slice(0,10)}.${format === 'matlab' ? 'm' : format}`
+    a.click()
+    URL.revokeObjectURL(url)
+  }
+  
+  const handleShare = (method: string) => {
+    console.log('Share via:', method)
+    // Implement sharing functionality based on method
+  }
+  
+  const handlePrint = (options: any) => {
+    console.log('Print with options:', options)
+    // Print functionality is handled by the dialog itself
   }
 
   if (showSetup) {
@@ -179,8 +281,13 @@ export default function App() {
         // Edit mode props
         selectedDefect={selectedDefectType}
         onSelectDefect={setSelectedDefectType}
-        // View mode props
-        onExport={handleExport}
+        // View mode props - individual export handlers
+        onExportPNG={() => setShowPNGDialog(true)}
+        onExportSVG={() => setShowSVGDialog(true)}
+        onExportPDF={() => setShowPDFDialog(true)}
+        onExportReport={() => setShowReportDialog(true)}
+        onShare={() => setShowShareDialog(true)}
+        onPrint={() => setShowPrintDialog(true)}
       />
 
       {/* Main canvas area */}
@@ -249,6 +356,49 @@ export default function App() {
         gridSize={currentScene?.gridSize || 30}
         annotations={currentScene?.getAnnotations?.() || []}
         initialFormat={selectedExportFormat}
+      />
+      
+      {/* Individual Export Dialogs */}
+      <PNGExportDialog
+        isOpen={showPNGDialog}
+        onClose={() => setShowPNGDialog(false)}
+        onExport={handleExportPNG}
+        currentScene={currentScene}
+      />
+      
+      <SVGExportDialog
+        isOpen={showSVGDialog}
+        onClose={() => setShowSVGDialog(false)}
+        onExport={handleExportSVG}
+        currentScene={currentScene}
+      />
+      
+      <PDFExportDialog
+        isOpen={showPDFDialog}
+        onClose={() => setShowPDFDialog(false)}
+        onExport={handleExportPDF}
+        currentScene={currentScene}
+      />
+      
+      <ReportExportDialog
+        isOpen={showReportDialog}
+        onClose={() => setShowReportDialog(false)}
+        onExport={handleExportReport}
+        currentScene={currentScene}
+        gridCells={gridCells}
+        beamProfile={selectedBeam}
+      />
+      
+      <ShareDialog
+        isOpen={showShareDialog}
+        onClose={() => setShowShareDialog(false)}
+        onShare={handleShare}
+      />
+      
+      <PrintDialog
+        isOpen={showPrintDialog}
+        onClose={() => setShowPrintDialog(false)}
+        onPrint={handlePrint}
       />
     </div>
   )
