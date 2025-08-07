@@ -321,6 +321,7 @@ export class BeamElevationScene extends Phaser.Scene {
     selectedDefectType?: DefectType;
     onCellChange?: (cells: GridCell[]) => void 
   }) {
+    console.log('[BeamElevationScene] init() called with data:', data)
     this.beamProfile = data.beamProfile
     this.beamLength = data.beamLength || 120
     this.editMode = data.editMode !== undefined ? data.editMode : true
@@ -335,7 +336,7 @@ export class BeamElevationScene extends Phaser.Scene {
     this.spanLength = data.spanLength || 96
     this.selectedDefectType = data.selectedDefectType || 'section-loss'
     
-    console.log('Scene init complete:', {
+    console.log('[BeamElevationScene] Scene init complete:', {
       appMode: this.appMode,
       editMode: this.editMode,
       savedAnnotations: this.savedAnnotations?.length || 0,
@@ -356,7 +357,11 @@ export class BeamElevationScene extends Phaser.Scene {
   }
 
   create() {
-    if (!this.beamProfile) return
+    console.log('[BeamElevationScene] create() called, beamProfile exists:', !!this.beamProfile)
+    if (!this.beamProfile) {
+      console.error('[BeamElevationScene] No beam profile in create(), skipping initialization')
+      return
+    }
 
     // Initialize configuration manager
     this.initializeConfigManager()
@@ -365,6 +370,8 @@ export class BeamElevationScene extends Phaser.Scene {
     this.gridSystem = new GridSystem(this)
     this.beamRenderer = new BeamRenderer(this)
     this.interactionController = new InteractionController(this)
+    
+    console.log('[BeamElevationScene] Core modules initialized')
     
     // Configure modules inline to avoid method call issues
     if (this.beamProfile && this.gridSystem && this.beamRenderer && this.interactionController) {
@@ -525,6 +532,7 @@ export class BeamElevationScene extends Phaser.Scene {
 
     // Create grid using GridSystem
     if (this.gridSystem) {
+      console.log('[BeamElevationScene] Creating grid with GridSystem')
       const gridDimensions = {
         startX,
         centerY,
@@ -532,6 +540,7 @@ export class BeamElevationScene extends Phaser.Scene {
         gridSize: this.gridSize, // Use the calculated grid size for proper alignment
         beamLength: this.beamLength
       }
+      console.log('[BeamElevationScene] Grid dimensions:', gridDimensions)
       this.gridSystem.createGrid(gridDimensions)
       
       // Set up cell interaction through InteractionController
@@ -877,6 +886,8 @@ export class BeamElevationScene extends Phaser.Scene {
     console.log(`[BeamElevationScene] Web cells for contours: ${webCells.length}`)
     if (webCells.length === 0) return
     
+    try {
+    
     // Generate grid for marching squares
     const cols = Math.ceil(this.beamLength)
     const rows = Math.ceil(this.beamProfile.webHeight)
@@ -920,6 +931,14 @@ export class BeamElevationScene extends Phaser.Scene {
     
     // Draw contours using renderer
     this.beamRenderer.drawContours(contourData, dimensions)
+    
+    } catch (error) {
+      console.error('[BeamElevationScene] Error generating contours:', error)
+      // Clear any partial contours on error
+      if (this.beamRenderer) {
+        this.beamRenderer.clearContours()
+      }
+    }
   }
   
   /**

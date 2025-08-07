@@ -41,11 +41,12 @@ export default function App() {
     return () => window.removeEventListener('resize', checkMobile)
   }, [])
 
-  const handleSetupComplete = (beam: BeamProfile, length: number, elevation: 'N' | 'S' | 'E' | 'W', span: number) => {
+  const handleSetupComplete = (beam: BeamProfile, length: number, elevation: 'N' | 'S' | 'E' | 'W', span: number, topFlange: boolean) => {
     setSelectedBeam(beam)
     setBeamLength(length)
     setElevationView(elevation)
     setSpanLength(span)
+    setShowTopFlange(topFlange)
     setShowSetup(false)
   }
 
@@ -132,22 +133,6 @@ export default function App() {
             <option value="view">View Mode</option>
             <option value="annotation">Annotation Mode</option>
           </select>
-          <button
-            onClick={() => setShowTopFlange(!showTopFlange)}
-            disabled={appMode === 'view'}
-            style={{
-              padding: '6px 12px',
-              backgroundColor: showTopFlange ? '#9C27B0' : '#999',
-              color: 'white',
-              border: 'none',
-              borderRadius: '4px',
-              cursor: appMode !== 'view' ? 'pointer' : 'not-allowed',
-              fontSize: '14px',
-              opacity: appMode !== 'view' ? 1 : 0.6
-            }}
-          >
-            Top Flange: {showTopFlange ? 'ON' : 'OFF'}
-          </button>
           <button
             onClick={() => setGridCells([])}
             style={{

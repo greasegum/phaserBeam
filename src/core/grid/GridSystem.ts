@@ -65,6 +65,7 @@ export class GridSystem {
    * Initialize the grid system with a beam profile
    */
   initialize(beamProfile: BeamProfile, config: Partial<GridSystemConfig> = {}): void {
+    console.log('[GridSystem] Initializing with config:', config)
     this.beamProfile = beamProfile
     this.config = { ...this.config, ...config }
     
@@ -72,23 +73,32 @@ export class GridSystem {
     if (!this.gridContainer) {
       this.gridContainer = this.scene.add.container()
       this.gridContainer.setDepth(100) // High depth to ensure visibility
+      console.log('[GridSystem] Created grid container with depth 100')
     }
+    console.log('[GridSystem] Final config:', this.config)
   }
 
   /**
    * Create the grid overlay based on beam dimensions
    */
   createGrid(dimensions: GridDimensions): void {
+    console.log('[GridSystem] createGrid called with dimensions:', dimensions)
     if (!this.beamProfile || !this.gridContainer) {
       console.warn('GridSystem: Cannot create grid without beam profile and container')
       return
     }
 
-    // Clear existing grid
+    // Store current selected cells before clearing
+    const previouslySelected = new Set(this.selectedCells)
+    const previousDefectTypes = new Map(this.cellDefectTypes)
+    
+    // Clear existing grid (but not selection state)
     this.clearGrid()
 
     const { startX, centerY, gridSize, beamLength } = dimensions
     const { webHeight, flangeThickness } = this.beamProfile
+    
+    console.log('[GridSystem] Creating grid with profile:', { webHeight, flangeThickness })
     
     // Store the grid size for use in cell creation
     this.currentGridSize = gridSize
@@ -113,8 +123,27 @@ export class GridSystem {
     this.createFlangeGrid(startX, webBottom, gridSize, cols, 'flange-bottom')
     
     // Make grid visible if configured
-    this.setVisible(this.shouldShowGrid())
+    const shouldShow = this.shouldShowGrid()
+    console.log('[GridSystem] Should show grid:', shouldShow, 'Config:', this.config)
+    this.setVisible(shouldShow)
+    console.log('[GridSystem] Grid created with', this.gridCells.size, 'cells')
     
+    // Restore previously selected cells
+    previouslySelected.forEach(key => {
+      if (this.gridCells.has(key)) {
+        this.selectedCells.add(key)
+        const defectType = previousDefectTypes.get(key) || 'section-loss'
+        this.cellDefectTypes.set(key, defectType)
+        const cell = this.gridCells.get(key)
+        if (cell) {
+          this.updateCellAppearance(cell, key)
+        }
+      }
+    })
+    
+    if (previouslySelected.size > 0) {
+      console.log('[GridSystem] Restored', this.selectedCells.size, 'selected cells')
+    }
   }
 
   /**
@@ -170,7 +199,7 @@ export class GridSystem {
       0.05  // Very subtle fill
     )
     
-    cell.setStrokeStyle(0.5, 0xcccccc, 0.5) // Thin, light gray, semi-transparent stroke
+    cell.setStrokeStyle(1, 0x999999, 0.8) // More visible stroke
     cell.setInteractive()
     cell.setDepth(10) // Relative depth within container
     
@@ -232,8 +261,9 @@ export class GridSystem {
         this.selectCell(key)
       }
       
+      // Call interaction callback if provided
       this.onCellInteractionCallback?.(key, this.selectedCells.has(key) ? 'select' : 'deselect')
-      this.notifyCellChange()
+      // Note: notifyCellChange is already called inside selectCell/deselectCell
     })
 
     cell.on('pointerover', () => {
@@ -259,6 +289,9 @@ export class GridSystem {
       
       if (!this.selectedCells.has(key)) {
         cell.setFillStyle(0xffffff, 0.05) // Reset to default subtle fill
+      } else {
+        // Restore selected cell appearance
+        this.updateCellAppearance(cell, key)
       }
     })
   }
@@ -289,12 +322,13 @@ export class GridSystem {
    * Deselect a grid cell
    */
   deselectCell(key: string): void {
+    console.log(`[GridSystem] Deselecting cell: ${key}`)
     this.selectedCells.delete(key)
     this.cellDefectTypes.delete(key)
     
     const cell = this.gridCells.get(key)
     if (cell) {
-      cell.setFillStyle(0xffffff, 0.1) // Reset to default
+      cell.setFillStyle(0xffffff, 0.05) // Reset to default subtle fill
     }
     
     // Notify of change
@@ -404,8 +438,10 @@ export class GridSystem {
    * Set grid visibility
    */
   setVisible(visible: boolean): void {
+    console.log('[GridSystem] setVisible called with:', visible)
     if (this.gridContainer) {
       this.gridContainer.setVisible(visible)
+      console.log('[GridSystem] Grid container visibility set to:', visible)
       // Also ensure container has proper depth
       this.gridContainer.setDepth(100)
     }
