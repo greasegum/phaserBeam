@@ -268,6 +268,24 @@ export class BeamElevationScene extends Phaser.Scene {
   }
   
   /**
+   * Update scene configuration
+   */
+  public updateConfig(updates: any): void {
+    if (this.configManager) {
+      this.configManager.updateConfig(updates)
+    }
+  }
+  
+  /**
+   * Reset configuration to defaults
+   */
+  public resetConfig(): void {
+    if (this.configManager) {
+      this.configManager.resetToDefaults()
+    }
+  }
+  
+  /**
    * Debug method to force contour drawing
    */
   public debugDrawContours() {
@@ -276,10 +294,8 @@ export class BeamElevationScene extends Phaser.Scene {
       appMode: this.appMode
     })
     
-    // Functionality moved to BeamRenderer - use extracted modules for debugging
-    if (this.beamRenderer) {
-      this.beamRenderer.debugDrawContours()
-    }
+    // Force a redraw of the visualization
+    this.redrawVisualization()
   }
 
   update() {

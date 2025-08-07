@@ -159,14 +159,14 @@ export class MarchingSquaresEngine {
       }
       
       // Process grid and store in cache
-      const processed = this.interpolationImpl.processGrid(grid)
+      const processed = this.interpolationImpl.processScalarField(grid)
       this.scalarFieldCache.set(cacheKey, processed)
       
       return processed
     }
     
     // Process without caching
-    return this.interpolationImpl.processGrid(grid)
+    return this.interpolationImpl.processScalarField(grid)
   }
   
   /**
