@@ -285,10 +285,12 @@ export class VectorExportService {
    * Create SVG background layer
    */
   private createSVGBackground(width: number, height: number, options: VectorExportOptions): string {
-    if (!options.backgroundColor || options.backgroundColor === 'transparent') {
+    // Always add a background rectangle - white by default unless transparent is explicitly requested
+    const bgColor = options.backgroundColor === 'transparent' ? 'none' : (options.backgroundColor || '#ffffff')
+    if (bgColor === 'none') {
       return ''
     }
-    return `    <rect x="0" y="0" width="${width}" height="${height}" fill="${options.backgroundColor}"/>\n`
+    return `    <rect x="0" y="0" width="${width}" height="${height}" fill="${bgColor}"/>\n`
   }
 
   /**

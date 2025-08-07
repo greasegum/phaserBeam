@@ -161,11 +161,9 @@ export class ExportService {
     // Scale context
     ctx.scale(scale, scale)
     
-    // Draw background
-    if (options.background) {
-      ctx.fillStyle = options.background
-      ctx.fillRect(0, 0, canvas.width, canvas.height)
-    }
+    // Draw background - default to white if not specified
+    ctx.fillStyle = options.background || '#ffffff'
+    ctx.fillRect(0, 0, canvas.width, canvas.height)
     
     // Draw beam profile
     this.drawBeamProfile(ctx, context)
@@ -369,10 +367,9 @@ export class ExportService {
   <g transform="scale(${scale})">
 `
     
-    // Add background if specified
-    if (options.background) {
-      svg += `    <rect width="${width}" height="${height}" fill="${options.background}"/>\n`
-    }
+    // Add background - default to white unless transparent
+    const bgColor = options.background || '#ffffff'
+    svg += `    <rect width="${width}" height="${height}" fill="${bgColor}"/>\n`
     
     // Add beam profile
     svg += this.createSVGBeamProfile(context)

@@ -55,7 +55,7 @@ export const VectorExportDialog: React.FC<VectorExportDialogProps> = ({
       const padding = 50
       const width = beamLength * gridSize
       const height = (beamProfile.webHeight + beamProfile.flangeThickness * 2) * gridSize
-      const centerY = height / 2 + beamProfile.flangeThickness * gridSize
+      const centerY = height / 2
       
       const context: VectorExportContext = {
         beamProfile,
