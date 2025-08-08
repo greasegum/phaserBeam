@@ -268,13 +268,19 @@ export class BeamRenderer {
    * Draw contour visualization layers
    */
   drawContours(contourData: ContourData, dimensions: BeamDimensions): void {
-    const { startX, centerY, webHeight } = dimensions
+    if (!this.beamProfile) {
+      console.warn('BeamRenderer: Cannot draw contours without beam profile')
+      return
+    }
+    
+    const { startX, centerY, gridSize } = dimensions
+    const webHeight = this.beamProfile.webHeight * gridSize
     // Calculate the top of the web (center minus half the web height)
     const webTop = centerY - webHeight / 2
     const transform = createGridToScreenTransform(
-      this.config.gridSize,
-      startX + this.config.contourGlobalOffsetX * this.config.gridSize,
-      webTop + this.config.contourGlobalOffsetY * this.config.gridSize
+      gridSize,
+      startX + this.config.contourGlobalOffsetX * gridSize,
+      webTop + this.config.contourGlobalOffsetY * gridSize
     )
 
     // Draw binary contours

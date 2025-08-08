@@ -1,529 +1,252 @@
 import React, { useState } from 'react'
-import { BeamElevationScene } from '../scenes/BeamElevationScene'
-import { AppMode } from '../types/mode'
+import { UnifiedAlgorithmPanel } from './panels/UnifiedAlgorithmPanel'
+import { UnifiedConfigManager } from '../core/configuration/UnifiedConfigManager'
 
 interface UnifiedSettingsPanelProps {
-  isOpen: boolean
-  onClose: () => void
-  scene?: BeamElevationScene
-  appMode: AppMode
-  showTopFlange: boolean
-  onToggleTopFlange: (show: boolean) => void
-  gridOrigin: 'left' | 'right'
-  onToggleGridOrigin: (origin: 'left' | 'right') => void
-}
-
-type TabType = 'general' | 'rendering' | 'debug'
-
-const TAB_INFO: Record<TabType, { label: string; icon: string }> = {
-  general: { label: 'General', icon: '⚙️' },
-  rendering: { label: 'Rendering', icon: '🎨' },
-  debug: { label: 'Debug', icon: '🐛' }
+  configManager: UnifiedConfigManager
+  onConfigChange?: (config: any) => void
+  onClose?: () => void
 }
 
 export const UnifiedSettingsPanel: React.FC<UnifiedSettingsPanelProps> = ({
-  isOpen,
-  onClose,
-  scene,
-  appMode,
-  showTopFlange,
-  onToggleTopFlange,
-  gridOrigin,
-  onToggleGridOrigin,
+  configManager,
+  onConfigChange,
+  onClose
 }) => {
-  const [activeTab, setActiveTab] = useState<TabType>('general')
-  
-  // Rendering settings (simplified)
-  const [smoothingLevel, setSmoothingLevel] = useState<'low' | 'medium' | 'high'>('medium')
-  const [contourQuality, setContourQuality] = useState<'draft' | 'normal' | 'high'>('normal')
-  
-  if (!isOpen) return null
-  
-  const renderGeneralTab = () => (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
-      {/* Grid Settings */}
-      <div>
-        <h3 style={{
-          fontSize: '14px',
-          fontWeight: '600',
-          color: '#111827',
-          marginBottom: '12px',
-          display: 'flex',
-          alignItems: 'center',
-          gap: '8px'
-        }}>
-          <span>📐</span> Grid Settings
-        </h3>
-        
-        <div style={{
-          padding: '16px',
-          backgroundColor: '#F9FAFB',
-          borderRadius: '8px',
-          display: 'flex',
-          flexDirection: 'column',
-          gap: '12px'
-        }}>
-          <label style={{
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-            cursor: 'pointer'
-          }}>
-            <span style={{ fontSize: '14px', color: '#4B5563' }}>Show Top Flange</span>
-            <input
-              type="checkbox"
-              checked={showTopFlange}
-              onChange={e => onToggleTopFlange(e.target.checked)}
-              disabled={appMode === 'view'}
-              style={{
-                width: '20px',
-                height: '20px',
-                cursor: appMode === 'view' ? 'not-allowed' : 'pointer'
-              }}
-            />
-          </label>
-          
-          <div>
-            <label style={{
-              fontSize: '14px',
-              color: '#4B5563',
-              display: 'block',
-              marginBottom: '8px'
-            }}>
-              Grid Origin
-            </label>
-            <div style={{ display: 'flex', gap: '8px' }}>
-              <button
-                onClick={() => onToggleGridOrigin('left')}
-                style={{
-                  flex: 1,
-                  padding: '8px',
-                  border: gridOrigin === 'left' ? '2px solid #3B82F6' : '1px solid #E5E7EB',
-                  borderRadius: '6px',
-                  backgroundColor: gridOrigin === 'left' ? '#EFF6FF' : 'white',
-                  color: gridOrigin === 'left' ? '#3B82F6' : '#6B7280',
-                  fontSize: '14px',
-                  cursor: 'pointer',
-                  transition: 'all 0.2s'
-                }}
-              >
-                Left
-              </button>
-              <button
-                onClick={() => onToggleGridOrigin('right')}
-                style={{
-                  flex: 1,
-                  padding: '8px',
-                  border: gridOrigin === 'right' ? '2px solid #3B82F6' : '1px solid #E5E7EB',
-                  borderRadius: '6px',
-                  backgroundColor: gridOrigin === 'right' ? '#EFF6FF' : 'white',
-                  color: gridOrigin === 'right' ? '#3B82F6' : '#6B7280',
-                  fontSize: '14px',
-                  cursor: 'pointer',
-                  transition: 'all 0.2s'
-                }}
-              >
-                Right
-              </button>
-            </div>
-          </div>
-        </div>
-      </div>
-      
-      {/* Mode-specific Settings */}
-      {appMode === 'annotation' && (
-        <div>
-          <h3 style={{
-            fontSize: '14px',
-            fontWeight: '600',
-            color: '#111827',
-            marginBottom: '12px',
-            display: 'flex',
-            alignItems: 'center',
-            gap: '8px'
-          }}>
-            <span>📏</span> Annotation Settings
-          </h3>
-          
-          <div style={{
-            padding: '16px',
-            backgroundColor: '#F9FAFB',
-            borderRadius: '8px',
-            display: 'flex',
-            flexDirection: 'column',
-            gap: '12px'
-          }}>
-            <label style={{
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'space-between',
-              cursor: 'pointer'
-            }}>
-              <span style={{ fontSize: '14px', color: '#4B5563' }}>Show Beam End Dimensions</span>
-              <input
-                type="checkbox"
-                defaultChecked={true}
-                style={{ width: '20px', height: '20px', cursor: 'pointer' }}
-              />
-            </label>
-            
-            <label style={{
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'space-between',
-              cursor: 'pointer'
-            }}>
-              <span style={{ fontSize: '14px', color: '#4B5563' }}>Show Bottom Ordinate</span>
-              <input
-                type="checkbox"
-                defaultChecked={true}
-                style={{ width: '20px', height: '20px', cursor: 'pointer' }}
-              />
-            </label>
-          </div>
-        </div>
-      )}
-    </div>
-  )
-  
-  const renderRenderingTab = () => (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
-      <div>
-        <h3 style={{
-          fontSize: '14px',
-          fontWeight: '600',
-          color: '#111827',
-          marginBottom: '12px',
-          display: 'flex',
-          alignItems: 'center',
-          gap: '8px'
-        }}>
-          <span>✨</span> Contour Quality
-        </h3>
-        
-        <div style={{
-          display: 'grid',
-          gridTemplateColumns: 'repeat(3, 1fr)',
-          gap: '8px'
-        }}>
-          {(['draft', 'normal', 'high'] as const).map(level => (
-            <button
-              key={level}
-              onClick={() => setContourQuality(level)}
-              style={{
-                padding: '12px',
-                border: contourQuality === level ? '2px solid #3B82F6' : '1px solid #E5E7EB',
-                borderRadius: '8px',
-                backgroundColor: contourQuality === level ? '#EFF6FF' : 'white',
-                cursor: 'pointer',
-                transition: 'all 0.2s'
-              }}
-            >
-              <div style={{
-                fontSize: '14px',
-                fontWeight: '500',
-                color: '#111827',
-                textTransform: 'capitalize'
-              }}>
-                {level}
-              </div>
-              <div style={{
-                fontSize: '11px',
-                color: '#6B7280',
-                marginTop: '2px'
-              }}>
-                {level === 'draft' && 'Fast preview'}
-                {level === 'normal' && 'Balanced'}
-                {level === 'high' && 'Best quality'}
-              </div>
-            </button>
-          ))}
-        </div>
-      </div>
-      
-      <div>
-        <h3 style={{
-          fontSize: '14px',
-          fontWeight: '600',
-          color: '#111827',
-          marginBottom: '12px',
-          display: 'flex',
-          alignItems: 'center',
-          gap: '8px'
-        }}>
-          <span>〰️</span> Smoothing
-        </h3>
-        
-        <div style={{
-          display: 'grid',
-          gridTemplateColumns: 'repeat(3, 1fr)',
-          gap: '8px'
-        }}>
-          {(['low', 'medium', 'high'] as const).map(level => (
-            <button
-              key={level}
-              onClick={() => setSmoothingLevel(level)}
-              style={{
-                padding: '12px',
-                border: smoothingLevel === level ? '2px solid #10B981' : '1px solid #E5E7EB',
-                borderRadius: '8px',
-                backgroundColor: smoothingLevel === level ? '#F0FDF4' : 'white',
-                cursor: 'pointer',
-                transition: 'all 0.2s'
-              }}
-            >
-              <div style={{
-                fontSize: '14px',
-                fontWeight: '500',
-                color: '#111827',
-                textTransform: 'capitalize'
-              }}>
-                {level}
-              </div>
-              <div style={{
-                fontSize: '11px',
-                color: '#6B7280',
-                marginTop: '2px'
-              }}>
-                {level === 'low' && 'Sharp edges'}
-                {level === 'medium' && 'Balanced'}
-                {level === 'high' && 'Very smooth'}
-              </div>
-            </button>
-          ))}
-        </div>
-      </div>
-      
-      <div style={{
-        padding: '12px',
-        backgroundColor: '#FEF3C7',
+  const [activeSection, setActiveSection] = useState<'algorithms' | 'rendering' | 'grid' | 'export'>('algorithms')
+
+  const renderSectionButton = (id: string, label: string, icon: string) => (
+    <button
+      key={id}
+      onClick={() => setActiveSection(id as any)}
+      style={{
+        padding: '12px 16px',
+        border: 'none',
+        background: activeSection === id ? '#3B82F6' : 'transparent',
+        color: activeSection === id ? 'white' : '#666',
         borderRadius: '8px',
+        cursor: 'pointer',
+        fontSize: '13px',
+        fontWeight: 500,
+        transition: 'all 0.2s ease',
         display: 'flex',
-        gap: '8px',
-        alignItems: 'flex-start'
-      }}>
-        <span style={{ fontSize: '14px' }}>💡</span>
-        <p style={{
-          fontSize: '13px',
-          color: '#92400E',
-          margin: 0,
-          lineHeight: '1.5'
-        }}>
-          Higher quality settings may affect performance on large inspections.
-          Use draft mode for quick previews.
-        </p>
-      </div>
-    </div>
+        alignItems: 'center',
+        gap: '8px'
+      }}
+    >
+      <span style={{ fontSize: '16px' }}>{icon}</span>
+      {label}
+    </button>
   )
-  
-  const renderDebugTab = () => (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
-      <div>
-        <h3 style={{
-          fontSize: '14px',
-          fontWeight: '600',
-          color: '#111827',
-          marginBottom: '12px',
-          display: 'flex',
-          alignItems: 'center',
-          gap: '8px'
-        }}>
-          <span>🔍</span> Visualization Options
-        </h3>
-        
-        <div style={{
-          padding: '16px',
-          backgroundColor: '#F9FAFB',
-          borderRadius: '8px',
-          display: 'flex',
-          flexDirection: 'column',
-          gap: '12px'
-        }}>
-          <label style={{
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-            cursor: 'pointer'
-          }}>
-            <div>
-              <div style={{ fontSize: '14px', color: '#111827' }}>Contour Display</div>
-              <div style={{ fontSize: '12px', color: '#6B7280', marginTop: '2px' }}>
-                Control how contours are shown
-              </div>
-            </div>
-            <div style={{ fontSize: '13px', color: '#4B5563' }}>
-              Always Enabled
-            </div>
-          </label>
-          
-          <div style={{
-            paddingLeft: '24px',
-            fontSize: '12px',
-            color: '#6B7280',
-            lineHeight: '1.5'
-          }}>
-            Marching squares contours are always displayed when defects are present.
-          </div>
-        </div>
-      </div>
-      
-      <div style={{
-        padding: '12px',
-        backgroundColor: '#F3F4F6',
-        borderRadius: '8px',
-        display: 'flex',
-        gap: '8px',
-        alignItems: 'flex-start'
-      }}>
-        <span style={{ fontSize: '14px' }}>ℹ️</span>
-        <p style={{
-          fontSize: '13px',
-          color: '#4B5563',
-          margin: 0,
-          lineHeight: '1.5'
-        }}>
-          Debug options help visualize how contours are generated.
-          These are for troubleshooting and won't appear in exports.
-        </p>
-      </div>
-    </div>
-  )
-  
+
   return (
     <div style={{
       position: 'fixed',
-      top: 0,
-      right: isOpen ? 0 : '-400px',
-      width: '400px',
-      height: '100vh',
-      backgroundColor: 'white',
-      boxShadow: isOpen ? '-4px 0 6px rgba(0, 0, 0, 0.05)' : 'none',
-      transition: 'right 0.3s ease-out',
-      zIndex: 1500,
-      display: 'flex',
-      flexDirection: 'column'
+      top: '50%',
+      left: '50%',
+      transform: 'translate(-50%, -50%)',
+      width: '600px',
+      maxHeight: '80vh',
+      background: 'white',
+      borderRadius: '12px',
+      boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)',
+      border: '1px solid #E5E7EB',
+      zIndex: 1000,
+      overflow: 'hidden'
     }}>
       {/* Header */}
       <div style={{
-        padding: '20px',
+        padding: '20px 24px',
         borderBottom: '1px solid #E5E7EB',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'space-between'
+        background: '#F9FAFB'
       }}>
-        <h2 style={{
-          fontSize: '18px',
-          fontWeight: '600',
-          color: '#111827',
-          margin: 0
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <h3 style={{
+            margin: 0,
+            fontSize: '18px',
+            fontWeight: 600,
+            color: '#1F2937'
+          }}>
+            ⚙️ Advanced Settings
+          </h3>
+          <button
+            onClick={onClose}
+            style={{
+              background: 'none',
+              border: 'none',
+              fontSize: '20px',
+              cursor: 'pointer',
+              color: '#6B7280',
+              padding: '4px',
+              borderRadius: '4px',
+              transition: 'all 0.2s ease'
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.background = '#F3F4F6'
+              e.currentTarget.style.color = '#374151'
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.background = 'none'
+              e.currentTarget.style.color = '#6B7280'
+            }}
+          >
+            ✕
+          </button>
+        </div>
+      </div>
+
+      {/* Navigation */}
+      <div style={{
+        padding: '16px 24px',
+        borderBottom: '1px solid #E5E7EB',
+        background: '#F9FAFB'
+      }}>
+        <div style={{
+          display: 'flex',
+          gap: '8px',
+          flexWrap: 'wrap'
         }}>
-          Settings
-        </h2>
+          {renderSectionButton('algorithms', 'Algorithms', '🎛️')}
+          {renderSectionButton('rendering', 'Rendering', '🎨')}
+          {renderSectionButton('grid', 'Grid', '📐')}
+          {renderSectionButton('export', 'Export', '📤')}
+        </div>
+      </div>
+
+      {/* Content */}
+      <div style={{
+        maxHeight: '60vh',
+        overflow: 'auto'
+      }}>
+        {activeSection === 'algorithms' && (
+          <UnifiedAlgorithmPanel
+            configManager={configManager}
+            onConfigChange={onConfigChange}
+          />
+        )}
+
+        {activeSection === 'rendering' && (
+          <div style={{ padding: '24px' }}>
+            <h4 style={{
+              margin: '0 0 16px 0',
+              fontSize: '16px',
+              fontWeight: 600,
+              color: '#1F2937',
+              borderBottom: '2px solid #3B82F6',
+              paddingBottom: '8px'
+            }}>
+              🎨 Rendering Settings
+            </h4>
+            <p style={{ color: '#6B7280', fontSize: '14px', marginBottom: '20px' }}>
+              Configure visual rendering options and display settings
+            </p>
+            
+            <div style={{ color: '#6B7280', fontSize: '14px', fontStyle: 'italic' }}>
+              Rendering settings panel coming soon...
+            </div>
+          </div>
+        )}
+
+        {activeSection === 'grid' && (
+          <div style={{ padding: '24px' }}>
+            <h4 style={{
+              margin: '0 0 16px 0',
+              fontSize: '16px',
+              fontWeight: 600,
+              color: '#1F2937',
+              borderBottom: '2px solid #3B82F6',
+              paddingBottom: '8px'
+            }}>
+              📐 Grid Settings
+            </h4>
+            <p style={{ color: '#6B7280', fontSize: '14px', marginBottom: '20px' }}>
+              Configure grid display and interaction settings
+            </p>
+            
+            <div style={{ color: '#6B7280', fontSize: '14px', fontStyle: 'italic' }}>
+              Grid settings panel coming soon...
+            </div>
+          </div>
+        )}
+
+        {activeSection === 'export' && (
+          <div style={{ padding: '24px' }}>
+            <h4 style={{
+              margin: '0 0 16px 0',
+              fontSize: '16px',
+              fontWeight: 600,
+              color: '#1F2937',
+              borderBottom: '2px solid #3B82F6',
+              paddingBottom: '8px'
+            }}>
+              📤 Export Settings
+            </h4>
+            <p style={{ color: '#6B7280', fontSize: '14px', marginBottom: '20px' }}>
+              Configure export options and output settings
+            </p>
+            
+            <div style={{ color: '#6B7280', fontSize: '14px', fontStyle: 'italic' }}>
+              Export settings panel coming soon...
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Footer */}
+      <div style={{
+        padding: '16px 24px',
+        borderTop: '1px solid #E5E7EB',
+        background: '#F9FAFB',
+        display: 'flex',
+        justifyContent: 'flex-end',
+        gap: '12px'
+      }}>
         <button
           onClick={onClose}
           style={{
-            width: '32px',
-            height: '32px',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            border: 'none',
+            padding: '8px 16px',
+            border: '1px solid #D1D5DB',
+            background: 'white',
+            color: '#374151',
             borderRadius: '6px',
-            backgroundColor: 'transparent',
-            color: '#6B7280',
-            fontSize: '20px',
             cursor: 'pointer',
-            transition: 'all 0.2s'
+            fontSize: '14px',
+            fontWeight: 500,
+            transition: 'all 0.2s ease'
           }}
-          onMouseEnter={e => e.currentTarget.style.backgroundColor = '#F3F4F6'}
-          onMouseLeave={e => e.currentTarget.style.backgroundColor = 'transparent'}
+          onMouseEnter={(e) => {
+            e.currentTarget.style.background = '#F9FAFB'
+          }}
+          onMouseLeave={(e) => {
+            e.currentTarget.style.background = 'white'
+          }}
         >
-          ×
+          Cancel
         </button>
-      </div>
-      
-      {/* Tabs */}
-      <div style={{
-        display: 'flex',
-        borderBottom: '1px solid #E5E7EB',
-        backgroundColor: '#F9FAFB'
-      }}>
-        {(Object.keys(TAB_INFO) as TabType[]).map(tab => (
-          <button
-            key={tab}
-            onClick={() => setActiveTab(tab)}
-            style={{
-              flex: 1,
-              padding: '12px',
-              border: 'none',
-              borderBottom: activeTab === tab ? '2px solid #3B82F6' : '2px solid transparent',
-              backgroundColor: 'transparent',
-              cursor: 'pointer',
-              transition: 'all 0.2s'
-            }}
-          >
-            <div style={{
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              gap: '6px',
-              fontSize: '14px',
-              fontWeight: activeTab === tab ? '600' : '500',
-              color: activeTab === tab ? '#3B82F6' : '#6B7280'
-            }}>
-              <span>{TAB_INFO[tab].icon}</span>
-              <span>{TAB_INFO[tab].label}</span>
-            </div>
-          </button>
-        ))}
-      </div>
-      
-      {/* Content */}
-      <div style={{
-        flex: 1,
-        padding: '20px',
-        overflowY: 'auto'
-      }}>
-        {activeTab === 'general' && renderGeneralTab()}
-        {activeTab === 'rendering' && renderRenderingTab()}
-        {activeTab === 'debug' && renderDebugTab()}
-      </div>
-      
-      {/* Footer */}
-      <div style={{
-        padding: '16px 20px',
-        borderTop: '1px solid #E5E7EB',
-        backgroundColor: '#F9FAFB'
-      }}>
         <button
           onClick={() => {
-            // Apply settings
-            if (scene) {
-              // Apply rendering settings based on quality levels
-              const smoothingMap = { low: 0, medium: 1, high: 2 }
-              const qualityMap = { draft: 0.5, normal: 1, high: 1.5 }
-              
-              // These would need to be connected to actual scene methods
-              console.log('Applying settings:', { smoothingLevel, contourQuality })
-            }
-            onClose()
+            onConfigChange?.(configManager.getConfig())
+            onClose?.()
           }}
           style={{
-            width: '100%',
-            padding: '10px',
-            backgroundColor: '#3B82F6',
-            color: 'white',
+            padding: '8px 16px',
             border: 'none',
-            borderRadius: '8px',
-            fontSize: '14px',
-            fontWeight: '500',
+            background: '#3B82F6',
+            color: 'white',
+            borderRadius: '6px',
             cursor: 'pointer',
-            transition: 'all 0.2s'
+            fontSize: '14px',
+            fontWeight: 500,
+            transition: 'all 0.2s ease'
           }}
-          onMouseEnter={e => e.currentTarget.style.backgroundColor = '#2563EB'}
-          onMouseLeave={e => e.currentTarget.style.backgroundColor = '#3B82F6'}
+          onMouseEnter={(e) => {
+            e.currentTarget.style.background = '#2563EB'
+          }}
+          onMouseLeave={(e) => {
+            e.currentTarget.style.background = '#3B82F6'
+          }}
         >
-          Apply Changes
+          Apply Settings
         </button>
       </div>
     </div>

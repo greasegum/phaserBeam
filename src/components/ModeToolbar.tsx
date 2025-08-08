@@ -24,6 +24,7 @@ interface ModeToolbarProps {
   onExportReport?: () => void
   onShare?: () => void
   onPrint?: () => void
+  onOpenSettings?: () => void
 }
 
 const ANNOTATION_TOOLS: { type: AnnotationType; label: string; shortcut: string }[] = [
@@ -55,6 +56,7 @@ export const ModeToolbar: React.FC<ModeToolbarProps> = ({
   onExportReport,
   onShare,
   onPrint,
+  onOpenSettings,
 }) => {
   
   const renderPatternPreview = (defectType: DefectType) => {
@@ -351,6 +353,33 @@ export const ModeToolbar: React.FC<ModeToolbarProps> = ({
           >
             <span style={{ fontSize: '16px' }}>📄</span>
             PDF
+          </button>
+          
+          <button
+            onClick={onOpenSettings}
+            style={{
+              padding: '8px 16px',
+              border: '1px solid #ddd',
+              borderRadius: '8px',
+              backgroundColor: 'white',
+              cursor: 'pointer',
+              fontSize: '14px',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px',
+              transition: 'all 0.2s ease'
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.backgroundColor = '#FFF3E0'
+              e.currentTarget.style.borderColor = '#FF9800'
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.backgroundColor = 'white'
+              e.currentTarget.style.borderColor = '#ddd'
+            }}
+          >
+            <span style={{ fontSize: '16px' }}>⚙️</span>
+            Settings
           </button>
           
           <button

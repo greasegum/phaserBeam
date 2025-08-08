@@ -3,18 +3,20 @@ import {
   Annotation, 
   AnnotationType, 
   AnnotationPoint, 
+  LinearDimension, 
+  OrdinateDimension, 
+  Callout, 
+  TextBlock,
   SnapPoint, 
-  SNAP_THRESHOLD,
-  GRID_SNAP_PRIORITY,
   AnnotationInteraction,
-  LinearDimension,
-  OrdinateDimension,
-  Callout,
-  DEFAULT_ANNOTATION_STYLE
+  DEFAULT_ANNOTATION_STYLE,
+  SNAP_THRESHOLD,
+  GRID_SNAP_PRIORITY
 } from '../types/annotations'
 import { LinearDimensionRenderer } from './LinearDimensionRenderer'
 import { OrdinateDimensionRenderer } from './OrdinateDimensionRenderer'
 import { CalloutRenderer } from './CalloutRenderer'
+import { TextBlockRenderer } from './TextBlockRenderer'
 import { EnhancedAnnotationEffects } from './EnhancedAnnotationEffects'
 
 export class AnnotationManager {
@@ -34,14 +36,17 @@ export class AnnotationManager {
   private beamBottom: number = 0
   private beamLength: number = 0
   private isInteractive: boolean = true
+  private beamProfile?: any
+  private gridTransform?: { scale: number; offsetX: number; offsetY: number }
   
-  // Renderers for different annotation types
+  // Renderers
   private linearDimensionRenderer: LinearDimensionRenderer
   private ordinateDimensionRenderer: OrdinateDimensionRenderer
   private calloutRenderer: CalloutRenderer
+  private textBlockRenderer: TextBlockRenderer
   private enhancedEffects: EnhancedAnnotationEffects
   
-  // Annotation creation state
+  // Creation state
   private isCreating: boolean = false
   private creationType: AnnotationType | null = null
   private creationPoints: AnnotationPoint[] = []
@@ -49,7 +54,7 @@ export class AnnotationManager {
   private ordinateOriginSide: 'left' | 'right' = 'left'
   private modeIndicator: Phaser.GameObjects.Container
   private cursorGraphics: Phaser.GameObjects.Graphics
-  private inputZone: Phaser.GameObjects.Zone
+  private inputZone!: Phaser.GameObjects.Zone
   
   constructor(scene: Phaser.Scene, gridSize: number, gridOrigin: { x: number, y: number }, beamBottom?: number, beamLength?: number) {
     this.scene = scene
@@ -62,6 +67,7 @@ export class AnnotationManager {
     this.linearDimensionRenderer = new LinearDimensionRenderer(scene, gridSize)
     this.ordinateDimensionRenderer = new OrdinateDimensionRenderer(scene, gridSize)
     this.calloutRenderer = new CalloutRenderer(scene, this.beamBottom)
+    this.textBlockRenderer = new TextBlockRenderer(scene)
     this.enhancedEffects = new EnhancedAnnotationEffects(scene)
     
     // Create preview graphics layer
@@ -588,71 +594,209 @@ export class AnnotationManager {
   }
   
   private renderAnnotation(annotation: Annotation, isSystemGenerated: boolean = false): void {
-    console.log('Rendering annotation:', annotation.type, annotation.id)
-    
-    // Remove existing graphics and effects
+    // Remove existing graphics if they exist
     const existingContainer = this.annotationGraphics.get(annotation.id)
     if (existingContainer) {
       existingContainer.destroy()
-      this.enhancedEffects.cleanup(annotation.id)
     }
-    
+
     // Create new container
     const container = this.scene.add.container(0, 0)
     container.setDepth(500) // Ensure annotations appear above other elements
-    
-    // Render based on type
-    try {
-      switch (annotation.type) {
-        case 'linear-dimension':
-          this.linearDimensionRenderer.render(annotation, container)
-          break
-        case 'ordinate-dimension':
-          this.ordinateDimensionRenderer.render(annotation, container, isSystemGenerated)
-          break
-        case 'callout':
-          this.calloutRenderer.render(annotation, container)
-          break
-      }
-      console.log('Rendered successfully, container children:', container.length)
-    } catch (error) {
-      console.error('Error rendering annotation:', error)
+
+    switch (annotation.type) {
+      case 'linear-dimension':
+        this.linearDimensionRenderer.render(annotation, container)
+        break
+      case 'ordinate-dimension':
+        this.ordinateDimensionRenderer.render(annotation, container, isSystemGenerated)
+        break
+      case 'callout':
+        this.calloutRenderer.render(annotation, container)
+        break
+      case 'text-block':
+        this.textBlockRenderer.render(annotation, container)
+        break
+      default:
+        console.warn('Unknown annotation type:', annotation.type)
+        return
     }
-    
-    // Apply enhanced effects
-    if (!isSystemGenerated) {
-      // Apply pulse effect for newly created annotations
-      this.enhancedEffects.startPulseEffect(container, annotation.id)
-      
-      // Add hover effects
-      container.on('pointerover', () => {
-        const graphics = this.scene.add.graphics()
-        const bounds = container.getBounds()
-        this.enhancedEffects.createHoverGlow(
-          graphics, 
-          bounds.centerX, 
-          bounds.centerY, 
-          Math.max(bounds.width, bounds.height) / 2,
-          annotation.style?.color || DEFAULT_ANNOTATION_STYLE.color
-        )
-        container.add(graphics)
-        container.setData('hoverGraphics', graphics)
-      })
-      
-      container.on('pointerout', () => {
-        const hoverGraphics = container.getData('hoverGraphics')
-        if (hoverGraphics) {
-          hoverGraphics.destroy()
-          container.setData('hoverGraphics', null)
-        }
-      })
-    }
-    
-    // Make interactive
-    container.setInteractive()
-    container.setData('annotationId', annotation.id)
-    
+
+    // Store the container
     this.annotationGraphics.set(annotation.id, container)
+
+    // Make interactive if not system-generated and interactive mode is on
+    if (!isSystemGenerated && this.isInteractive) {
+      container.setInteractive()
+      container.on('pointerdown', () => this.handleAnnotationClick(annotation))
+    }
+  }
+
+  /**
+   * Create a system-generated text block (title, label, etc.)
+   */
+  public createTextBlock(
+    id: string,
+    text: string,
+    position: { x: number; y: number },
+    options: {
+      fontSize?: number
+      fontFamily?: string
+      textColor?: string
+      alignment?: 'left' | 'center' | 'right'
+      rotation?: number
+      isSystemGenerated?: boolean
+      backgroundColor?: string
+      borderColor?: string
+      borderWidth?: number
+      padding?: number
+    } = {}
+  ): void {
+    const textBlock: TextBlock = {
+      id,
+      type: 'text-block',
+      visible: true,
+      locked: true,
+      style: {
+        ...DEFAULT_ANNOTATION_STYLE,
+        fontSize: options.fontSize || DEFAULT_ANNOTATION_STYLE.fontSize,
+        fontFamily: options.fontFamily || DEFAULT_ANNOTATION_STYLE.fontFamily,
+        textColor: options.textColor || DEFAULT_ANNOTATION_STYLE.textColor,
+        color: 0x000000,
+        lineWidth: 1
+      },
+      position: {
+        x: position.x,
+        y: position.y
+      },
+      text,
+      alignment: options.alignment || 'center',
+      rotation: options.rotation || 0,
+      backgroundColor: options.backgroundColor,
+      borderColor: options.borderColor,
+      borderWidth: options.borderWidth,
+      padding: options.padding,
+      isSystemGenerated: options.isSystemGenerated ?? true
+    }
+
+    // Add to system annotations if system-generated, otherwise to regular annotations
+    if (textBlock.isSystemGenerated) {
+      this.systemAnnotations.set(id, textBlock)
+    } else {
+      this.annotations.set(id, textBlock)
+    }
+
+    // Render the text block
+    this.renderAnnotation(textBlock, textBlock.isSystemGenerated)
+  }
+
+  /**
+   * Create system-generated title and labels
+   */
+  public createSystemTextBlocks(
+    elevationView: 'N' | 'S' | 'E' | 'W',
+    beamWidth: number,
+    startX: number,
+    centerY: number
+  ): void {
+    // Create title
+    const elevationNames = { 'N': 'North', 'S': 'South', 'E': 'East', 'W': 'West' }
+    const titleX = startX + beamWidth / 2
+    this.createTextBlock(
+      'system-title',
+      `${elevationNames[elevationView]} Beam Elevation`,
+      { x: titleX, y: 30 },
+      {
+        fontSize: 20,
+        textColor: '#333',
+        fontFamily: 'Arial, sans-serif',
+        alignment: 'center',
+        isSystemGenerated: true
+      }
+    )
+
+    // Create end labels based on elevation view
+    let leftLabel: string, rightLabel: string
+    switch (elevationView) {
+      case 'N': // Looking at North elevation
+        leftLabel = 'East End'
+        rightLabel = 'West End'
+        break
+      case 'S': // Looking at South elevation
+        leftLabel = 'West End'
+        rightLabel = 'East End'
+        break
+      case 'E': // Looking at East elevation
+        leftLabel = 'South End'
+        rightLabel = 'North End'
+        break
+      case 'W': // Looking at West elevation
+        leftLabel = 'North End'
+        rightLabel = 'South End'
+        break
+      default:
+        leftLabel = 'Left End'
+        rightLabel = 'Right End'
+    }
+
+    // Calculate label position
+    const totalHeight = this.beamProfile?.webHeight + 2 * this.beamProfile?.flangeThickness || 0
+    const beamTopGrid = -totalHeight / 2
+    const beamTop = this.gridTransform ? 
+      this.gridTransform.offsetY + beamTopGrid * this.gridTransform.scale : 
+      centerY - (totalHeight * this.gridSize) / 2
+    const labelY = beamTop - 30
+
+    // Create left end label
+    this.createTextBlock(
+      'system-left-end-label',
+      leftLabel,
+      { x: startX, y: labelY },
+      {
+        fontSize: 14,
+        textColor: '#333',
+        fontFamily: 'Arial, sans-serif',
+        alignment: 'center',
+        isSystemGenerated: true
+      }
+    )
+
+    // Create right end label
+    this.createTextBlock(
+      'system-right-end-label',
+      rightLabel,
+      { x: startX + beamWidth, y: labelY },
+      {
+        fontSize: 14,
+        textColor: '#333',
+        fontFamily: 'Arial, sans-serif',
+        alignment: 'center',
+        isSystemGenerated: true
+      }
+    )
+  }
+
+  /**
+   * Clear all system text blocks
+   */
+  public clearSystemTextBlocks(): void {
+    const textBlockIds = ['system-title', 'system-left-end-label', 'system-right-end-label']
+    
+    textBlockIds.forEach(id => {
+      const annotation = this.systemAnnotations.get(id)
+      if (annotation && annotation.type === 'text-block') {
+        const container = this.annotationGraphics.get(id)
+        if (container) {
+          container.destroy()
+        }
+        this.systemAnnotations.delete(id)
+      }
+    })
+  }
+
+  private handleAnnotationClick(annotation: Annotation): void {
+    // Handle annotation click - could be used for selection, editing, etc.
+    console.log('Annotation clicked:', annotation.id)
   }
   
   // Interaction methods
@@ -973,7 +1117,7 @@ export class AnnotationManager {
           this.previewGraphics.lineTo(currentPoint.x - 5, currentPoint.y + 5)
           this.previewGraphics.stroke()
         } else {
-          // Second click preview - show diagonal-horizontal leader and text box
+          // Second click - show diagonal-horizontal leader and text box
           const arrowPoint = this.creationPoints[0]
           
           // Calculate diagonal-horizontal path

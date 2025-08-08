@@ -9,13 +9,15 @@ import { ZoomControl } from './components/ZoomControl'
 import { DefectType } from './types/defects'
 import { exportCanvasAsPNG, exportCanvasAsSVG } from './utils/canvasExport'
 import { BeamElevationScene } from './scenes/BeamElevationScene'
-import { VectorExportDialog } from './components/VectorExportDialog'
+
 import { PNGExportDialog } from './components/export/PNGExportDialog'
 import { SVGExportDialog } from './components/export/SVGExportDialog'
 import { PDFExportDialog } from './components/export/PDFExportDialog'
 import { ReportExportDialog } from './components/export/ReportExportDialog'
 import { ShareDialog } from './components/export/ShareDialog'
 import { PrintDialog } from './components/export/PrintDialog'
+import { UnifiedSettingsPanel } from './components/UnifiedSettingsPanel'
+import { UnifiedConfigManager } from './core/configuration/UnifiedConfigManager'
 
 export default function App() {
   const [selectedBeam, setSelectedBeam] = useState<BeamProfile | null>(null)
@@ -35,8 +37,9 @@ export default function App() {
   const [currentZoom, setCurrentZoom] = useState<number>(1.0)
   const [selectedDefectType, setSelectedDefectType] = useState<DefectType>('section-loss')
   const [currentScene, setCurrentScene] = useState<BeamElevationScene | null>(null)
-  const [showExportDialog, setShowExportDialog] = useState<boolean>(false)
-  const [selectedExportFormat, setSelectedExportFormat] = useState<'svg' | 'pdf' | 'dxf'>('svg')
+  const [configManager] = useState(() => new UnifiedConfigManager())
+  const [showUnifiedSettings, setShowUnifiedSettings] = useState(false)
+
   
   // Individual export dialog states
   const [showPNGDialog, setShowPNGDialog] = useState<boolean>(false)
@@ -70,32 +73,42 @@ export default function App() {
   
   // Individual export handlers
   const handleExportPNG = (options: any) => {
-    if (!currentScene || !selectedBeam) return
+    console.log('[App] handleExportPNG called with options:', options)
+    console.log('[App] currentScene:', currentScene)
+    console.log('[App] selectedBeam:', selectedBeam)
+    
+    if (!currentScene || !selectedBeam) {
+      console.error('[App] Missing currentScene or selectedBeam')
+      return
+    }
     
     const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, -5)
     const beamName = selectedBeam.name.replace(/\s+/g, '-')
+    const filename = `${beamName}-inspection-${timestamp}.png`
     
-    // Apply options like scale, background color, etc.
-    // For now, use simple export
-    exportCanvasAsPNG(currentScene, `${beamName}-inspection-${timestamp}.png`)
+    console.log('[App] Exporting PNG with filename:', filename)
+    
+    // Add a small delay to ensure canvas is fully rendered
+    setTimeout(() => {
+      console.log('[App] Executing PNG export after delay')
+      exportCanvasAsPNG(currentScene, filename)
+    }, 100)
   }
   
   const handleExportSVG = (options: any) => {
     if (!currentScene || !selectedBeam) return
     
-    // Use the existing VectorExportDialog for SVG
-    setSelectedExportFormat('svg')
-    setShowExportDialog(true)
-    setShowSVGDialog(false)
+    // Use our beautiful SVG export dialog
+    console.log('Exporting SVG with options:', options)
+    // TODO: Implement SVG export using the options
   }
   
   const handleExportPDF = (options: any) => {
     if (!currentScene || !selectedBeam) return
     
-    // Use the existing VectorExportDialog for PDF
-    setSelectedExportFormat('pdf')
-    setShowExportDialog(true)
-    setShowPDFDialog(false)
+    // Use our beautiful PDF export dialog
+    console.log('Exporting PDF with options:', options)
+    // TODO: Implement PDF export using the options
   }
   
   const handleExportReport = (options: any) => {
@@ -151,7 +164,7 @@ export default function App() {
       if (includeStatistics) {
         const totalCells = gridCells.length
         const webCells = gridCells.filter(c => c.zone === 'web').length
-        const flangeCells = gridCells.filter(c => c.zone === 'flange').length
+        const flangeCells = gridCells.filter(c => c.zone === 'flange-top' || c.zone === 'flange-bottom').length
         
         content += `% Statistics\n`
         content += `totalDefects = ${totalCells};\n`
@@ -288,6 +301,7 @@ export default function App() {
         onExportReport={() => setShowReportDialog(true)}
         onShare={() => setShowShareDialog(true)}
         onPrint={() => setShowPrintDialog(true)}
+        onOpenSettings={() => setShowUnifiedSettings(true)}
       />
 
       {/* Main canvas area */}
@@ -346,17 +360,7 @@ export default function App() {
         onZoomChange={setCurrentZoom}
       />
       
-      {/* Export Dialog */}
-      <VectorExportDialog
-        isOpen={showExportDialog}
-        onClose={() => setShowExportDialog(false)}
-        beamProfile={selectedBeam}
-        beamLength={beamLength}
-        cells={gridCells}
-        gridSize={currentScene?.gridSize || 30}
-        annotations={currentScene?.getAnnotations?.() || []}
-        initialFormat={selectedExportFormat}
-      />
+
       
       {/* Individual Export Dialogs */}
       <PNGExportDialog
@@ -400,6 +404,21 @@ export default function App() {
         onClose={() => setShowPrintDialog(false)}
         onPrint={handlePrint}
       />
+      
+      {/* Unified Settings Panel */}
+      {showUnifiedSettings && (
+        <UnifiedSettingsPanel
+          configManager={configManager}
+          onConfigChange={(config) => {
+            console.log('Configuration updated:', config)
+            // Update the scene with new configuration
+            if (currentScene) {
+              currentScene.configManager.updateConfig(config)
+            }
+          }}
+          onClose={() => setShowUnifiedSettings(false)}
+        />
+      )}
     </div>
   )
 }

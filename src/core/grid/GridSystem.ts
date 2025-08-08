@@ -1,6 +1,6 @@
 import Phaser from 'phaser'
 import { BeamProfile, GridCell } from '../../types/beam'
-import { DefectType } from '../../types/defects'
+import { DefectType, DEFECT_STYLES } from '../../types/defects'
 
 export interface GridDimensions {
   startX: number
@@ -8,18 +8,6 @@ export interface GridDimensions {
   width: number
   gridSize: number
   beamLength: number
-}
-
-export interface GridZone {
-  key: string
-  zone: 'web' | 'flange-top' | 'flange-bottom'
-  col: number
-  row: number
-  x: number
-  y: number
-  width: number
-  height: number
-  isLinear: boolean
 }
 
 export interface GridSystemConfig {
@@ -30,20 +18,23 @@ export interface GridSystemConfig {
 }
 
 /**
- * GridSystem manages the interactive grid overlay for beam inspection
- * Extracted from BeamElevationScene to improve maintainability and testability
+ * Simplified GridSystem focused on core functionality
  */
 export class GridSystem {
   private scene: Phaser.Scene
   private beamProfile: BeamProfile | null = null
   private gridContainer: Phaser.GameObjects.Container | null = null
-  private currentGridSize: number = 30 // Store current grid size
   
-  // Grid state
+  // Core state
   private selectedCells: Set<string> = new Set()
   private gridCells: Map<string, Phaser.GameObjects.Rectangle> = new Map()
   private cellDefectTypes: Map<string, DefectType> = new Map()
-  private zones: Map<string, GridZone> = new Map()
+  
+  // Drag painting state
+  private isDragging: boolean = false
+  private dragStartCell: string | null = null
+  private dragAction: 'select' | 'deselect' | null = null
+  private lastDraggedCell: string | null = null
   
   // Configuration
   private config: GridSystemConfig = {
@@ -55,53 +46,82 @@ export class GridSystem {
   
   // Callbacks
   private onCellChangeCallback?: (cells: GridCell[]) => void
-  private onCellInteractionCallback?: (key: string, action: 'select' | 'deselect') => void
   
   constructor(scene: Phaser.Scene) {
     this.scene = scene
   }
 
   /**
-   * Initialize the grid system with a beam profile
+   * Initialize the grid system
    */
   initialize(beamProfile: BeamProfile, config: Partial<GridSystemConfig> = {}): void {
     console.log('[GridSystem] Initializing with config:', config)
     this.beamProfile = beamProfile
     this.config = { ...this.config, ...config }
     
-    // Create grid container if it doesn't exist
+    // Create grid container
     if (!this.gridContainer) {
       this.gridContainer = this.scene.add.container()
-      this.gridContainer.setDepth(100) // High depth to ensure visibility
-      console.log('[GridSystem] Created grid container with depth 100')
+      this.gridContainer.setDepth(100)
     }
-    console.log('[GridSystem] Final config:', this.config)
+    
+    // Set up global mouse events for drag painting
+    this.setupGlobalMouseEvents()
   }
 
   /**
-   * Create the grid overlay based on beam dimensions
+   * Set up global mouse events for drag painting
+   */
+  private setupGlobalMouseEvents(): void {
+    // Listen for mouse up on the scene to end drag painting
+    this.scene.input.on('pointerup', () => {
+      this.endDragPainting()
+    })
+    
+    // Listen for mouse up outside the scene to end drag painting
+    this.scene.input.on('pointerupoutside', () => {
+      this.endDragPainting()
+    })
+  }
+
+  /**
+   * End drag painting and reset state
+   */
+  private endDragPainting(): void {
+    if (this.isDragging) {
+      console.log('[GridSystem] Ending drag painting')
+      this.isDragging = false
+      this.dragStartCell = null
+      this.dragAction = null
+      this.lastDraggedCell = null
+      
+      // Notify cell change after drag ends to trigger contour redraw
+      this.notifyCellChange()
+    }
+  }
+
+  /**
+   * Check if currently dragging
+   */
+  getIsDragging(): boolean {
+    return this.isDragging
+  }
+
+  /**
+   * Create the grid overlay
    */
   createGrid(dimensions: GridDimensions): void {
-    console.log('[GridSystem] createGrid called with dimensions:', dimensions)
+    console.log('[GridSystem] Creating grid with dimensions:', dimensions)
     if (!this.beamProfile || !this.gridContainer) {
       console.warn('GridSystem: Cannot create grid without beam profile and container')
       return
     }
 
-    // Store current selected cells before clearing
-    const previouslySelected = new Set(this.selectedCells)
-    const previousDefectTypes = new Map(this.cellDefectTypes)
-    
-    // Clear existing grid (but not selection state)
+    // Clear existing grid
     this.clearGrid()
 
     const { startX, centerY, gridSize, beamLength } = dimensions
     const { webHeight, flangeThickness } = this.beamProfile
-    
-    console.log('[GridSystem] Creating grid with profile:', { webHeight, flangeThickness })
-    
-    // Store the grid size for use in cell creation
-    this.currentGridSize = gridSize
     
     // Calculate beam section boundaries
     const webTop = centerY - (webHeight * gridSize) / 2
@@ -112,7 +132,6 @@ export class GridSystem {
     const cols = Math.ceil(beamLength)
     const webRows = Math.ceil(webHeight)
     
-    
     // Create web grid (2D)
     this.createWebGrid(startX, webTop, webBottom, gridSize, cols, webRows)
     
@@ -122,28 +141,9 @@ export class GridSystem {
     }
     this.createFlangeGrid(startX, webBottom, gridSize, cols, 'flange-bottom')
     
-    // Make grid visible if configured
-    const shouldShow = this.shouldShowGrid()
-    console.log('[GridSystem] Should show grid:', shouldShow, 'Config:', this.config)
-    this.setVisible(shouldShow)
+    // Make grid visible
+    this.setVisible(this.config.showGrid)
     console.log('[GridSystem] Grid created with', this.gridCells.size, 'cells')
-    
-    // Restore previously selected cells
-    previouslySelected.forEach(key => {
-      if (this.gridCells.has(key)) {
-        this.selectedCells.add(key)
-        const defectType = previousDefectTypes.get(key) || 'section-loss'
-        this.cellDefectTypes.set(key, defectType)
-        const cell = this.gridCells.get(key)
-        if (cell) {
-          this.updateCellAppearance(cell, key)
-        }
-      }
-    })
-    
-    if (previouslySelected.size > 0) {
-      console.log('[GridSystem] Restored', this.selectedCells.size, 'selected cells')
-    }
   }
 
   /**
@@ -160,10 +160,9 @@ export class GridSystem {
         let cellY = y
         
         if (y < webTop) {
-          // Cell extends above web top - truncate it
           cellHeight = y + gridSize - webTop
           cellY = webTop
-          if (cellHeight <= 0) continue // Skip cells completely above the web
+          if (cellHeight <= 0) continue
         }
         
         this.createGridCell(x, cellY, col, row, 'web', false, cellHeight)
@@ -182,26 +181,26 @@ export class GridSystem {
   }
 
   /**
-   * Create an individual grid cell
+   * Create a single grid cell
    */
   private createGridCell(x: number, y: number, col: number, row: number, zone: 'web' | 'flange-top' | 'flange-bottom', isLinear: boolean = false, customHeight?: number): void {
     if (!this.beamProfile || !this.gridContainer) return
 
     const height = customHeight !== undefined ? customHeight - 1 : 
-                  (isLinear ? this.beamProfile.flangeThickness * this.currentGridSize - 1 : this.currentGridSize - 1)
+                  (isLinear ? this.beamProfile.flangeThickness * 30 - 1 : 30 - 1)
     
     const cell = this.scene.add.rectangle(
-      x + this.currentGridSize / 2,
+      x + 30 / 2,
       y + height / 2,
-      this.currentGridSize - 1, // 1px gap between cells
+      30 - 1,
       height,
-      0xffffff,
-      0.05  // Very subtle fill
+      0xB8E6B8, // Pastel green
+      0.3
     )
     
-    cell.setStrokeStyle(1, 0x999999, 0.8) // More visible stroke
+    cell.setStrokeStyle(1, 0x4A7C4A, 0.8) // Darker green border
     cell.setInteractive()
-    cell.setDepth(10) // Relative depth within container
+    cell.setDepth(10)
     
     // Store cell data
     cell.setData('col', col)
@@ -211,26 +210,9 @@ export class GridSystem {
     
     // Create zone info
     const key = `${zone}_${col}_${row}`
-    const zoneInfo: GridZone = {
-      key,
-      zone,
-      col,
-      row,
-      x: cell.x,
-      y: cell.y,
-      width: cell.width,
-      height: cell.height,
-      isLinear
-    }
     
     this.gridCells.set(key, cell)
-    this.zones.set(key, zoneInfo)
     this.gridContainer.add(cell)
-    
-    // Restore selected state if cell was previously selected
-    if (this.selectedCells.has(key)) {
-      this.updateCellAppearance(cell, key)
-    }
     
     // Set up interaction
     this.setupCellInteraction(cell)
@@ -241,29 +223,31 @@ export class GridSystem {
    */
   private setupCellInteraction(cell: Phaser.GameObjects.Rectangle): void {
     cell.on('pointerdown', () => {
-      console.log(`[GridSystem] Cell clicked, editMode: ${this.config.editMode}`)
-      if (!this.config.editMode) {
-        console.log(`[GridSystem] Not in edit mode, ignoring click`)
-        return
-      }
+      if (!this.config.editMode) return
       
       const zone = cell.getData('zone') || 'web'
       const col = cell.getData('col')
       const row = cell.getData('row')
       const key = `${zone}_${col}_${row}`
       
-      console.log(`[GridSystem] Cell interaction: ${key}, currently selected: ${this.selectedCells.has(key)}`)
+      // Start drag painting
+      this.isDragging = true
+      this.dragStartCell = key
+      this.lastDraggedCell = key
       
-      // Toggle cell selection
+      // Determine drag action based on current cell state
       if (this.selectedCells.has(key)) {
-        this.deselectCell(key)
+        this.dragAction = 'deselect'
       } else {
-        this.selectCell(key)
+        this.dragAction = 'select'
       }
       
-      // Call interaction callback if provided
-      this.onCellInteractionCallback?.(key, this.selectedCells.has(key) ? 'select' : 'deselect')
-      // Note: notifyCellChange is already called inside selectCell/deselectCell
+      // Apply the action to the initial cell
+      if (this.dragAction === 'select') {
+        this.selectCell(key)
+      } else {
+        this.deselectCell(key)
+      }
     })
 
     cell.on('pointerover', () => {
@@ -274,24 +258,15 @@ export class GridSystem {
       const row = cell.getData('row')
       const key = `${zone}_${col}_${row}`
       
-      if (!this.selectedCells.has(key)) {
-        cell.setFillStyle(0xeeeeee, 0.15) // Subtle hover effect
-      }
-    })
-
-    cell.on('pointerout', () => {
-      if (!this.config.editMode) return
-      
-      const zone = cell.getData('zone') || 'web'
-      const col = cell.getData('col')
-      const row = cell.getData('row')
-      const key = `${zone}_${col}_${row}`
-      
-      if (!this.selectedCells.has(key)) {
-        cell.setFillStyle(0xffffff, 0.05) // Reset to default subtle fill
-      } else {
-        // Restore selected cell appearance
-        this.updateCellAppearance(cell, key)
+      // Handle drag painting
+      if (this.isDragging && this.dragAction && key !== this.lastDraggedCell) {
+        this.lastDraggedCell = key
+        
+        if (this.dragAction === 'select' && !this.selectedCells.has(key)) {
+          this.selectCell(key)
+        } else if (this.dragAction === 'deselect' && this.selectedCells.has(key)) {
+          this.deselectCell(key)
+        }
       }
     })
   }
@@ -300,21 +275,18 @@ export class GridSystem {
    * Select a grid cell
    */
   selectCell(key: string, defectType: DefectType = 'section-loss'): void {
-    console.log(`[GridSystem] Selecting cell: ${key}, defectType: ${defectType}`)
+    console.log(`[GridSystem] Selecting cell: ${key} with defect type: ${defectType}`)
     this.selectedCells.add(key)
     this.cellDefectTypes.set(key, defectType)
     
     const cell = this.gridCells.get(key)
     if (cell) {
-      console.log(`[GridSystem] Updating appearance for cell: ${key}`)
+      console.log(`[GridSystem] Updating cell appearance for: ${key}`)
       this.updateCellAppearance(cell, key)
     } else {
-      console.warn(`[GridSystem] Cell not found: ${key}`)
+      console.warn(`[GridSystem] Cell not found for key: ${key}`)
     }
     
-    console.log(`[GridSystem] Total selected cells: ${this.selectedCells.size}`)
-    
-    // Notify of change
     this.notifyCellChange()
   }
 
@@ -328,43 +300,25 @@ export class GridSystem {
     
     const cell = this.gridCells.get(key)
     if (cell) {
-      cell.setFillStyle(0xffffff, 0.05) // Reset to default subtle fill
+      console.log(`[GridSystem] Resetting cell appearance for: ${key} to pastel green`)
+      cell.setFillStyle(0xB8E6B8, 0.3) // Pastel green
+      cell.setStrokeStyle(1, 0x4A7C4A, 0.8) // Darker green border
+    } else {
+      console.warn(`[GridSystem] Cell not found for key: ${key}`)
     }
     
-    // Notify of change
     this.notifyCellChange()
   }
 
   /**
-   * Clear all selected cells
-   */
-  clearSelection(): void {
-    this.selectedCells.forEach(key => {
-      const cell = this.gridCells.get(key)
-      if (cell) {
-        cell.setFillStyle(0xffffff, 0.1)
-      }
-    })
-    
-    this.selectedCells.clear()
-    this.cellDefectTypes.clear()
-    this.notifyCellChange()
-  }
-
-  /**
-   * Update the visual appearance of a selected cell based on its defect type
+   * Update cell appearance based on selection state
    */
   private updateCellAppearance(cell: Phaser.GameObjects.Rectangle, key: string): void {
     const defectType = this.cellDefectTypes.get(key) || 'section-loss'
-    
-    // TODO: Import DEFECT_STYLES from types/defects and use proper styling
-    const defectColors: Record<string, number> = {
-      'section-loss': 0xFFB3D9,
-      'hole': 0xFFFFFF
-    }
-    
-    const color = defectColors[defectType] || defectColors['section-loss']
-    cell.setFillStyle(color, 0.3)
+    const style = DEFECT_STYLES[defectType] || DEFECT_STYLES['section-loss']
+    console.log(`[GridSystem] Setting cell ${key} to ${defectType} style:`, style)
+    cell.setFillStyle(style.fillColor, style.fillAlpha)
+    cell.setStrokeStyle(style.strokeWidth, style.strokeColor, style.strokeAlpha)
   }
 
   /**
@@ -374,15 +328,16 @@ export class GridSystem {
     const cells: GridCell[] = []
     
     this.selectedCells.forEach(key => {
-      const zone = this.zones.get(key)
-      const defectType = this.cellDefectTypes.get(key)
-      
-      if (zone) {
+      const parts = key.split('_')
+      if (parts.length === 3) {
+        const [zone, col, row] = parts
+        const defectType = this.cellDefectTypes.get(key)
+        
         cells.push({
-          x: zone.col,
-          y: zone.row,
+          x: parseInt(col),
+          y: parseInt(row),
           selected: true,
-          zone: zone.zone,
+          zone: zone as 'web' | 'flange-top' | 'flange-bottom',
           defectType: defectType || 'section-loss'
         })
       }
@@ -392,31 +347,16 @@ export class GridSystem {
   }
 
   /**
-   * Set selected cells from GridCell array (for restoring state)
+   * Set selected cells from GridCell array
    */
   setSelectedCells(cells: GridCell[]): void {
-    this.clearSelection()
+    this.selectedCells.clear()
+    this.cellDefectTypes.clear()
     
     cells.forEach(cell => {
-      const key = `${cell.zone || 'web'}_${cell.x}_${cell.y}`
+      const key = `${cell.zone}_${cell.x}_${cell.y}`
       this.selectCell(key, cell.defectType || 'section-loss')
     })
-    
-    this.notifyCellChange()
-  }
-
-  /**
-   * Get grid dimensions and statistics
-   */
-  getGridInfo(): { totalCells: number; selectedCells: number; zones: string[] } {
-    const zones = new Set<string>()
-    this.zones.forEach(zone => zones.add(zone.zone))
-    
-    return {
-      totalCells: this.gridCells.size,
-      selectedCells: this.selectedCells.size,
-      zones: Array.from(zones)
-    }
   }
 
   /**
@@ -424,26 +364,15 @@ export class GridSystem {
    */
   updateConfig(config: Partial<GridSystemConfig>): void {
     this.config = { ...this.config, ...config }
-    this.setVisible(this.shouldShowGrid())
-  }
-
-  /**
-   * Determine if grid should be visible based on current configuration
-   */
-  private shouldShowGrid(): boolean {
-    return (this.config.editMode || this.config.appMode === 'annotation') && this.config.showGrid
+    this.setVisible(this.config.showGrid)
   }
 
   /**
    * Set grid visibility
    */
   setVisible(visible: boolean): void {
-    console.log('[GridSystem] setVisible called with:', visible)
     if (this.gridContainer) {
       this.gridContainer.setVisible(visible)
-      console.log('[GridSystem] Grid container visibility set to:', visible)
-      // Also ensure container has proper depth
-      this.gridContainer.setDepth(100)
     }
   }
 
@@ -455,85 +384,53 @@ export class GridSystem {
       if (this.gridContainer) {
         this.gridContainer.remove(cell)
       }
-      cell.destroy()
     })
-    
     this.gridCells.clear()
-    this.zones.clear()
   }
 
   /**
-   * Update cell visibility based on selection state
-   */
-  updateCellVisibility(): void {
-    this.gridCells.forEach((cell, key) => {
-      if (this.selectedCells.has(key)) {
-        // Hide stroke for selected cells (section loss areas)
-        cell.setStrokeStyle(0, 0xcccccc, 0)
-      } else {
-        // Show stroke for non-selected cells
-        cell.setStrokeStyle(0.5, 0xcccccc, 0.5)
-      }
-    })
-  }
-
-  /**
-   * Get snap points for annotation system
-   */
-  getSnapPoints(): { x: number; y: number; width: number; height: number }[] {
-    const snapPoints: { x: number; y: number; width: number; height: number }[] = []
-    
-    this.gridCells.forEach(cell => {
-      snapPoints.push({
-        x: cell.x,
-        y: cell.y,
-        width: cell.width,
-        height: cell.height
-      })
-    })
-    
-    return snapPoints
-  }
-
-  /**
-   * Set callback for cell selection changes
+   * Set up cell change callback
    */
   onCellChange(callback: (cells: GridCell[]) => void): void {
     this.onCellChangeCallback = callback
   }
 
   /**
-   * Set callback for individual cell interactions
-   */
-  onCellInteraction(callback: (key: string, action: 'select' | 'deselect') => void): void {
-    this.onCellInteractionCallback = callback
-  }
-
-  /**
-   * Notify listeners of cell changes
+   * Notify of cell changes
    */
   private notifyCellChange(): void {
-    console.log(`[GridSystem] notifyCellChange called, callback exists: ${!!this.onCellChangeCallback}`)
     if (this.onCellChangeCallback) {
       const cells = this.getSelectedCells()
-      console.log(`[GridSystem] Notifying with ${cells.length} cells`)
       this.onCellChangeCallback(cells)
     }
   }
 
   /**
-   * Destroy the grid system and clean up resources
+   * Clean up resources
    */
   destroy(): void {
+    console.log('[GridSystem] Destroying grid system')
+    
+    // Remove global mouse event listeners
+    this.scene.input.off('pointerup')
+    this.scene.input.off('pointerupoutside')
+    
+    // Clear all cells
     this.clearGrid()
     
+    // Destroy container
     if (this.gridContainer) {
       this.gridContainer.destroy()
       this.gridContainer = null
     }
     
+    // Clear state
     this.selectedCells.clear()
     this.cellDefectTypes.clear()
-    this.zones.clear()
+    this.isDragging = false
+    this.dragStartCell = null
+    this.dragAction = null
+    this.lastDraggedCell = null
+    this.beamProfile = null
   }
 }

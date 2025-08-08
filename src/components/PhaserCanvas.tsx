@@ -55,7 +55,7 @@ export const PhaserCanvas: React.FC<PhaserCanvasProps> = ({
   const gameRef = useRef<Phaser.Game | null>(null)
   const containerRef = useRef<HTMLDivElement>(null)
   const scrollContainerRef = useRef<HTMLDivElement>(null)
-  const [currentScene, setCurrentScene] = useState<BeamElevationScene | null>(null)
+  const [currentScene, setCurrentScene] = useState<BeamElevationScene | undefined>(undefined)
 
   useEffect(() => {
     if (!containerRef.current) return
@@ -111,7 +111,7 @@ export const PhaserCanvas: React.FC<PhaserCanvasProps> = ({
       setCurrentScene(scene)
       onSceneReady?.(scene)
       if (scene.scene.isActive()) {
-        scene.updateBeamProfile(beamProfile, beamLength, editMode, showGrid, gridOrigin, showTopFlange, gridCells, elevationView, appMode, spanLength, zoom, selectedDefectType)
+        scene.updateBeamProfile(beamProfile, beamLength, editMode, showGrid, gridOrigin, showTopFlange, gridCells, elevationView, appMode, spanLength, selectedDefectType)
       } else {
         scene.scene.start('BeamElevationScene', { 
           beamProfile, 
@@ -127,6 +127,7 @@ export const PhaserCanvas: React.FC<PhaserCanvasProps> = ({
           spanLength,
           zoom,
           selectedDefectType,
+          savedAnnotations: [],
         })
       }
     } else {
