@@ -65,7 +65,7 @@ export class BeamDimensionRenderer {
    * Main entry point - renders all beam dimensions
    */
   renderDimensions(config: DimensionConfig): Result<void, RenderingError> {
-    return Result.fromSync(() => {
+    const result = Result.fromSync(() => {
       this.updateCoordinateTransformer(config)
       
       const beamDimensions = this.calculateBeamDimensions(config)
@@ -77,7 +77,9 @@ export class BeamDimensionRenderer {
       this.drawWebDimension(config, beamDimensions, positions)
       this.drawOverallDimension(config, beamDimensions, positions)
       this.drawLengthMarkers(config, beamDimensions)
-    }).mapError(error => 
+    })
+    
+    return Result.mapError(result, error => 
       new RenderingError(`Failed to render beam dimensions: ${error.message}`, config)
     )
   }
