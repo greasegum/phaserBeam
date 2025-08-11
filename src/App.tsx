@@ -10,6 +10,15 @@ import { DefectType } from './types/defects'
 import { exportCanvasAsPNG, exportCanvasAsSVG } from './utils/canvasExport'
 import { BeamElevationScene } from './scenes/BeamElevationScene'
 
+import { PNGExportDialog } from './components/export/PNGExportDialog'
+import { SVGExportDialog } from './components/export/SVGExportDialog'
+import { PDFExportDialog } from './components/export/PDFExportDialog'
+import { ReportExportDialog } from './components/export/ReportExportDialog'
+import { ShareDialog } from './components/export/ShareDialog'
+import { PrintDialog } from './components/export/PrintDialog'
+import { UnifiedSettingsPanel } from './components/UnifiedSettingsPanel'
+import { UnifiedConfigManager } from './core/configuration/UnifiedConfigManager'
+
 export default function App() {
   const [selectedBeam, setSelectedBeam] = useState<BeamProfile | null>(null)
   const [beamLength, setBeamLength] = useState<number>(120)
@@ -28,7 +37,17 @@ export default function App() {
   const [currentZoom, setCurrentZoom] = useState<number>(1.0)
   const [selectedDefectType, setSelectedDefectType] = useState<DefectType>('section-loss')
   const [currentScene, setCurrentScene] = useState<BeamElevationScene | null>(null)
-  const [showDebugVisualization, setShowDebugVisualization] = useState<boolean>(false)
+  const [configManager] = useState(() => new UnifiedConfigManager())
+  const [showUnifiedSettings, setShowUnifiedSettings] = useState(false)
+
+  
+  // Individual export dialog states
+  const [showPNGDialog, setShowPNGDialog] = useState<boolean>(false)
+  const [showSVGDialog, setShowSVGDialog] = useState<boolean>(false)
+  const [showPDFDialog, setShowPDFDialog] = useState<boolean>(false)
+  const [showReportDialog, setShowReportDialog] = useState<boolean>(false)
+  const [showShareDialog, setShowShareDialog] = useState<boolean>(false)
+  const [showPrintDialog, setShowPrintDialog] = useState<boolean>(false)
   
   useEffect(() => {
     const checkMobile = () => {
@@ -39,11 +58,12 @@ export default function App() {
     return () => window.removeEventListener('resize', checkMobile)
   }, [])
 
-  const handleSetupComplete = (beam: BeamProfile, length: number, elevation: 'N' | 'S' | 'E' | 'W', span: number) => {
+  const handleSetupComplete = (beam: BeamProfile, length: number, elevation: 'N' | 'S' | 'E' | 'W', span: number, topFlange: boolean) => {
     setSelectedBeam(beam)
     setBeamLength(length)
     setElevationView(elevation)
     setSpanLength(span)
+    setShowTopFlange(topFlange)
     setShowSetup(false)
   }
 
@@ -51,26 +71,127 @@ export default function App() {
     setGridCells(cells)
   }
   
-  const handleExport = (format: 'pdf' | 'png' | 'svg') => {
-    if (!currentScene) {
-      alert('Scene not ready. Please wait a moment and try again.')
+  // Individual export handlers
+  const handleExportPNG = (options: any) => {
+    console.log('[App] handleExportPNG called with options:', options)
+    console.log('[App] currentScene:', currentScene)
+    console.log('[App] selectedBeam:', selectedBeam)
+    
+    if (!currentScene || !selectedBeam) {
+      console.error('[App] Missing currentScene or selectedBeam')
       return
     }
     
     const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, -5)
-    const beamName = selectedBeam?.name.replace(/\s+/g, '-') || 'beam'
+    const beamName = selectedBeam.name.replace(/\s+/g, '-')
+    const filename = `${beamName}-inspection-${timestamp}.png`
     
-    switch (format) {
-      case 'png':
-        exportCanvasAsPNG(currentScene, `${beamName}-inspection-${timestamp}.png`)
-        break
-      case 'svg':
-        exportCanvasAsSVG(currentScene, `${beamName}-inspection-${timestamp}.svg`)
-        break
-      case 'pdf':
-        alert('PDF export coming soon! This will generate a professional report with beam details, defect summary, and inspection notes.')
-        break
+    console.log('[App] Exporting PNG with filename:', filename)
+    
+    // Add a small delay to ensure canvas is fully rendered
+    setTimeout(() => {
+      console.log('[App] Executing PNG export after delay')
+      exportCanvasAsPNG(currentScene, filename)
+    }, 100)
+  }
+  
+  const handleExportSVG = (options: any) => {
+    if (!currentScene || !selectedBeam) return
+    
+    // Use our beautiful SVG export dialog
+    console.log('Exporting SVG with options:', options)
+    // TODO: Implement SVG export using the options
+  }
+  
+  const handleExportPDF = (options: any) => {
+    if (!currentScene || !selectedBeam) return
+    
+    // Use our beautiful PDF export dialog
+    console.log('Exporting PDF with options:', options)
+    // TODO: Implement PDF export using the options
+  }
+  
+  const handleExportReport = (options: any) => {
+    if (!selectedBeam) return
+    
+    const { format, includeHeader, includeBeamProperties, includeSectionLossMatrix, includeStatistics, coordinateSystem } = options
+    
+    // Generate report content based on format
+    let content = ''
+    const timestamp = new Date().toISOString()
+    const beamName = selectedBeam.name
+    
+    if (format === 'matlab') {
+      content = `% Beam Section Loss Analysis\n`
+      content += `% Generated: ${timestamp}\n`
+      content += `% Beam: ${beamName}\n`
+      content += `% Length: ${beamLength}" (${(beamLength/12).toFixed(1)} ft)\n\n`
+      
+      if (includeBeamProperties) {
+        content += `% Beam Properties\n`
+        content += `webHeight = ${selectedBeam.webHeight}; % inches\n`
+        content += `webThickness = ${selectedBeam.webThickness}; % inches\n`
+        content += `flangeWidth = ${selectedBeam.flangeWidth}; % inches\n`
+        content += `flangeThickness = ${selectedBeam.flangeThickness}; % inches\n\n`
+      }
+      
+      if (includeSectionLossMatrix) {
+        content += `% Section Loss Matrix\n`
+        content += `% Coordinates: ${coordinateSystem}\n`
+        content += `sectionLoss = [\n`
+        
+        // Group cells by row for matrix representation
+        const cellsByRow = new Map<number, GridCell[]>()
+        gridCells.forEach(cell => {
+          const row = cell.y
+          if (!cellsByRow.has(row)) cellsByRow.set(row, [])
+          cellsByRow.get(row)!.push(cell)
+        })
+        
+        // Create matrix representation
+        const sortedRows = Array.from(cellsByRow.keys()).sort((a, b) => a - b)
+        sortedRows.forEach(row => {
+          const cells = cellsByRow.get(row)!.sort((a, b) => a.x - b.x)
+          content += `  % Row ${row}: `
+          cells.forEach(cell => {
+            content += `[${cell.x},${cell.y}] `
+          })
+          content += `\n`
+        })
+        content += `];\n\n`
+      }
+      
+      if (includeStatistics) {
+        const totalCells = gridCells.length
+        const webCells = gridCells.filter(c => c.zone === 'web').length
+        const flangeCells = gridCells.filter(c => c.zone === 'flange-top' || c.zone === 'flange-bottom').length
+        
+        content += `% Statistics\n`
+        content += `totalDefects = ${totalCells};\n`
+        content += `webDefects = ${webCells};\n`
+        content += `flangeDefects = ${flangeCells};\n`
+        content += `sectionLossPercentage = ${((totalCells * 1 * 1) / (selectedBeam.webHeight * beamLength) * 100).toFixed(2)}; % percent\n`
+      }
     }
+    
+    // Download the file
+    const blob = new Blob([content], { type: 'text/plain' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `${beamName.replace(/\s+/g, '-')}-analysis-${timestamp.slice(0,10)}.${format === 'matlab' ? 'm' : format}`
+    a.click()
+    URL.revokeObjectURL(url)
+  }
+  
+  const handleShare = (method: string) => {
+    console.log('Share via:', method)
+    // Implement sharing functionality based on method
+  }
+  
+  const handlePrint = (options: any) => {
+    console.log('Print with options:', options)
+    // Print functionality is handled by the dialog itself
   }
 
   if (showSetup) {
@@ -128,22 +249,6 @@ export default function App() {
             <option value="annotation">Annotation Mode</option>
           </select>
           <button
-            onClick={() => setShowTopFlange(!showTopFlange)}
-            disabled={appMode === 'view'}
-            style={{
-              padding: '6px 12px',
-              backgroundColor: showTopFlange ? '#9C27B0' : '#999',
-              color: 'white',
-              border: 'none',
-              borderRadius: '4px',
-              cursor: appMode !== 'view' ? 'pointer' : 'not-allowed',
-              fontSize: '14px',
-              opacity: appMode !== 'view' ? 1 : 0.6
-            }}
-          >
-            Top Flange: {showTopFlange ? 'ON' : 'OFF'}
-          </button>
-          <button
             onClick={() => setGridCells([])}
             style={{
               padding: '6px 12px',
@@ -189,11 +294,14 @@ export default function App() {
         // Edit mode props
         selectedDefect={selectedDefectType}
         onSelectDefect={setSelectedDefectType}
-        // View mode props
-        onExport={handleExport}
-        // Debug props
-        showDebugVisualization={showDebugVisualization}
-        onToggleDebugVisualization={() => setShowDebugVisualization(!showDebugVisualization)}
+        // View mode props - individual export handlers
+        onExportPNG={() => setShowPNGDialog(true)}
+        onExportSVG={() => setShowSVGDialog(true)}
+        onExportPDF={() => setShowPDFDialog(true)}
+        onExportReport={() => setShowReportDialog(true)}
+        onShare={() => setShowShareDialog(true)}
+        onPrint={() => setShowPrintDialog(true)}
+        onOpenSettings={() => setShowUnifiedSettings(true)}
       />
 
       {/* Main canvas area */}
@@ -224,7 +332,6 @@ export default function App() {
             zoom={currentZoom}
             selectedDefectType={selectedDefectType}
             onSceneReady={setCurrentScene}
-            showDebugVisualization={showDebugVisualization}
           />
         </div>
       </main>
@@ -252,6 +359,66 @@ export default function App() {
         currentZoom={currentZoom}
         onZoomChange={setCurrentZoom}
       />
+      
+
+      
+      {/* Individual Export Dialogs */}
+      <PNGExportDialog
+        isOpen={showPNGDialog}
+        onClose={() => setShowPNGDialog(false)}
+        onExport={handleExportPNG}
+        currentScene={currentScene}
+      />
+      
+      <SVGExportDialog
+        isOpen={showSVGDialog}
+        onClose={() => setShowSVGDialog(false)}
+        onExport={handleExportSVG}
+        currentScene={currentScene}
+      />
+      
+      <PDFExportDialog
+        isOpen={showPDFDialog}
+        onClose={() => setShowPDFDialog(false)}
+        onExport={handleExportPDF}
+        currentScene={currentScene}
+      />
+      
+      <ReportExportDialog
+        isOpen={showReportDialog}
+        onClose={() => setShowReportDialog(false)}
+        onExport={handleExportReport}
+        currentScene={currentScene}
+        gridCells={gridCells}
+        beamProfile={selectedBeam}
+      />
+      
+      <ShareDialog
+        isOpen={showShareDialog}
+        onClose={() => setShowShareDialog(false)}
+        onShare={handleShare}
+      />
+      
+      <PrintDialog
+        isOpen={showPrintDialog}
+        onClose={() => setShowPrintDialog(false)}
+        onPrint={handlePrint}
+      />
+      
+      {/* Unified Settings Panel */}
+      {showUnifiedSettings && (
+        <UnifiedSettingsPanel
+          configManager={configManager}
+          onConfigChange={(config) => {
+            console.log('Configuration updated:', config)
+            // Update the scene with new configuration
+            if (currentScene) {
+              currentScene.configManager.updateConfig(config)
+            }
+          }}
+          onClose={() => setShowUnifiedSettings(false)}
+        />
+      )}
     </div>
   )
 }

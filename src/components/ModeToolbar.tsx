@@ -17,11 +17,14 @@ interface ModeToolbarProps {
   // For edit mode
   selectedDefect?: DefectType
   onSelectDefect?: (defect: DefectType) => void
-  // For view mode
-  onExport?: (format: 'pdf' | 'png' | 'svg') => void
-  // For debug
-  showDebugVisualization?: boolean
-  onToggleDebugVisualization?: () => void
+  // For view mode - new callbacks for each export type
+  onExportPNG?: () => void
+  onExportSVG?: () => void
+  onExportPDF?: () => void
+  onExportReport?: () => void
+  onShare?: () => void
+  onPrint?: () => void
+  onOpenSettings?: () => void
 }
 
 const ANNOTATION_TOOLS: { type: AnnotationType; label: string; shortcut: string }[] = [
@@ -31,12 +34,8 @@ const ANNOTATION_TOOLS: { type: AnnotationType; label: string; shortcut: string 
 ]
 
 const DEFECT_INFO: Record<DefectType, { label: string, description: string }> = {
-  'hole': { label: 'Hole', description: 'Complete penetration' },
-  'pinholes': { label: 'Pinholes', description: 'Small perforations' },
-  'surface-rust': { label: 'Surface Rust', description: 'Surface corrosion' },
-  'paper-thin': { label: 'Paper Thin', description: 'Extreme thinning' },
   'section-loss': { label: 'Section Loss', description: 'Material loss' },
-  'pitting': { label: 'Pitting', description: 'Localized corrosion' }
+  'hole': { label: 'Hole', description: 'Complete penetration' }
 }
 
 export const ModeToolbar: React.FC<ModeToolbarProps> = ({
@@ -51,9 +50,13 @@ export const ModeToolbar: React.FC<ModeToolbarProps> = ({
   onToggleBottomOrdinate,
   selectedDefect = 'section-loss',
   onSelectDefect,
-  onExport,
-  showDebugVisualization = false,
-  onToggleDebugVisualization
+  onExportPNG,
+  onExportSVG,
+  onExportPDF,
+  onExportReport,
+  onShare,
+  onPrint,
+  onOpenSettings,
 }) => {
   
   const renderPatternPreview = (defectType: DefectType) => {
@@ -257,27 +260,6 @@ export const ModeToolbar: React.FC<ModeToolbarProps> = ({
             </button>
           ))}
           
-          <div style={{ width: '1px', height: '30px', backgroundColor: '#ddd', margin: '0 10px' }} />
-          
-          <button
-            onClick={onToggleDebugVisualization}
-            style={{
-              padding: '6px 12px',
-              border: showDebugVisualization ? '2px solid #FF6B6B' : '1px solid #ddd',
-              borderRadius: '4px',
-              backgroundColor: showDebugVisualization ? '#FFE3E3' : 'white',
-              cursor: 'pointer',
-              fontSize: '14px',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '5px',
-              transition: 'all 0.2s ease'
-            }}
-            title="Show all three line types simultaneously for debugging"
-          >
-            <span style={{ fontSize: '16px' }}>🐛</span>
-            Debug Lines
-          </button>
         </>
       )}
       
@@ -293,11 +275,11 @@ export const ModeToolbar: React.FC<ModeToolbarProps> = ({
           </span>
           
           <button
-            onClick={() => onExport?.('png')}
+            onClick={onExportPNG}
             style={{
               padding: '8px 16px',
               border: '1px solid #ddd',
-              borderRadius: '4px',
+              borderRadius: '8px',
               backgroundColor: 'white',
               cursor: 'pointer',
               fontSize: '14px',
@@ -306,19 +288,25 @@ export const ModeToolbar: React.FC<ModeToolbarProps> = ({
               gap: '6px',
               transition: 'all 0.2s ease'
             }}
-            onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#f5f5f5'}
-            onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'white'}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.backgroundColor = '#E8F5E9'
+              e.currentTarget.style.borderColor = '#4CAF50'
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.backgroundColor = 'white'
+              e.currentTarget.style.borderColor = '#ddd'
+            }}
           >
             <span style={{ fontSize: '16px' }}>🖼️</span>
             PNG
           </button>
           
           <button
-            onClick={() => onExport?.('svg')}
+            onClick={onExportSVG}
             style={{
               padding: '8px 16px',
               border: '1px solid #ddd',
-              borderRadius: '4px',
+              borderRadius: '8px',
               backgroundColor: 'white',
               cursor: 'pointer',
               fontSize: '14px',
@@ -327,19 +315,25 @@ export const ModeToolbar: React.FC<ModeToolbarProps> = ({
               gap: '6px',
               transition: 'all 0.2s ease'
             }}
-            onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#f5f5f5'}
-            onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'white'}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.backgroundColor = '#E3F2FD'
+              e.currentTarget.style.borderColor = '#2196F3'
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.backgroundColor = 'white'
+              e.currentTarget.style.borderColor = '#ddd'
+            }}
           >
             <span style={{ fontSize: '16px' }}>📐</span>
             SVG
           </button>
           
           <button
-            onClick={() => onExport?.('pdf')}
+            onClick={onExportPDF}
             style={{
               padding: '8px 16px',
               border: '1px solid #ddd',
-              borderRadius: '4px',
+              borderRadius: '8px',
               backgroundColor: 'white',
               cursor: 'pointer',
               fontSize: '14px',
@@ -348,71 +342,124 @@ export const ModeToolbar: React.FC<ModeToolbarProps> = ({
               gap: '6px',
               transition: 'all 0.2s ease'
             }}
-            onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#f5f5f5'}
-            onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'white'}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.backgroundColor = '#FCE4EC'
+              e.currentTarget.style.borderColor = '#E91E63'
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.backgroundColor = 'white'
+              e.currentTarget.style.borderColor = '#ddd'
+            }}
           >
             <span style={{ fontSize: '16px' }}>📄</span>
             PDF
           </button>
           
-          <div style={{ width: '1px', height: '30px', backgroundColor: '#ddd', margin: '0 10px' }} />
-          
-          {/* Stubbed future features */}
           <button
-            disabled
+            onClick={onOpenSettings}
             style={{
               padding: '8px 16px',
               border: '1px solid #ddd',
-              borderRadius: '4px',
-              backgroundColor: '#f5f5f5',
-              cursor: 'not-allowed',
+              borderRadius: '8px',
+              backgroundColor: 'white',
+              cursor: 'pointer',
               fontSize: '14px',
-              opacity: 0.5,
               display: 'flex',
               alignItems: 'center',
-              gap: '6px'
+              gap: '6px',
+              transition: 'all 0.2s ease'
             }}
-            title="Coming soon"
+            onMouseEnter={(e) => {
+              e.currentTarget.style.backgroundColor = '#FFF3E0'
+              e.currentTarget.style.borderColor = '#FF9800'
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.backgroundColor = 'white'
+              e.currentTarget.style.borderColor = '#ddd'
+            }}
+          >
+            <span style={{ fontSize: '16px' }}>⚙️</span>
+            Settings
+          </button>
+          
+          <button
+            onClick={onExportReport}
+            style={{
+              padding: '8px 16px',
+              border: '1px solid #ddd',
+              borderRadius: '8px',
+              backgroundColor: 'white',
+              cursor: 'pointer',
+              fontSize: '14px',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px',
+              transition: 'all 0.2s ease'
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.backgroundColor = '#FFF3E0'
+              e.currentTarget.style.borderColor = '#FF9800'
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.backgroundColor = 'white'
+              e.currentTarget.style.borderColor = '#ddd'
+            }}
           >
             <span style={{ fontSize: '16px' }}>📊</span>
             Report
           </button>
           
+          <div style={{ width: '1px', height: '30px', backgroundColor: '#ddd', margin: '0 10px' }} />
+          
           <button
-            disabled
+            onClick={onShare}
             style={{
               padding: '8px 16px',
               border: '1px solid #ddd',
-              borderRadius: '4px',
-              backgroundColor: '#f5f5f5',
-              cursor: 'not-allowed',
+              borderRadius: '8px',
+              backgroundColor: 'white',
+              cursor: 'pointer',
               fontSize: '14px',
-              opacity: 0.5,
               display: 'flex',
               alignItems: 'center',
-              gap: '6px'
+              gap: '6px',
+              transition: 'all 0.2s ease'
             }}
-            title="Coming soon"
+            onMouseEnter={(e) => {
+              e.currentTarget.style.backgroundColor = '#F3E5F5'
+              e.currentTarget.style.borderColor = '#9C27B0'
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.backgroundColor = 'white'
+              e.currentTarget.style.borderColor = '#ddd'
+            }}
           >
-            <span style={{ fontSize: '16px' }}>📤</span>
+            <span style={{ fontSize: '16px' }}>🔗</span>
             Share
           </button>
           
           <button
-            disabled
+            onClick={onPrint}
             style={{
               padding: '8px 16px',
               border: '1px solid #ddd',
-              borderRadius: '4px',
-              backgroundColor: '#f5f5f5',
-              cursor: 'not-allowed',
+              borderRadius: '8px',
+              backgroundColor: 'white',
+              cursor: 'pointer',
               fontSize: '14px',
-              opacity: 0.5,
               display: 'flex',
               alignItems: 'center',
-              gap: '6px'
+              gap: '6px',
+              transition: 'all 0.2s ease'
             }}
-            title="Coming soon"
+            onMouseEnter={(e) => {
+              e.currentTarget.style.backgroundColor = '#EDE7F6'
+              e.currentTarget.style.borderColor = '#673AB7'
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.backgroundColor = 'white'
+              e.currentTarget.style.borderColor = '#ddd'
+            }}
           >
             <span style={{ fontSize: '16px' }}>🖨️</span>
             Print

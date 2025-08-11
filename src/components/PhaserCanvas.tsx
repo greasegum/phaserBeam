@@ -2,7 +2,7 @@ import React, { useEffect, useRef, useState } from 'react'
 import Phaser from 'phaser'
 import { BeamElevationScene } from '../scenes/BeamElevationScene'
 import { BeamProfile, GridCell } from '../types/beam'
-import { AdvancedSettings } from './AdvancedSettings'
+import { Configuration } from './Configuration'
 import { AppMode } from '../types/mode'
 import { AnnotationType } from '../types/annotations'
 import { DefectType } from '../types/defects'
@@ -28,7 +28,6 @@ interface PhaserCanvasProps {
   zoom?: number
   selectedDefectType?: DefectType
   onSceneReady?: (scene: BeamElevationScene) => void
-  showDebugVisualization?: boolean
 }
 
 export const PhaserCanvas: React.FC<PhaserCanvasProps> = ({ 
@@ -52,13 +51,11 @@ export const PhaserCanvas: React.FC<PhaserCanvasProps> = ({
   zoom = 1.0,
   selectedDefectType = 'section-loss',
   onSceneReady,
-  showDebugVisualization = false
 }) => {
-  console.log('PhaserCanvas render - appMode:', appMode, 'editMode:', editMode, 'showGrid:', showGrid)
   const gameRef = useRef<Phaser.Game | null>(null)
   const containerRef = useRef<HTMLDivElement>(null)
   const scrollContainerRef = useRef<HTMLDivElement>(null)
-  const [currentScene, setCurrentScene] = useState<BeamElevationScene | null>(null)
+  const [currentScene, setCurrentScene] = useState<BeamElevationScene | undefined>(undefined)
 
   useEffect(() => {
     if (!containerRef.current) return
@@ -114,7 +111,7 @@ export const PhaserCanvas: React.FC<PhaserCanvasProps> = ({
       setCurrentScene(scene)
       onSceneReady?.(scene)
       if (scene.scene.isActive()) {
-        scene.updateBeamProfile(beamProfile, beamLength, editMode, showGrid, gridOrigin, showTopFlange, gridCells, elevationView, appMode, spanLength, zoom, selectedDefectType, showDebugVisualization)
+        scene.updateBeamProfile(beamProfile, beamLength, editMode, showGrid, gridOrigin, showTopFlange, gridCells, elevationView, appMode, spanLength, selectedDefectType)
       } else {
         scene.scene.start('BeamElevationScene', { 
           beamProfile, 
@@ -130,7 +127,7 @@ export const PhaserCanvas: React.FC<PhaserCanvasProps> = ({
           spanLength,
           zoom,
           selectedDefectType,
-          showDebugVisualization
+          savedAnnotations: [],
         })
       }
     } else {
@@ -154,12 +151,11 @@ export const PhaserCanvas: React.FC<PhaserCanvasProps> = ({
             spanLength,
             zoom,
             selectedDefectType,
-            showDebugVisualization
-          })
+            })
         }
       })
     }
-  }, [beamProfile, beamLength, editMode, onCellChange, showGrid, gridOrigin, showTopFlange, gridCells, elevationView, appMode, spanLength, zoom, selectedDefectType, showDebugVisualization])
+  }, [beamProfile, beamLength, editMode, onCellChange, showGrid, gridOrigin, showTopFlange, gridCells, elevationView, appMode, spanLength, zoom, selectedDefectType])
 
   if (!beamProfile) {
     return (
@@ -223,7 +219,7 @@ export const PhaserCanvas: React.FC<PhaserCanvasProps> = ({
       <div ref={scrollContainerRef} style={{ width: '100%', height: '100%', overflow: 'auto', position: 'relative' }}>
         <div ref={containerRef} style={{ minWidth: '100%', height: '100%' }} />
       </div>
-      <AdvancedSettings scene={currentScene} />
+      <Configuration scene={currentScene} />
     </>
   )
 }

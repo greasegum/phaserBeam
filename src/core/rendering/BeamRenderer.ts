@@ -28,6 +28,8 @@ export interface BeamRenderConfig {
   selectedCells: Set<string>
   contourOffsetX: number
   contourOffsetY: number
+  contourGlobalOffsetX: number
+  contourGlobalOffsetY: number
   showContours: boolean
   showControlPoints: boolean
   showPixelOutline: boolean
@@ -72,6 +74,8 @@ export class BeamRenderer {
     selectedCells: new Set(),
     contourOffsetX: 0,
     contourOffsetY: 0,
+    contourGlobalOffsetX: 0,
+    contourGlobalOffsetY: 0,
     showContours: true,
     showControlPoints: false,
     showPixelOutline: false,
@@ -264,11 +268,19 @@ export class BeamRenderer {
    * Draw contour visualization layers
    */
   drawContours(contourData: ContourData, dimensions: BeamDimensions): void {
-    const { startX, centerY } = dimensions
+    if (!this.beamProfile) {
+      console.warn('BeamRenderer: Cannot draw contours without beam profile')
+      return
+    }
+    
+    const { startX, centerY, gridSize } = dimensions
+    const webHeight = this.beamProfile.webHeight * gridSize
+    // Calculate the top of the web (center minus half the web height)
+    const webTop = centerY - webHeight / 2
     const transform = createGridToScreenTransform(
-      startX + this.config.contourOffsetX,
-      centerY + this.config.contourOffsetY,
-      this.config.gridSize
+      gridSize,
+      startX + this.config.contourGlobalOffsetX * gridSize,
+      webTop + this.config.contourGlobalOffsetY * gridSize
     )
 
     // Draw binary contours
@@ -318,6 +330,18 @@ export class BeamRenderer {
       this.blurredFieldGraphics.clear()
       this.renderBlurredField(this.blurredFieldGraphics, contourData.blurredField, dimensions)
     }
+  }
+
+  /**
+   * Clear all contour graphics layers
+   */
+  clearContours(): void {
+    if (this.binaryContourGraphics) this.binaryContourGraphics.clear()
+    if (this.rawContourGraphics) this.rawContourGraphics.clear()
+    if (this.smoothedContourGraphics) this.smoothedContourGraphics.clear()
+    if (this.controlPointGraphics) this.controlPointGraphics.clear()
+    if (this.pixelOutlineGraphics) this.pixelOutlineGraphics.clear()
+    if (this.blurredFieldGraphics) this.blurredFieldGraphics.clear()
   }
 
   /**

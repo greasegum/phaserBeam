@@ -1,5 +1,8 @@
 import { defineConfig } from 'vitest/config'
+import { fileURLToPath } from 'node:url'
 import path from 'node:path'
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url))
 
 export default defineConfig({
   test: {
@@ -9,13 +12,13 @@ export default defineConfig({
   },
   resolve: {
     alias: {
-      '@': path.resolve(import.meta.url, './src'),
-      '@types': path.resolve(import.meta.url, './src/types'),
-      '@core': path.resolve(import.meta.url, './src/core'),
-      '@components': path.resolve(import.meta.url, './src/components'),
-      '@utils': path.resolve(import.meta.url, './src/utils'),
+      '@': path.resolve(__dirname, './src'),
+      '@types': path.resolve(__dirname, './src/types'),
+      '@core': path.resolve(__dirname, './src/core'),
+      '@components': path.resolve(__dirname, './src/components'),
+      '@utils': path.resolve(__dirname, './src/utils'),
       // Mock Phaser to avoid WebGL issues in tests
-      'phaser': path.resolve(import.meta.url, './src/test/mocks/phaser.ts')
+      'phaser': path.resolve(__dirname, './src/test/mocks/phaser.ts')
     }
   }
 })

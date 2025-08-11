@@ -1,6 +1,6 @@
 import Phaser from 'phaser'
 
-export type AnnotationType = 'linear-dimension' | 'ordinate-dimension' | 'callout'
+export type AnnotationType = 'linear-dimension' | 'ordinate-dimension' | 'callout' | 'text-block'
 
 export interface AnnotationPoint {
   x: number
@@ -34,11 +34,16 @@ export interface LinearDimension extends BaseAnnotation {
   endPoint: AnnotationPoint
   offsetDistance: number // Distance from the measured edge
   text: string
-  unit: 'in' | 'ft'
+  unit: 'in' | 'ft' | 'inches'
   showWitnessLines: boolean
   witnessLineExtension: number
   textPosition: 'center' | 'above' | 'below'
   autoText: boolean // Automatically calculate dimension text
+  witnessLineStart?: number
+  witnessLineEnd?: number
+  dimensionOffset?: number
+  showArrows?: boolean
+  orientation?: 'horizontal' | 'vertical'
 }
 
 export interface OrdinateDimension extends BaseAnnotation {
@@ -47,7 +52,7 @@ export interface OrdinateDimension extends BaseAnnotation {
   originSide: 'left' | 'right' // Which end to measure from
   jogOffset: number // Vertical offset below beam for dimension line
   text: string
-  unit: 'in' | 'ft'
+  unit: 'in' | 'ft' | 'inches'
   autoText: boolean // Automatically calculate dimension text
   showArrow: boolean
   witnessLineHeight: number // Height of witness line from beam bottom
@@ -69,11 +74,25 @@ export interface Callout extends BaseAnnotation {
     isEditing?: boolean
     decimalReading?: number // For UT meter readings
   }
-  leaderStyle: 'straight' | 'curved' | 'polyline'
+  leaderStyle: 'straight' | 'curved' | 'polyline' | 'diagonal'
   endStyle: 'arrow' | 'dot' | 'none'
 }
 
-export type Annotation = LinearDimension | OrdinateDimension | Callout
+export interface TextBlock extends BaseAnnotation {
+  type: 'text-block'
+  position: AnnotationPoint
+  text: string
+  alignment: 'left' | 'center' | 'right'
+  rotation: number // in radians
+  maxWidth?: number // for text wrapping
+  backgroundColor?: string
+  borderColor?: string
+  borderWidth?: number
+  padding?: number
+  isSystemGenerated?: boolean // for titles and labels that shouldn't be editable
+}
+
+export type Annotation = LinearDimension | OrdinateDimension | Callout | TextBlock
 
 export interface AnnotationInteraction {
   annotation: Annotation
@@ -85,7 +104,7 @@ export interface AnnotationInteraction {
 export interface SnapPoint {
   x: number
   y: number
-  type: 'grid-vertex' | 'grid-center' | 'edge' | 'midpoint'
+  type: 'grid-vertex' | 'grid-center' | 'edge' | 'midpoint' | 'grid-edge'
   priority: number
 }
 

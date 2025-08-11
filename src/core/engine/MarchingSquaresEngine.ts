@@ -45,6 +45,8 @@ export class MarchingSquaresEngine {
     this.algorithmImpl = new MarchingSquaresAlgorithm(this.config.algorithm)
     this.interpolationImpl = new InterpolationAlgorithm(this.config.interpolation)
     this.smoothingImpl = new SmoothingAlgorithm(this.config.smoothing)
+    
+    // Initialize performance monitor
     this.monitor = new PerformanceMonitor()
   }
   
@@ -61,6 +63,11 @@ export class MarchingSquaresEngine {
         contours: [],
         metrics: { total: 0, extraction: 0, interpolation: 0, smoothing: 0 }
       }
+    }
+    
+    // Ensure monitor is initialized
+    if (!this.monitor) {
+      this.monitor = new PerformanceMonitor()
     }
     
     this.monitor.start('total')
@@ -84,7 +91,7 @@ export class MarchingSquaresEngine {
       if (edgeConstraints && edgeConstraints.length > 0) {
         this.smoothingImpl.setEdgeConstraints(edgeConstraints)
       }
-      const processedContours = this.smoothingImpl.processContours(rawContours)
+      const processedContours = this.smoothingImpl.smoothContours(rawContours)
       this.monitor.end('smoothing')
       
       this.monitor.end('total')
@@ -159,14 +166,14 @@ export class MarchingSquaresEngine {
       }
       
       // Process grid and store in cache
-      const processed = this.interpolationImpl.processGrid(grid)
+      const processed = this.interpolationImpl.processScalarField(grid)
       this.scalarFieldCache.set(cacheKey, processed)
       
       return processed
     }
     
     // Process without caching
-    return this.interpolationImpl.processGrid(grid)
+    return this.interpolationImpl.processScalarField(grid)
   }
   
   /**

@@ -8,12 +8,8 @@ interface DefectToolbarProps {
 }
 
 const DEFECT_INFO: Record<DefectType, { label: string, description: string }> = {
-  'hole': { label: 'Hole', description: 'Complete penetration' },
-  'pinholes': { label: 'Pinholes', description: 'Small perforations' },
-  'surface-rust': { label: 'Surface Rust', description: 'Surface corrosion' },
-  'paper-thin': { label: 'Paper Thin', description: 'Extreme thinning' },
   'section-loss': { label: 'Section Loss', description: 'Material loss' },
-  'pitting': { label: 'Pitting', description: 'Localized corrosion' }
+  'hole': { label: 'Hole', description: 'Complete penetration' }
 }
 
 export const DefectToolbar: React.FC<DefectToolbarProps> = ({ visible, selectedDefect, onSelectDefect }) => {
@@ -21,6 +17,9 @@ export const DefectToolbar: React.FC<DefectToolbarProps> = ({ visible, selectedD
   
   const renderPatternPreview = (defectType: DefectType) => {
     const style = DEFECT_STYLES[defectType]
+    if (!style) {
+      return <div style={{ width: 30, height: 30, backgroundColor: '#ccc' }} />
+    }
     const size = 30
     
     return (

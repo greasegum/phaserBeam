@@ -29,6 +29,7 @@ export * from './rendering/BeamRenderer'
 
 // Configuration
 export * from './config/SceneConfigManager'
+export * from './configuration/MarchingSquaresConfig'
 
 // Rendering components
 

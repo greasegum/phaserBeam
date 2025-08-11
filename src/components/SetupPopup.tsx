@@ -3,7 +3,7 @@ import { BeamProfile } from '../types/beam'
 import { beamCatalog } from '../utils/beamCatalog'
 
 interface SetupPopupProps {
-  onComplete: (beam: BeamProfile, length: number, elevationView: 'N' | 'S' | 'E' | 'W', spanLength: number) => void
+  onComplete: (beam: BeamProfile, length: number, elevationView: 'N' | 'S' | 'E' | 'W', spanLength: number, showTopFlange: boolean) => void
 }
 
 export const SetupPopup: React.FC<SetupPopupProps> = ({ onComplete }) => {
@@ -15,6 +15,7 @@ export const SetupPopup: React.FC<SetupPopupProps> = ({ onComplete }) => {
   const [elevationView, setElevationView] = useState<'N' | 'S' | 'E' | 'W'>('N') // Default North
   const [spanLengthFeet, setSpanLengthFeet] = useState<number>(0)
   const [spanLengthInches, setSpanLengthInches] = useState<number>(0)
+  const [showTopFlange, setShowTopFlange] = useState<boolean>(true)
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
@@ -27,7 +28,7 @@ export const SetupPopup: React.FC<SetupPopupProps> = ({ onComplete }) => {
         totalSpanLengthInches = Math.max(0, totalLengthInches - 24)
       }
       
-      onComplete(selectedBeam, totalLengthInches, elevationView, totalSpanLengthInches)
+      onComplete(selectedBeam, totalLengthInches, elevationView, totalSpanLengthInches, showTopFlange)
     }
   }
 
@@ -233,7 +234,7 @@ export const SetupPopup: React.FC<SetupPopupProps> = ({ onComplete }) => {
             </div>
           </div>
 
-          <div style={{ marginBottom: '25px' }}>
+          <div style={{ marginBottom: '20px' }}>
             <label style={{ 
               display: 'block', 
               marginBottom: '8px', 
@@ -259,6 +260,37 @@ export const SetupPopup: React.FC<SetupPopupProps> = ({ onComplete }) => {
               <option value="E">East Elevation</option>
               <option value="W">West Elevation</option>
             </select>
+          </div>
+
+          <div style={{ marginBottom: '25px' }}>
+            <label style={{ 
+              display: 'flex', 
+              alignItems: 'center',
+              fontWeight: 'bold',
+              color: '#555',
+              cursor: 'pointer'
+            }}>
+              <input
+                type="checkbox"
+                checked={showTopFlange}
+                onChange={(e) => setShowTopFlange(e.target.checked)}
+                style={{
+                  marginRight: '10px',
+                  width: '18px',
+                  height: '18px',
+                  cursor: 'pointer'
+                }}
+              />
+              Show Top Flange
+            </label>
+            <div style={{ 
+              marginTop: '5px', 
+              marginLeft: '28px',
+              fontSize: '14px', 
+              color: '#666'
+            }}>
+              Display the top flange in the beam elevation view
+            </div>
           </div>
 
           <button
