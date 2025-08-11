@@ -17,6 +17,9 @@ export const MinimalApp: React.FC = () => {
   const [beamLength, setBeamLength] = useState<number>(120)
   const [gridCells, setGridCells] = useState<GridCell[]>([])
   const [showSetup, setShowSetup] = useState<boolean>(true)
+  
+  // For debugging - you can set this to false to skip setup and show a default beam
+  const DEBUG_SKIP_SETUP = true
   const [appMode, setAppMode] = useState<AppMode>('edit')
   const [gridOrigin, setGridOrigin] = useState<'left' | 'right'>('left')
   const [showTopFlange, setShowTopFlange] = useState<boolean>(true)
@@ -30,6 +33,20 @@ export const MinimalApp: React.FC = () => {
   const [selectedDefectType, setSelectedDefectType] = useState<DefectType>('section-loss')
 
   const store = useAppStore()
+
+  // Debug: Load a default beam on startup if DEBUG_SKIP_SETUP is true
+  useEffect(() => {
+    if (DEBUG_SKIP_SETUP && !selectedBeam) {
+      // Import beam catalog and select first beam
+      import('../../utils/beamCatalog').then(({ beamCatalog }) => {
+        const defaultBeam = beamCatalog[0]
+        if (defaultBeam) {
+          setSelectedBeam(defaultBeam)
+          setShowSetup(false)
+        }
+      })
+    }
+  }, [DEBUG_SKIP_SETUP, selectedBeam])
 
   const handleSetupComplete = (beam: BeamProfile, length: number, elevation: 'N' | 'S' | 'E' | 'W', span: number, topFlange: boolean) => {
     setSelectedBeam(beam)
@@ -187,7 +204,7 @@ export const MinimalApp: React.FC = () => {
         overflow: 'auto',
         background: 'white'
       }}>
-        {selectedBeam && (
+        {selectedBeam ? (
           <div style={{ 
             width: '100%', 
             height: '100%',
@@ -215,6 +232,36 @@ export const MinimalApp: React.FC = () => {
               zoom={currentZoom}
               selectedDefectType={selectedDefectType}
             />
+            
+            {/* Debug info overlay */}
+            <div style={{
+              position: 'absolute',
+              top: '10px',
+              left: '10px',
+              background: 'rgba(255,255,255,0.9)',
+              padding: '10px',
+              border: '1px solid #333',
+              fontSize: '11px',
+              fontFamily: 'monospace'
+            }}>
+              <div>Beam: {selectedBeam.name}</div>
+              <div>Length: {beamLength}"</div>
+              <div>View: {elevationView}</div>
+              <div>Mode: {appMode}</div>
+              <div>Grid Cells: {gridCells.length}</div>
+              <div>Canvas should show beam with grid</div>
+            </div>
+          </div>
+        ) : (
+          <div style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            height: '100%',
+            fontSize: '16px',
+            color: '#666'
+          }}>
+            No beam selected. Click "NEW INSPECTION" to start.
           </div>
         )}
       </main>
