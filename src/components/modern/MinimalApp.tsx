@@ -19,7 +19,7 @@ export const MinimalApp: React.FC = () => {
   const [showSetup, setShowSetup] = useState<boolean>(true)
   
   // For debugging - you can set this to false to skip setup and show a default beam
-  const DEBUG_SKIP_SETUP = true
+  const DEBUG_SKIP_SETUP = false
   const [appMode, setAppMode] = useState<AppMode>('edit')
   const [gridOrigin, setGridOrigin] = useState<'left' | 'right'>('left')
   const [showTopFlange, setShowTopFlange] = useState<boolean>(true)
