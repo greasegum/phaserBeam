@@ -8,6 +8,7 @@ import { ModernSidebar } from './ModernSidebar'
 import { ModernCanvas } from './ModernCanvas'
 import { ModernStatusBar } from './ModernStatusBar'
 import { ModernToolbar } from './ModernToolbar'
+import { DebugInfo } from './DebugInfo'
 import './ModernLayout.css'
 
 export const ModernLayout: React.FC = () => {
@@ -18,6 +19,8 @@ export const ModernLayout: React.FC = () => {
 
   return (
     <div className="modern-layout">
+      <DebugInfo />
+      
       <div className="layout-header">
         <ModernToolbar />
       </div>

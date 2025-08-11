@@ -4,8 +4,9 @@
 
 import React, { useEffect } from 'react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { ModernLayout } from './components/modern/ModernLayout'
-import { useAppStore } from './stores/appStore'
+import { MinimalApp } from './components/modern/MinimalApp'
+// import { ModernLayout } from './components/modern/ModernLayout'
+// import { useAppStore } from './stores/appStore'
 import './App.css'
 
 // Create query client with modern defaults
@@ -27,23 +28,7 @@ const queryClient = new QueryClient({
 })
 
 const AppContent: React.FC = () => {
-  const { addBeam } = useAppStore()
-
-  // Initialize with sample data for demo
-  useEffect(() => {
-    const sampleBeam = {
-      id: 'demo-beam-1',
-      name: 'W12x26 Demo Beam',
-      width: 120,
-      height: 50,
-      imageUrl: undefined,
-      scalarField: generateSampleScalarField(120, 50)
-    }
-    
-    addBeam(sampleBeam)
-  }, [addBeam])
-
-  return <ModernLayout />
+  return <MinimalApp />
 }
 
 // Generate sample scalar field data for demo

@@ -7,82 +7,7 @@ import { useAppStore } from '../../stores/appStore'
 import { ModernPanelContainer } from './ModernPanelContainer'
 import './ModernSidebar.css'
 
-interface PanelConfig {
-  id: string
-  title: string
-  icon: string
-  component: React.ComponentType
-}
-
-const panels: PanelConfig[] = [
-  { id: 'beams', title: 'Beams', icon: '🔧', component: BeamPanel },
-  { id: 'processing', title: 'Processing', icon: '⚡', component: ProcessingPanel },
-  { id: 'annotations', title: 'Annotations', icon: '📝', component: AnnotationPanel },
-  { id: 'export', title: 'Export', icon: '📤', component: ExportPanel }
-]
-
-export const ModernSidebar: React.FC = () => {
-  const { sidebarOpen, activePanel, setActivePanel, toggleSidebar } = useAppStore(state => ({
-    sidebarOpen: state.sidebarOpen,
-    activePanel: state.activePanel,
-    setActivePanel: state.setActivePanel,
-    toggleSidebar: state.toggleSidebar
-  }))
-
-  const handlePanelClick = (panelId: string) => {
-    if (activePanel === panelId) {
-      setActivePanel(null)
-    } else {
-      setActivePanel(panelId)
-      if (!sidebarOpen) {
-        toggleSidebar()
-      }
-    }
-  }
-
-  return (
-    <aside className={`modern-sidebar ${!sidebarOpen ? 'collapsed' : ''}`}>
-      <div className="sidebar-tabs">
-        <button
-          className="sidebar-toggle"
-          onClick={toggleSidebar}
-          title={sidebarOpen ? 'Collapse sidebar' : 'Expand sidebar'}
-        >
-          <span className={`toggle-icon ${sidebarOpen ? 'expanded' : ''}`}>
-            ←
-          </span>
-        </button>
-        
-        {panels.map(panel => (
-          <button
-            key={panel.id}
-            className={`sidebar-tab ${activePanel === panel.id ? 'active' : ''}`}
-            onClick={() => handlePanelClick(panel.id)}
-            title={panel.title}
-          >
-            <span className="tab-icon">{panel.icon}</span>
-            {sidebarOpen && <span className="tab-label">{panel.title}</span>}
-          </button>
-        ))}
-      </div>
-
-      {sidebarOpen && activePanel && (
-        <div className="sidebar-content">
-          <ModernPanelContainer>
-            {(() => {
-              const panel = panels.find(p => p.id === activePanel)
-              if (!panel) return null
-              const Component = panel.component
-              return <Component />
-            })()}
-          </ModernPanelContainer>
-        </div>
-      )}
-    </aside>
-  )
-}
-
-// Panel Components
+// Panel Components - defined first
 const BeamPanel: React.FC = () => {
   const { beams, currentBeam, setCurrentBeam, addBeam } = useAppStore(state => ({
     beams: state.beams,
@@ -204,5 +129,80 @@ const ExportPanel: React.FC = () => {
         <button className="glass-button">Export JSON</button>
       </div>
     </div>
+  )
+}
+
+interface PanelConfig {
+  id: string
+  title: string
+  icon: string
+  component: React.ComponentType
+}
+
+const panels: PanelConfig[] = [
+  { id: 'beams', title: 'Beams', icon: '🔧', component: BeamPanel },
+  { id: 'processing', title: 'Processing', icon: '⚡', component: ProcessingPanel },
+  { id: 'annotations', title: 'Annotations', icon: '📝', component: AnnotationPanel },
+  { id: 'export', title: 'Export', icon: '📤', component: ExportPanel }
+]
+
+export const ModernSidebar: React.FC = () => {
+  const { sidebarOpen, activePanel, setActivePanel, toggleSidebar } = useAppStore(state => ({
+    sidebarOpen: state.sidebarOpen,
+    activePanel: state.activePanel,
+    setActivePanel: state.setActivePanel,
+    toggleSidebar: state.toggleSidebar
+  }))
+
+  const handlePanelClick = (panelId: string) => {
+    if (activePanel === panelId) {
+      setActivePanel(null)
+    } else {
+      setActivePanel(panelId)
+      if (!sidebarOpen) {
+        toggleSidebar()
+      }
+    }
+  }
+
+  return (
+    <aside className={`modern-sidebar ${!sidebarOpen ? 'collapsed' : ''}`}>
+      <div className="sidebar-tabs">
+        <button
+          className="sidebar-toggle"
+          onClick={toggleSidebar}
+          title={sidebarOpen ? 'Collapse sidebar' : 'Expand sidebar'}
+        >
+          <span className={`toggle-icon ${sidebarOpen ? 'expanded' : ''}`}>
+            ←
+          </span>
+        </button>
+        
+        {panels.map(panel => (
+          <button
+            key={panel.id}
+            className={`sidebar-tab ${activePanel === panel.id ? 'active' : ''}`}
+            onClick={() => handlePanelClick(panel.id)}
+            title={panel.title}
+          >
+            <span className="tab-icon">{panel.icon}</span>
+            {sidebarOpen && <span className="tab-label">{panel.title}</span>}
+          </button>
+        ))}
+      </div>
+
+      {sidebarOpen && activePanel && (
+        <div className="sidebar-content">
+          <ModernPanelContainer>
+            {(() => {
+              const panel = panels.find(p => p.id === activePanel)
+              if (!panel) return null
+              const Component = panel.component
+              return <Component />
+            })()}
+          </ModernPanelContainer>
+        </div>
+      )}
+    </aside>
   )
 }
