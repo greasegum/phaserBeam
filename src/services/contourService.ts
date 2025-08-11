@@ -10,6 +10,10 @@ import type { ContourStyle } from '../renderers/contours/phaserRenderer'
 import { cellSetToGridMask } from '../core/grid/mask'
 import { generateScalarField } from '../core/fields/scalarFieldGenerator'
 import { extractContours, extractContoursFromBinary } from '../core/contours/marchingSquares'
+import { OptimizedContourProcessor, createOptimizedContourProcessor } from '../utils/OptimizedContourProcessor'
+import { Result, success, failure, logger } from '../utils/Result'
+import { enhanceScalarField } from '../core/ScalarFieldEnhancements'
+import { EnhancementConfig } from '../core/configuration/EnhancementConfig'
 
 export interface ContourConfig {
   /** Grid dimensions */
@@ -20,6 +24,9 @@ export interface ContourConfig {
   
   /** Marching squares algorithm settings */
   marchingSquares: MarchingSquaresConfig
+  
+  /** Enhancement settings (NEW - integrates orphaned algorithms) */
+  enhancement?: EnhancementConfig
   
   /** Optional post-processing */
   postProcessing?: {
@@ -44,12 +51,16 @@ export interface ContourResult {
     gridMask: boolean[][]
     /** Generated scalar field */
     scalarField: number[][]
+    /** Enhanced scalar field (if enhancement was applied) */
+    enhancedScalarField?: number[][]
     /** Processing statistics */
     stats: {
       selectedCells: number
       totalCells: number
       contourCount: number
       processingTime: number
+      enhancementTime?: number
+      enhancementAlgorithm?: string
     }
   }
 }
@@ -71,15 +82,70 @@ export function processSelectedCells(
   // Step 2: Choose processing path based on configuration
   let contours: ContourPath[]
   let scalarField: number[][] | undefined
+  let enhancedScalarField: number[][] | undefined
+  let enhancementTime: number | undefined
   
   if (config.field) {
     // Use enhanced pipeline with scalar field generation
     scalarField = generateScalarField(gridMask, config.field)
-    contours = extractContours(scalarField, config.marchingSquares)
+    
+    // Step 2a: Apply enhancement if configured (NEW - integrates orphaned algorithms!)
+    if (config.enhancement?.enabled && config.enhancement.algorithm !== 'none') {
+      const enhancementStart = performance.now()
+      logger.info('Applying scalar field enhancement', { 
+        algorithm: config.enhancement.algorithm,
+        strength: config.enhancement.strength,
+        iterations: config.enhancement.iterations
+      })
+      
+      enhancedScalarField = enhanceScalarField(
+        scalarField,
+        config.enhancement.algorithm,
+        {
+          strength: config.enhancement.strength,
+          iterations: config.enhancement.iterations,
+          preserveEdges: config.enhancement.preserveEdges,
+          ...config.enhancement.algorithmParams[config.enhancement.algorithm]
+        }
+      )
+      
+      enhancementTime = performance.now() - enhancementStart
+      logger.debug('Enhancement completed', { enhancementTime: enhancementTime.toFixed(2) })
+      
+      // Use enhanced field for contour extraction
+      contours = extractContours(enhancedScalarField, config.marchingSquares)
+    } else {
+      // Use original scalar field
+      contours = extractContours(scalarField, config.marchingSquares)
+    }
   } else {
-    // Use direct binary processing with optional scalar field enhancement
-    contours = extractContoursFromBinary(gridMask, config.marchingSquares)
-    scalarField = undefined // Only available in enhanced pipeline
+    // Use direct binary processing - convert to scalar field for potential enhancement
+    scalarField = gridMask.map(row => row.map(cell => cell ? 1 : 0))
+    
+    // Step 2a: Apply enhancement if configured (even for binary processing)
+    if (config.enhancement?.enabled && config.enhancement.algorithm !== 'none') {
+      const enhancementStart = performance.now()
+      logger.info('Applying enhancement to binary field', {
+        algorithm: config.enhancement.algorithm
+      })
+      
+      enhancedScalarField = enhanceScalarField(
+        scalarField,
+        config.enhancement.algorithm,
+        {
+          strength: config.enhancement.strength,
+          iterations: config.enhancement.iterations,
+          preserveEdges: config.enhancement.preserveEdges,
+          ...config.enhancement.algorithmParams[config.enhancement.algorithm]
+        }
+      )
+      
+      enhancementTime = performance.now() - enhancementStart
+      contours = extractContours(enhancedScalarField, config.marchingSquares)
+    } else {
+      // Use standard binary processing
+      contours = extractContoursFromBinary(gridMask, config.marchingSquares)
+    }
   }
   
   // Step 3: Apply post-processing if configured
@@ -97,11 +163,14 @@ export function processSelectedCells(
     result.debug = {
       gridMask,
       scalarField: scalarField || gridMask.map(row => row.map(val => val ? 1 : 0)),
+      enhancedScalarField,
       stats: {
         selectedCells: selectedCells.size,
         totalCells: config.grid.cols * config.grid.rows,
         contourCount: contours.length,
-        processingTime
+        processingTime,
+        enhancementTime,
+        enhancementAlgorithm: config.enhancement?.enabled ? config.enhancement.algorithm : undefined
       }
     }
   }
@@ -160,12 +229,42 @@ function calculateContourLength(points: Point2D[]): number {
 }
 
 /**
- * Merge contours that are close to each other
+ * Merge contours that are close to each other using optimized spatial indexing
  */
 function mergeNearbyContours(
   contours: ContourPath[],
   threshold: number
 ): ContourPath[] {
+  // Use optimized processor for better performance
+  const processor = createOptimizedContourProcessor()
+  const result = processor.mergeNearbyContours(contours, threshold)
+  
+  if (Result.isSuccess(result)) {
+    const stats = processor.getStatistics()
+    logger.info('Optimized contour merging completed', {
+      originalCount: contours.length,
+      mergedCount: result.data.length,
+      complexity: stats.estimatedComplexity,
+      indexDepth: stats.indexDepth
+    })
+    processor.destroy() // Clean up resources
+    return result.data
+  } else {
+    logger.warn('Optimized merging failed, falling back to basic algorithm', {
+      error: result.error.message
+    })
+    processor.destroy()
+    
+    // Fallback to simple merging without O(n²) distance calculation
+    return mergeContoursBasic(contours, threshold)
+  }
+}
+
+/**
+ * Basic contour merging fallback (still optimized to avoid O(n²))
+ */
+function mergeContoursBasic(contours: ContourPath[], threshold: number): ContourPath[] {
+  // Use bounding box approximation instead of point-by-point distance
   const merged: ContourPath[] = []
   const used = new Set<number>()
   
@@ -175,11 +274,11 @@ function mergeNearbyContours(
     let currentContour = contours[i]
     used.add(i)
     
-    // Find contours to merge with this one
+    // Find contours to merge using fast bounding box check
     for (let j = i + 1; j < contours.length; j++) {
       if (used.has(j)) continue
       
-      const distance = getContourDistance(currentContour, contours[j])
+      const distance = getContourDistanceFast(currentContour, contours[j])
       if (distance <= threshold) {
         currentContour = mergeContours(currentContour, contours[j])
         used.add(j)
@@ -193,13 +292,23 @@ function mergeNearbyContours(
 }
 
 /**
- * Calculate minimum distance between two contours
+ * Calculate minimum distance between two contours (DEPRECATED - O(n²) complexity)
+ * Use getContourDistanceFast for better performance
  */
 function getContourDistance(contour1: ContourPath, contour2: ContourPath): number {
+  logger.warn('Using deprecated O(n²) distance calculation - consider using getContourDistanceFast')
+  
+  // Limit points to avoid extreme performance issues
+  const maxPoints = 10
+  const points1 = contour1.points.length > maxPoints ? 
+    samplePoints(contour1.points, maxPoints) : contour1.points
+  const points2 = contour2.points.length > maxPoints ? 
+    samplePoints(contour2.points, maxPoints) : contour2.points
+  
   let minDistance = Infinity
   
-  for (const point1 of contour1.points) {
-    for (const point2 of contour2.points) {
+  for (const point1 of points1) {
+    for (const point2 of points2) {
       const dx = point1.x - point2.x
       const dy = point1.y - point2.y
       const distance = Math.sqrt(dx * dx + dy * dy)
@@ -208,6 +317,65 @@ function getContourDistance(contour1: ContourPath, contour2: ContourPath): numbe
   }
   
   return minDistance
+}
+
+/**
+ * Fast contour distance calculation using bounding box approximation
+ */
+function getContourDistanceFast(contour1: ContourPath, contour2: ContourPath): number {
+  const bounds1 = calculateContourBounds(contour1)
+  const bounds2 = calculateContourBounds(contour2)
+  
+  // Calculate distance between bounding box centers
+  const center1X = (bounds1.minX + bounds1.maxX) / 2
+  const center1Y = (bounds1.minY + bounds1.maxY) / 2
+  const center2X = (bounds2.minX + bounds2.maxX) / 2
+  const center2Y = (bounds2.minY + bounds2.maxY) / 2
+  
+  const dx = center2X - center1X
+  const dy = center2Y - center1Y
+  
+  return Math.sqrt(dx * dx + dy * dy)
+}
+
+/**
+ * Calculate bounding box for contour
+ */
+function calculateContourBounds(contour: ContourPath): { minX: number; minY: number; maxX: number; maxY: number } {
+  if (contour.points.length === 0) {
+    return { minX: 0, minY: 0, maxX: 0, maxY: 0 }
+  }
+  
+  let minX = contour.points[0].x, maxX = contour.points[0].x
+  let minY = contour.points[0].y, maxY = contour.points[0].y
+  
+  for (const point of contour.points) {
+    minX = Math.min(minX, point.x)
+    maxX = Math.max(maxX, point.x)
+    minY = Math.min(minY, point.y)
+    maxY = Math.max(maxY, point.y)
+  }
+  
+  return { minX, minY, maxX, maxY }
+}
+
+/**
+ * Sample points from contour for performance
+ */
+function samplePoints(points: Point2D[], maxSamples: number): Point2D[] {
+  if (points.length <= maxSamples) {
+    return points
+  }
+  
+  const step = points.length / maxSamples
+  const sampled: Point2D[] = []
+  
+  for (let i = 0; i < maxSamples; i++) {
+    const index = Math.floor(i * step)
+    sampled.push(points[index])
+  }
+  
+  return sampled
 }
 
 /**

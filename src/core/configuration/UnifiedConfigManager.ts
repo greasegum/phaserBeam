@@ -3,41 +3,51 @@ import { InterpolationConfig, DEFAULT_INTERPOLATION_CONFIG } from './Interpolati
 import { SmoothingConfig, DEFAULT_SMOOTHING_CONFIG } from './SmoothingConfig'
 import { MarchingSquaresAlgorithmConfig, DEFAULT_MARCHING_SQUARES_ALGORITHM_CONFIG } from './MarchingSquaresAlgorithmConfig'
 import { PerformanceConfig, DEFAULT_PERFORMANCE_CONFIG } from './PerformanceConfig'
+import { EnhancementConfig, DEFAULT_ENHANCEMENT_CONFIG } from './EnhancementConfig'
+
+/**
+ * Extended configuration including enhancement algorithms
+ */
+export interface ExtendedConfig extends MarchingSquaresConfig {
+  enhancement: EnhancementConfig
+}
 
 /**
  * Unified Configuration Manager
- * Provides a clean interface for managing all algorithm settings
+ * Provides a clean interface for managing all algorithm settings including enhancements
  */
 export class UnifiedConfigManager {
-  private config: MarchingSquaresConfig
-  private listeners: Set<(config: MarchingSquaresConfig) => void> = new Set()
+  private config: ExtendedConfig
+  private listeners: Set<(config: ExtendedConfig) => void> = new Set()
 
-  constructor(initialConfig?: Partial<MarchingSquaresConfig>) {
+  constructor(initialConfig?: Partial<ExtendedConfig>) {
     this.config = {
       algorithm: { ...DEFAULT_MARCHING_SQUARES_ALGORITHM_CONFIG, ...initialConfig?.algorithm },
       interpolation: { ...DEFAULT_INTERPOLATION_CONFIG, ...initialConfig?.interpolation },
       smoothing: { ...DEFAULT_SMOOTHING_CONFIG, ...initialConfig?.smoothing },
-      performance: { ...DEFAULT_PERFORMANCE_CONFIG, ...initialConfig?.performance }
+      performance: { ...DEFAULT_PERFORMANCE_CONFIG, ...initialConfig?.performance },
+      enhancement: { ...DEFAULT_ENHANCEMENT_CONFIG, ...initialConfig?.enhancement }
     }
   }
 
   /**
    * Get the current configuration
    */
-  getConfig(): MarchingSquaresConfig {
+  getConfig(): ExtendedConfig {
     return { ...this.config }
   }
 
   /**
    * Update the configuration
    */
-  updateConfig(updates: Partial<MarchingSquaresConfig>): void {
+  updateConfig(updates: Partial<ExtendedConfig>): void {
     this.config = {
       ...this.config,
       algorithm: { ...this.config.algorithm, ...updates.algorithm },
       interpolation: { ...this.config.interpolation, ...updates.interpolation },
       smoothing: { ...this.config.smoothing, ...updates.smoothing },
-      performance: { ...this.config.performance, ...updates.performance }
+      performance: { ...this.config.performance, ...updates.performance },
+      enhancement: { ...this.config.enhancement, ...updates.enhancement }
     }
     this.notifyListeners()
   }
@@ -75,6 +85,14 @@ export class UnifiedConfigManager {
   }
 
   /**
+   * Update enhancement settings
+   */
+  updateEnhancementSettings(settings: Partial<EnhancementConfig>): void {
+    this.config.enhancement = { ...this.config.enhancement, ...settings }
+    this.notifyListeners()
+  }
+
+  /**
    * Reset to default configuration
    */
   resetToDefaults(): void {
@@ -82,7 +100,8 @@ export class UnifiedConfigManager {
       algorithm: { ...DEFAULT_MARCHING_SQUARES_ALGORITHM_CONFIG },
       interpolation: { ...DEFAULT_INTERPOLATION_CONFIG },
       smoothing: { ...DEFAULT_SMOOTHING_CONFIG },
-      performance: { ...DEFAULT_PERFORMANCE_CONFIG }
+      performance: { ...DEFAULT_PERFORMANCE_CONFIG },
+      enhancement: { ...DEFAULT_ENHANCEMENT_CONFIG }
     }
     this.notifyListeners()
   }

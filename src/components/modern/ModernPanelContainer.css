@@ -1,0 +1,57 @@
+/* Modern panel container with glassmorphism */
+.modern-panel-container {
+  height: 100%;
+  background: rgba(49, 50, 68, 0.4);
+  backdrop-filter: blur(20px);
+  border: 1px solid rgba(205, 214, 244, 0.1);
+  border-radius: 12px;
+  overflow: hidden;
+  box-shadow: 
+    0 8px 32px rgba(0, 0, 0, 0.2),
+    inset 0 1px 0 rgba(255, 255, 255, 0.05);
+  animation: slideInLeft 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.panel-inner {
+  height: 100%;
+  padding: 16px;
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+
+/* Custom scrollbar for panels */
+.panel-inner::-webkit-scrollbar {
+  width: 6px;
+}
+
+.panel-inner::-webkit-scrollbar-track {
+  background: rgba(17, 17, 27, 0.3);
+  border-radius: 3px;
+}
+
+.panel-inner::-webkit-scrollbar-thumb {
+  background: rgba(116, 199, 236, 0.3);
+  border-radius: 3px;
+  transition: background 0.2s ease;
+}
+
+.panel-inner::-webkit-scrollbar-thumb:hover {
+  background: rgba(116, 199, 236, 0.5);
+}
+
+/* Firefox scrollbar */
+.panel-inner {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(116, 199, 236, 0.3) rgba(17, 17, 27, 0.3);
+}
+
+@keyframes slideInLeft {
+  from {
+    transform: translateX(-20px);
+    opacity: 0;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}

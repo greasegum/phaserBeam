@@ -18,6 +18,7 @@ import { OrdinateDimensionRenderer } from './OrdinateDimensionRenderer'
 import { CalloutRenderer } from './CalloutRenderer'
 import { TextBlockRenderer } from './TextBlockRenderer'
 import { EnhancedAnnotationEffects } from './EnhancedAnnotationEffects'
+import { logger } from '../utils/Result'
 
 export class AnnotationManager {
   private textInputElement?: HTMLInputElement
@@ -97,7 +98,7 @@ export class AnnotationManager {
     this.inputZone.on('pointermove', this.handlePointerMove, this)
     this.inputZone.on('pointerup', this.handlePointerUp, this)
     
-    console.log('AnnotationManager event handlers set up with input zone:', width, 'x', height)
+    logger.debug('AnnotationManager event handlers initialized', { width, height })
   }
   
   public update(): void {
@@ -289,7 +290,7 @@ export class AnnotationManager {
       y: pointer.worldY
     }
     
-    console.log('AnnotationManager handlePointerDown:', point, 'isCreating:', this.isCreating, 'type:', this.creationType)
+    logger.debug('Handling pointer down', { point, isCreating: this.isCreating, type: this.creationType })
     
     // Event handled - no need to disable camera as scene already checks isCreatingAnnotation()
     
@@ -297,11 +298,11 @@ export class AnnotationManager {
       const snappedPoint = this.snapToGrid(point)
       this.creationPoints.push(snappedPoint)
       
-      console.log('Added creation point:', snappedPoint, 'total points:', this.creationPoints.length)
+      logger.debug('Added creation point', { point: snappedPoint, totalPoints: this.creationPoints.length })
       
       // Check if we have enough points to create the annotation
       if (this.shouldCreateAnnotation()) {
-        console.log('Creating annotation...')
+        logger.debug('Creating annotation from points')
         this.createAnnotation()
         // Reset points but keep the tool active for repeatability
         this.creationPoints = []
@@ -374,7 +375,7 @@ export class AnnotationManager {
     const id = `annotation_${Date.now()}`
     let annotation: Annotation | null = null
     
-    console.log('Creating annotation type:', this.creationType)
+    logger.debug('Creating annotation', { type: this.creationType })
     
     switch (this.creationType) {
       case 'linear-dimension':

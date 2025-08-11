@@ -1,424 +1,88 @@
-import { useState, useEffect } from 'react'
-import { SetupPopup } from './components/SetupPopup'
-import { PhaserCanvas } from './components/PhaserCanvas'
-import { BeamProfile, GridCell } from './types/beam'
-import { AppMode, MODE_CONFIGS } from './types/mode'
-import { AnnotationType } from './types/annotations'
-import { ModeToolbar } from './components/ModeToolbar'
-import { ZoomControl } from './components/ZoomControl'
-import { DefectType } from './types/defects'
-import { exportCanvasAsPNG, exportCanvasAsSVG } from './utils/canvasExport'
-import { BeamElevationScene } from './scenes/BeamElevationScene'
+/**
+ * Ultra-modern App component with Zustand state management
+ */
 
-import { PNGExportDialog } from './components/export/PNGExportDialog'
-import { SVGExportDialog } from './components/export/SVGExportDialog'
-import { PDFExportDialog } from './components/export/PDFExportDialog'
-import { ReportExportDialog } from './components/export/ReportExportDialog'
-import { ShareDialog } from './components/export/ShareDialog'
-import { PrintDialog } from './components/export/PrintDialog'
-import { UnifiedSettingsPanel } from './components/UnifiedSettingsPanel'
-import { UnifiedConfigManager } from './core/configuration/UnifiedConfigManager'
+import React, { useEffect } from 'react'
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+import { MinimalApp } from './components/modern/MinimalApp'
+// import { ModernLayout } from './components/modern/ModernLayout'
+// import { useAppStore } from './stores/appStore'
+import './App.css'
+
+// Create query client with modern defaults
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      staleTime: 1000 * 60 * 5, // 5 minutes
+      gcTime: 1000 * 60 * 10,   // 10 minutes
+      refetchOnWindowFocus: false,
+      retry: (failureCount, error) => {
+        // Don't retry on 4xx errors
+        if (error && 'status' in error && typeof error.status === 'number') {
+          return error.status >= 500 && failureCount < 3
+        }
+        return failureCount < 3
+      }
+    }
+  }
+})
+
+const AppContent: React.FC = () => {
+  return <MinimalApp />
+}
+
+// Generate sample scalar field data for demo
+function generateSampleScalarField(width: number, height: number): number[][] {
+  const field: number[][] = []
+  
+  for (let y = 0; y < height; y++) {
+    field[y] = []
+    for (let x = 0; x < width; x++) {
+      // Create interesting patterns for demo
+      const centerX = width / 2
+      const centerY = height / 2
+      const distance = Math.sqrt((x - centerX) ** 2 + (y - centerY) ** 2)
+      const maxDistance = Math.sqrt(centerX ** 2 + centerY ** 2)
+      
+      // Combine multiple patterns
+      const wave1 = Math.sin(x * 0.1) * Math.cos(y * 0.1)
+      const wave2 = Math.sin(distance * 0.2)
+      const gradient = 1 - (distance / maxDistance)
+      
+      field[y][x] = (wave1 * 0.3 + wave2 * 0.4 + gradient * 0.3 + 1) / 2
+    }
+  }
+  
+  return field
+}
 
 export default function App() {
-  const [selectedBeam, setSelectedBeam] = useState<BeamProfile | null>(null)
-  const [beamLength, setBeamLength] = useState<number>(120)
-  const [gridCells, setGridCells] = useState<GridCell[]>([])
-  const [showSetup, setShowSetup] = useState<boolean>(true)
-  const [appMode, setAppMode] = useState<AppMode>('edit')
-  const [gridOrigin, setGridOrigin] = useState<'left' | 'right'>('left')
-  const [showTopFlange, setShowTopFlange] = useState<boolean>(true)
-  const [elevationView, setElevationView] = useState<'N' | 'S' | 'E' | 'W'>('N')
-  const [isMobile, setIsMobile] = useState(false)
-  const [selectedAnnotationTool, setSelectedAnnotationTool] = useState<AnnotationType>('linear-dimension')
-  const [ordinateOriginSide, setOrdinateOriginSide] = useState<'left' | 'right'>('left')
-  const [showBeamEndDimensions, setShowBeamEndDimensions] = useState(true)
-  const [showBottomOrdinate, setShowBottomOrdinate] = useState(true)
-  const [spanLength, setSpanLength] = useState<number>(96) // Default 96" (8 ft)
-  const [currentZoom, setCurrentZoom] = useState<number>(1.0)
-  const [selectedDefectType, setSelectedDefectType] = useState<DefectType>('section-loss')
-  const [currentScene, setCurrentScene] = useState<BeamElevationScene | null>(null)
-  const [configManager] = useState(() => new UnifiedConfigManager())
-  const [showUnifiedSettings, setShowUnifiedSettings] = useState(false)
-
-  
-  // Individual export dialog states
-  const [showPNGDialog, setShowPNGDialog] = useState<boolean>(false)
-  const [showSVGDialog, setShowSVGDialog] = useState<boolean>(false)
-  const [showPDFDialog, setShowPDFDialog] = useState<boolean>(false)
-  const [showReportDialog, setShowReportDialog] = useState<boolean>(false)
-  const [showShareDialog, setShowShareDialog] = useState<boolean>(false)
-  const [showPrintDialog, setShowPrintDialog] = useState<boolean>(false)
-  
+  // Handle global error boundaries and setup
   useEffect(() => {
-    const checkMobile = () => {
-      setIsMobile(window.innerWidth < 768)
+    const handleGlobalError = (event: ErrorEvent) => {
+      console.error('Global error:', event.error)
+      // Could integrate with error reporting service here
     }
-    checkMobile()
-    window.addEventListener('resize', checkMobile)
-    return () => window.removeEventListener('resize', checkMobile)
+
+    const handleUnhandledRejection = (event: PromiseRejectionEvent) => {
+      console.error('Unhandled promise rejection:', event.reason)
+      // Could integrate with error reporting service here
+    }
+
+    window.addEventListener('error', handleGlobalError)
+    window.addEventListener('unhandledrejection', handleUnhandledRejection)
+
+    return () => {
+      window.removeEventListener('error', handleGlobalError)
+      window.removeEventListener('unhandledrejection', handleUnhandledRejection)
+    }
   }, [])
 
-  const handleSetupComplete = (beam: BeamProfile, length: number, elevation: 'N' | 'S' | 'E' | 'W', span: number, topFlange: boolean) => {
-    setSelectedBeam(beam)
-    setBeamLength(length)
-    setElevationView(elevation)
-    setSpanLength(span)
-    setShowTopFlange(topFlange)
-    setShowSetup(false)
-  }
-
-  const handleCellChange = (cells: GridCell[]) => {
-    setGridCells(cells)
-  }
-  
-  // Individual export handlers
-  const handleExportPNG = (options: any) => {
-    console.log('[App] handleExportPNG called with options:', options)
-    console.log('[App] currentScene:', currentScene)
-    console.log('[App] selectedBeam:', selectedBeam)
-    
-    if (!currentScene || !selectedBeam) {
-      console.error('[App] Missing currentScene or selectedBeam')
-      return
-    }
-    
-    const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, -5)
-    const beamName = selectedBeam.name.replace(/\s+/g, '-')
-    const filename = `${beamName}-inspection-${timestamp}.png`
-    
-    console.log('[App] Exporting PNG with filename:', filename)
-    
-    // Add a small delay to ensure canvas is fully rendered
-    setTimeout(() => {
-      console.log('[App] Executing PNG export after delay')
-      exportCanvasAsPNG(currentScene, filename)
-    }, 100)
-  }
-  
-  const handleExportSVG = (options: any) => {
-    if (!currentScene || !selectedBeam) return
-    
-    // Use our beautiful SVG export dialog
-    console.log('Exporting SVG with options:', options)
-    // TODO: Implement SVG export using the options
-  }
-  
-  const handleExportPDF = (options: any) => {
-    if (!currentScene || !selectedBeam) return
-    
-    // Use our beautiful PDF export dialog
-    console.log('Exporting PDF with options:', options)
-    // TODO: Implement PDF export using the options
-  }
-  
-  const handleExportReport = (options: any) => {
-    if (!selectedBeam) return
-    
-    const { format, includeHeader, includeBeamProperties, includeSectionLossMatrix, includeStatistics, coordinateSystem } = options
-    
-    // Generate report content based on format
-    let content = ''
-    const timestamp = new Date().toISOString()
-    const beamName = selectedBeam.name
-    
-    if (format === 'matlab') {
-      content = `% Beam Section Loss Analysis\n`
-      content += `% Generated: ${timestamp}\n`
-      content += `% Beam: ${beamName}\n`
-      content += `% Length: ${beamLength}" (${(beamLength/12).toFixed(1)} ft)\n\n`
-      
-      if (includeBeamProperties) {
-        content += `% Beam Properties\n`
-        content += `webHeight = ${selectedBeam.webHeight}; % inches\n`
-        content += `webThickness = ${selectedBeam.webThickness}; % inches\n`
-        content += `flangeWidth = ${selectedBeam.flangeWidth}; % inches\n`
-        content += `flangeThickness = ${selectedBeam.flangeThickness}; % inches\n\n`
-      }
-      
-      if (includeSectionLossMatrix) {
-        content += `% Section Loss Matrix\n`
-        content += `% Coordinates: ${coordinateSystem}\n`
-        content += `sectionLoss = [\n`
-        
-        // Group cells by row for matrix representation
-        const cellsByRow = new Map<number, GridCell[]>()
-        gridCells.forEach(cell => {
-          const row = cell.y
-          if (!cellsByRow.has(row)) cellsByRow.set(row, [])
-          cellsByRow.get(row)!.push(cell)
-        })
-        
-        // Create matrix representation
-        const sortedRows = Array.from(cellsByRow.keys()).sort((a, b) => a - b)
-        sortedRows.forEach(row => {
-          const cells = cellsByRow.get(row)!.sort((a, b) => a.x - b.x)
-          content += `  % Row ${row}: `
-          cells.forEach(cell => {
-            content += `[${cell.x},${cell.y}] `
-          })
-          content += `\n`
-        })
-        content += `];\n\n`
-      }
-      
-      if (includeStatistics) {
-        const totalCells = gridCells.length
-        const webCells = gridCells.filter(c => c.zone === 'web').length
-        const flangeCells = gridCells.filter(c => c.zone === 'flange-top' || c.zone === 'flange-bottom').length
-        
-        content += `% Statistics\n`
-        content += `totalDefects = ${totalCells};\n`
-        content += `webDefects = ${webCells};\n`
-        content += `flangeDefects = ${flangeCells};\n`
-        content += `sectionLossPercentage = ${((totalCells * 1 * 1) / (selectedBeam.webHeight * beamLength) * 100).toFixed(2)}; % percent\n`
-      }
-    }
-    
-    // Download the file
-    const blob = new Blob([content], { type: 'text/plain' })
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement('a')
-    a.href = url
-    a.download = `${beamName.replace(/\s+/g, '-')}-analysis-${timestamp.slice(0,10)}.${format === 'matlab' ? 'm' : format}`
-    a.click()
-    URL.revokeObjectURL(url)
-  }
-  
-  const handleShare = (method: string) => {
-    console.log('Share via:', method)
-    // Implement sharing functionality based on method
-  }
-  
-  const handlePrint = (options: any) => {
-    console.log('Print with options:', options)
-    // Print functionality is handled by the dialog itself
-  }
-
-  if (showSetup) {
-    return <SetupPopup onComplete={handleSetupComplete} />
-  }
-
   return (
-    <div style={{ 
-      display: 'flex', 
-      flexDirection: 'column', 
-      height: '100vh',
-      backgroundColor: '#f5f5f5'
-    }}>
-      {/* Minimal header */}
-      <header style={{ 
-        backgroundColor: 'white', 
-        padding: '10px 20px',
-        boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
-        display: 'flex',
-        justifyContent: 'space-between',
-        alignItems: 'center'
-      }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '20px' }}>
-          <h1 style={{ 
-            color: '#333', 
-            fontSize: '20px',
-            margin: 0
-          }}>Beam Inspection</h1>
-          {selectedBeam && (
-            <span style={{ color: '#666', fontSize: '14px' }}>
-              {selectedBeam.name} • {beamLength}" ({(beamLength/12).toFixed(1)} ft)
-            </span>
-          )}
-        </div>
-        
-        <div style={{ display: 'flex', gap: '10px' }}>
-          <select
-            value={appMode}
-            onChange={(e) => {
-              console.log('App.tsx: Changing mode from', appMode, 'to', e.target.value)
-              setAppMode(e.target.value as AppMode)
-            }}
-            style={{
-              padding: '6px 12px',
-              backgroundColor: '#4CAF50',
-              color: 'white',
-              border: 'none',
-              borderRadius: '4px',
-              cursor: 'pointer',
-              fontSize: '14px'
-            }}
-          >
-            <option value="edit">Edit Mode</option>
-            <option value="view">View Mode</option>
-            <option value="annotation">Annotation Mode</option>
-          </select>
-          <button
-            onClick={() => setGridCells([])}
-            style={{
-              padding: '6px 12px',
-              backgroundColor: '#ff9999',
-              color: 'white',
-              border: 'none',
-              borderRadius: '4px',
-              cursor: 'pointer',
-              fontSize: '14px'
-            }}
-          >
-            Clear All
-          </button>
-          <button
-            onClick={() => setShowSetup(true)}
-            style={{
-              padding: '6px 12px',
-              backgroundColor: '#666',
-              color: 'white',
-              border: 'none',
-              borderRadius: '4px',
-              cursor: 'pointer',
-              fontSize: '14px'
-            }}
-          >
-            New Inspection
-          </button>
-        </div>
-      </header>
-      
-      {/* Mode-specific toolbar band (2nd from top) */}
-      <ModeToolbar
-        appMode={appMode}
-        // Annotation mode props
-        selectedAnnotationTool={selectedAnnotationTool}
-        onSelectAnnotationTool={setSelectedAnnotationTool}
-        ordinateOriginSide={gridOrigin}
-        onToggleOrdinateOrigin={() => setGridOrigin(gridOrigin === 'left' ? 'right' : 'left')}
-        showBeamEndDimensions={showBeamEndDimensions}
-        showBottomOrdinate={showBottomOrdinate}
-        onToggleBeamEndDimensions={() => setShowBeamEndDimensions(!showBeamEndDimensions)}
-        onToggleBottomOrdinate={() => setShowBottomOrdinate(!showBottomOrdinate)}
-        // Edit mode props
-        selectedDefect={selectedDefectType}
-        onSelectDefect={setSelectedDefectType}
-        // View mode props - individual export handlers
-        onExportPNG={() => setShowPNGDialog(true)}
-        onExportSVG={() => setShowSVGDialog(true)}
-        onExportPDF={() => setShowPDFDialog(true)}
-        onExportReport={() => setShowReportDialog(true)}
-        onShare={() => setShowShareDialog(true)}
-        onPrint={() => setShowPrintDialog(true)}
-        onOpenSettings={() => setShowUnifiedSettings(true)}
-      />
-
-      {/* Main canvas area */}
-      <main style={{ 
-        flex: 1, 
-        position: 'relative',
-        overflow: 'auto'
-      }}>
-        <div style={{ position: 'relative', minWidth: '100%', height: '100%' }}>
-          <PhaserCanvas 
-            beamProfile={selectedBeam} 
-            onCellChange={handleCellChange}
-            editMode={MODE_CONFIGS[appMode].allowCellEditing}
-            beamLength={beamLength}
-            showGrid={MODE_CONFIGS[appMode].showGrid}
-            gridOrigin={gridOrigin}
-            showTopFlange={showTopFlange}
-            gridCells={gridCells}
-            elevationView={elevationView}
-            appMode={appMode}
-            selectedAnnotationTool={selectedAnnotationTool}
-            onSelectAnnotationTool={setSelectedAnnotationTool}
-            ordinateOriginSide={ordinateOriginSide}
-            onToggleOrdinateOrigin={() => setOrdinateOriginSide(ordinateOriginSide === 'left' ? 'right' : 'left')}
-            showBeamEndDimensions={showBeamEndDimensions}
-            showBottomOrdinate={showBottomOrdinate}
-            spanLength={spanLength}
-            zoom={currentZoom}
-            selectedDefectType={selectedDefectType}
-            onSceneReady={setCurrentScene}
-          />
-        </div>
-      </main>
-
-      {/* Minimal footer */}
-      <footer style={{ 
-        backgroundColor: 'white', 
-        padding: '8px 20px',
-        boxShadow: '0 -2px 4px rgba(0,0,0,0.1)',
-        fontSize: '12px',
-        color: '#666',
-        display: 'flex',
-        justifyContent: 'space-between'
-      }}>
-        <span>
-          {appMode === 'edit' && `Click cells to mark ${selectedDefectType.replace('-', ' ')}`}
-          {appMode === 'view' && 'View mode - Export ready'}
-          {appMode === 'annotation' && 'Click to add annotations'}
-        </span>
-        <span>Total cells: {gridCells.length}</span>
-      </footer>
-      
-      {/* Zoom control */}
-      <ZoomControl
-        currentZoom={currentZoom}
-        onZoomChange={setCurrentZoom}
-      />
-      
-
-      
-      {/* Individual Export Dialogs */}
-      <PNGExportDialog
-        isOpen={showPNGDialog}
-        onClose={() => setShowPNGDialog(false)}
-        onExport={handleExportPNG}
-        currentScene={currentScene}
-      />
-      
-      <SVGExportDialog
-        isOpen={showSVGDialog}
-        onClose={() => setShowSVGDialog(false)}
-        onExport={handleExportSVG}
-        currentScene={currentScene}
-      />
-      
-      <PDFExportDialog
-        isOpen={showPDFDialog}
-        onClose={() => setShowPDFDialog(false)}
-        onExport={handleExportPDF}
-        currentScene={currentScene}
-      />
-      
-      <ReportExportDialog
-        isOpen={showReportDialog}
-        onClose={() => setShowReportDialog(false)}
-        onExport={handleExportReport}
-        currentScene={currentScene}
-        gridCells={gridCells}
-        beamProfile={selectedBeam}
-      />
-      
-      <ShareDialog
-        isOpen={showShareDialog}
-        onClose={() => setShowShareDialog(false)}
-        onShare={handleShare}
-      />
-      
-      <PrintDialog
-        isOpen={showPrintDialog}
-        onClose={() => setShowPrintDialog(false)}
-        onPrint={handlePrint}
-      />
-      
-      {/* Unified Settings Panel */}
-      {showUnifiedSettings && (
-        <UnifiedSettingsPanel
-          configManager={configManager}
-          onConfigChange={(config) => {
-            console.log('Configuration updated:', config)
-            // Update the scene with new configuration
-            if (currentScene) {
-              currentScene.configManager.updateConfig(config)
-            }
-          }}
-          onClose={() => setShowUnifiedSettings(false)}
-        />
-      )}
-    </div>
+    <QueryClientProvider client={queryClient}>
+      <div className="app">
+        <AppContent />
+      </div>
+    </QueryClientProvider>
   )
 }

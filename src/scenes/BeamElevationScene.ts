@@ -9,11 +9,14 @@ import { DefectType } from '../types/defects'
 import { gridToScreen, screenToGrid, createGridToScreenTransform, beamToGrid, gridToBeam } from '../utils/coordinateTransform'
 import { UnifiedConfigManager } from '../core/configuration/UnifiedConfigManager'
 import { processGrid } from '../core'
+import { BeamDimensionRenderer, createBeamDimensionRenderer, DimensionConfig } from '../utils/BeamDimensionRenderer'
+import { Result, logger } from '../utils/Result'
 
 export class BeamElevationScene extends Phaser.Scene {
   // Core modules
   private gridSystem?: GridSystem
   private beamRenderer?: BeamRenderer
+  private dimensionRenderer?: BeamDimensionRenderer
   
   // Scene properties
   private beamProfile: BeamProfile | null = null
@@ -78,7 +81,7 @@ export class BeamElevationScene extends Phaser.Scene {
   }
 
   create() {
-    console.log('[BeamElevationScene] create() called')
+    logger.debug('BeamElevationScene created')
     if (!this.beamProfile) {
       console.error('[BeamElevationScene] No beam profile in create()')
       return
@@ -185,7 +188,7 @@ export class BeamElevationScene extends Phaser.Scene {
     
     // Restore saved annotations if any
     if (this.savedAnnotations && this.savedAnnotations.length > 0) {
-      console.log('Restoring', this.savedAnnotations.length, 'saved annotations')
+      logger.info('Restoring saved annotations', { count: this.savedAnnotations.length })
       this.annotationManager.restoreAnnotations(this.savedAnnotations)
     }
     
@@ -206,186 +209,30 @@ export class BeamElevationScene extends Phaser.Scene {
   }
 
   private addDimensions(startX: number, centerY: number, width: number) {
-    if (!this.beamProfile || !this.gridTransform) return
+    if (!this.beamProfile || !this.gridTransform) {
+      logger.warn('Cannot add dimensions: missing beam profile or grid transform')
+      return
+    }
 
-    const { webHeight, flangeThickness } = this.beamProfile
-    const totalHeight = webHeight + 2 * flangeThickness
-    
-    // Use same coordinate transformation as annotations
-    const gridOrigin = { x: startX, y: centerY }
-    
-    // Calculate beam dimensions in grid coordinates
-    const beamTopGrid = -totalHeight / 2
-    const beamBottomGrid = totalHeight / 2
-    const webTopGrid = -webHeight / 2
-    const webBottomGrid = webHeight / 2
-    const flangeTopGrid = beamTopGrid
-    const flangeBottomGrid = beamBottomGrid
-    
-    // Transform to screen coordinates using same method as annotations
-    const beamTop = gridToScreen({ x: 0, y: beamTopGrid }, this.gridTransform).y
-    const beamBottom = gridToScreen({ x: 0, y: beamBottomGrid }, this.gridTransform).y
-    const webTop = gridToScreen({ x: 0, y: webTopGrid }, this.gridTransform).y
-    const webBottom = gridToScreen({ x: 0, y: webBottomGrid }, this.gridTransform).y
-    const flangeTop = gridToScreen({ x: 0, y: flangeTopGrid }, this.gridTransform).y
-    const flangeBottom = gridToScreen({ x: 0, y: flangeBottomGrid }, this.gridTransform).y
+    // Initialize dimension renderer if not exists
+    if (!this.dimensionRenderer) {
+      this.dimensionRenderer = createBeamDimensionRenderer(this)
+    }
 
-    // Height dimension lines - position based on grid origin
-    const graphics = this.add.graphics()
-    
-    // Dimension positions (same logic as annotations)
-    const dim1X = this.gridOrigin === 'left' ? startX - 20 : startX + width + 20  // Closest to beam
-    const dim2X = this.gridOrigin === 'left' ? startX - 35 : startX + width + 35  // Middle
-    const dim3X = this.gridOrigin === 'left' ? startX - 55 : startX + width + 55  // Farthest
-    
-    // Draw all dimension lines with consistent style
-    graphics.lineStyle(1, 0x666666, 0.8)
-    
-    // Extension line offset from actual points
-    const extOffset = 2 // pixels to stop short of vertices
-    const beamEdgeX = this.gridOrigin === 'left' ? startX : startX + width
-    const extDir = this.gridOrigin === 'left' ? -1 : 1
-    
-    // Top flange dimension (closest to beam)
-    // Extension lines
-    graphics.beginPath()
-    graphics.moveTo(beamEdgeX - extDir * 5, flangeTop)
-    graphics.lineTo(dim1X + extDir * 5, flangeTop)
-    graphics.moveTo(beamEdgeX - extDir * 5, webTop)
-    graphics.lineTo(dim1X + extDir * 5, webTop)
-    graphics.strokePath()
-    
-    // Dimension line
-    graphics.beginPath()
-    graphics.moveTo(dim1X, flangeTop + extOffset)
-    graphics.lineTo(dim1X, webTop - extOffset)
-    graphics.strokePath()
-    // Arrows
-    graphics.moveTo(dim1X - 2, flangeTop + extOffset + 3)
-    graphics.lineTo(dim1X, flangeTop + extOffset)
-    graphics.lineTo(dim1X + 2, flangeTop + extOffset + 3)
-    graphics.moveTo(dim1X - 2, webTop - extOffset - 3)
-    graphics.lineTo(dim1X, webTop - extOffset)
-    graphics.lineTo(dim1X + 2, webTop - extOffset - 3)
-    graphics.strokePath()
-    
-    this.add.text(dim1X + (this.gridOrigin === 'left' ? -5 : 5), flangeTop + (webTop - flangeTop) / 2, `${flangeThickness.toFixed(3)}"`, {
-      fontSize: '11px',
-      color: '#666'
-    }).setOrigin(this.gridOrigin === 'left' ? 1 : 0, 0.5)
-    
-    // Web height dimension (middle)
-    // Extension lines
-    graphics.beginPath()
-    graphics.moveTo(beamEdgeX - extDir * 5, webTop)
-    graphics.lineTo(dim2X + extDir * 5, webTop)
-    graphics.moveTo(beamEdgeX - extDir * 5, webBottom)
-    graphics.lineTo(dim2X + extDir * 5, webBottom)
-    graphics.strokePath()
-    
-    // Dimension line
-    graphics.beginPath()
-    graphics.moveTo(dim2X, webTop + extOffset)
-    graphics.lineTo(dim2X, webBottom - extOffset)
-    graphics.strokePath()
-    // Arrows
-    graphics.moveTo(dim2X - 2, webTop + extOffset + 3)
-    graphics.lineTo(dim2X, webTop + extOffset)
-    graphics.lineTo(dim2X + 2, webTop + extOffset + 3)
-    graphics.moveTo(dim2X - 2, webBottom - extOffset - 3)
-    graphics.lineTo(dim2X, webBottom - extOffset)
-    graphics.lineTo(dim2X + 2, webBottom - extOffset - 3)
-    graphics.strokePath()
-    
-    // Web height label - rotated vertically
-    const webText = this.add.text(dim2X + (this.gridOrigin === 'left' ? -5 : 5), centerY, `${webHeight.toFixed(3)}"`, {
-      fontSize: '11px',
-      color: '#666'
-    })
-    webText.setOrigin(0.5, this.gridOrigin === 'left' ? 1 : 0)
-    webText.setRotation(this.gridOrigin === 'left' ? -Math.PI/2 : Math.PI/2)
-    
-    // Bottom flange dimension (closest to beam)
-    // Extension lines
-    graphics.beginPath()
-    graphics.moveTo(beamEdgeX - extDir * 5, webBottom)
-    graphics.lineTo(dim1X + extDir * 5, webBottom)
-    graphics.moveTo(beamEdgeX - extDir * 5, beamBottom)
-    graphics.lineTo(dim1X + extDir * 5, beamBottom)
-    graphics.strokePath()
-    
-    // Dimension line
-    graphics.beginPath()
-    graphics.moveTo(dim1X, webBottom + extOffset)
-    graphics.lineTo(dim1X, beamBottom - extOffset)
-    graphics.strokePath()
-    // Arrows
-    graphics.moveTo(dim1X - 2, webBottom + extOffset + 3)
-    graphics.lineTo(dim1X, webBottom + extOffset)
-    graphics.lineTo(dim1X + 2, webBottom + extOffset + 3)
-    graphics.moveTo(dim1X - 2, beamBottom - extOffset - 3)
-    graphics.lineTo(dim1X, beamBottom - extOffset)
-    graphics.lineTo(dim1X + 2, beamBottom - extOffset - 3)
-    graphics.strokePath()
-    
-    this.add.text(dim1X + (this.gridOrigin === 'left' ? -5 : 5), webBottom + (beamBottom - webBottom) / 2, `${flangeThickness.toFixed(3)}"`, {
-      fontSize: '11px',
-      color: '#666'
-    }).setOrigin(this.gridOrigin === 'left' ? 1 : 0, 0.5)
-    
-    // Overall height dimension (farthest)
-    graphics.lineStyle(1, 0x333333)
-    
-    // Extension lines
-    graphics.beginPath()
-    graphics.moveTo(beamEdgeX - extDir * 5, beamTop)
-    graphics.lineTo(dim3X + extDir * 5, beamTop)
-    graphics.moveTo(beamEdgeX - extDir * 5, beamBottom)
-    graphics.lineTo(dim3X + extDir * 5, beamBottom)
-    graphics.strokePath()
-    
-    // Dimension line
-    graphics.beginPath()
-    graphics.moveTo(dim3X, beamTop + extOffset)
-    graphics.lineTo(dim3X, beamBottom - extOffset)
-    graphics.strokePath()
-    // Arrows
-    graphics.moveTo(dim3X - 3, beamTop + extOffset + 4)
-    graphics.lineTo(dim3X, beamTop + extOffset)
-    graphics.lineTo(dim3X + 3, beamTop + extOffset + 4)
-    graphics.moveTo(dim3X - 3, beamBottom - extOffset - 4)
-    graphics.lineTo(dim3X, beamBottom - extOffset)
-    graphics.lineTo(dim3X + 3, beamBottom - extOffset - 4)
-    graphics.strokePath()
-    
-    // Overall height label - rotated vertically
-    const heightText = this.add.text(dim3X + (this.gridOrigin === 'left' ? -8 : 8), centerY, `${totalHeight.toFixed(3)}"`, {
-      fontSize: '13px',
-      color: '#333',
-      fontStyle: 'bold'
-    })
-    heightText.setOrigin(0.5, this.gridOrigin === 'left' ? 1 : 0)
-    heightText.setRotation(this.gridOrigin === 'left' ? -Math.PI/2 : Math.PI/2)
+    const config: DimensionConfig = {
+      startX,
+      centerY,
+      width,
+      beamLength: this.beamLength,
+      gridOrigin: this.gridOrigin,
+      beamProfile: this.beamProfile,
+      gridTransform: this.gridTransform
+    }
 
-    // Length dimension markers at bottom using same coordinate system
-    const dimY = beamBottom + 40
+    const result = this.dimensionRenderer.renderDimensions(config)
     
-    // Draw inch markers every 12 inches based on grid origin
-    for (let i = 0; i <= this.beamLength; i += 12) {
-      // Use same coordinate transformation as annotations
-      const gridX = this.gridOrigin === 'left' ? i : this.beamLength - i
-      const screenPoint = gridToScreen({ x: gridX, y: 0 }, this.gridTransform)
-      
-      graphics.beginPath()
-      graphics.moveTo(screenPoint.x, dimY - 5)
-      graphics.lineTo(screenPoint.x, dimY + 5)
-      graphics.strokePath()
-      
-      const label = this.gridOrigin === 'left' ? i : this.beamLength - i
-      this.add.text(screenPoint.x, dimY + 15, `${label}"`, {
-        fontSize: '12px',
-        color: '#333'
-      }).setOrigin(0.5, 0)
+    if (!Result.isSuccess(result)) {
+      logger.error('Failed to render beam dimensions', result.error)
     }
   }
 
@@ -450,7 +297,7 @@ export class BeamElevationScene extends Phaser.Scene {
   private redrawVisualization() {
     if (!this.beamProfile || !this.beamRenderer || !this.gridSystem) return
     
-    console.log('[BeamElevationScene] Redrawing visualization')
+    logger.debug('Redrawing beam visualization')
     
     const padding = 100
     const startX = padding
@@ -469,13 +316,13 @@ export class BeamElevationScene extends Phaser.Scene {
     
     // Generate and draw contours only when cells change
     const selectedCells = this.gridSystem.getSelectedCells()
-    console.log('[BeamElevationScene] Selected cells count:', selectedCells.length)
+    logger.debug('Processing selected cells', { count: selectedCells.length })
     if (selectedCells.length > 0) {
-      console.log('[BeamElevationScene] Selected cells:', selectedCells.map(c => `${c.zone}_${c.x}_${c.y}`))
+      logger.debug('Selected cell details', { cells: selectedCells.map(c => `${c.zone}_${c.x}_${c.y}`) })
       this.generateAndDrawContours(dimensions, selectedCells)
     } else {
       // Clear contours when no cells are selected
-      console.log('[BeamElevationScene] No cells selected, clearing contours')
+      logger.debug('No cells selected, clearing contours')
       this.beamRenderer.clearContours()
     }
   }
@@ -486,12 +333,12 @@ export class BeamElevationScene extends Phaser.Scene {
       return
     }
     
-    console.log('[BeamElevationScene] Beam profile:', this.beamProfile)
-    console.log('[BeamElevationScene] Beam length:', this.beamLength)
+    logger.debug('Beam profile for contours', { profile: this.beamProfile })
+    logger.debug('Beam length for contours', { length: this.beamLength })
     
     // Separate web cells for contour generation
     const webCells = selectedCells.filter(cell => cell.zone === 'web')
-    console.log('[BeamElevationScene] Web cells for contour generation:', webCells.length)
+    logger.debug('Web cells prepared for contour generation', { count: webCells.length })
     
     if (webCells.length === 0) {
       console.log('[BeamElevationScene] No web cells, skipping contour generation')
@@ -600,7 +447,7 @@ export class BeamElevationScene extends Phaser.Scene {
     // Save annotations before destroying
     if (this.annotationManager) {
       this.savedAnnotations = this.annotationManager.getAnnotations()
-      console.log('Saving', this.savedAnnotations.length, 'annotations before shutdown')
+      logger.info('Saving annotations before shutdown', { count: this.savedAnnotations.length })
       this.annotationManager.destroy()
       this.annotationManager = undefined
     }
@@ -610,6 +457,11 @@ export class BeamElevationScene extends Phaser.Scene {
     }
     if (this.beamRenderer) {
       this.beamRenderer.destroy()
+    }
+    
+    if (this.dimensionRenderer) {
+      this.dimensionRenderer.destroy()
+      this.dimensionRenderer = undefined
     }
   }
 }

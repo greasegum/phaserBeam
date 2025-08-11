@@ -65,7 +65,7 @@ export const PhaserCanvas: React.FC<PhaserCanvasProps> = ({
       width: window.innerWidth,
       height: window.innerHeight - 100, // Account for header and footer
       parent: containerRef.current,
-      backgroundColor: '#f0f0f0',
+      backgroundColor: '#ffffff',
       scene: [BeamElevationScene],
       physics: {
         default: 'arcade',

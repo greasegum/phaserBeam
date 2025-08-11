@@ -25,11 +25,16 @@
   "homepage": "https://github.com/greasegum/phaserBeam#readme",
   "dependencies": {
     "2": "^3.0.0",
+    "@tanstack/react-query": "^5.84.2",
+    "immer": "^10.1.1",
+    "jotai": "^2.13.1",
     "jspdf": "^3.0.1",
     "phaser": "^3.90.0",
     "react": "^19.1.1",
     "react-dom": "^19.1.1",
-    "svg2pdf.js": "^2.5.0"
+    "svg2pdf.js": "^2.5.0",
+    "use-immer": "^0.11.0",
+    "zustand": "^5.0.7"
   },
   "devDependencies": {
     "@types/node": "^24.2.0",
