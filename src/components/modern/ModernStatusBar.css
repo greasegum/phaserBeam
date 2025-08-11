@@ -1,0 +1,192 @@
+/* Modern status bar with glassmorphism */
+.modern-status-bar {
+  display: flex;
+  align-items: center;
+  justify-content: between;
+  padding: 6px 16px;
+  background: rgba(30, 30, 46, 0.95);
+  backdrop-filter: blur(20px);
+  border-top: 1px solid rgba(205, 214, 244, 0.1);
+  height: 32px;
+  font-size: 11px;
+  color: #a6adc8;
+  position: relative;
+  z-index: 1000;
+}
+
+.status-section {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.status-left {
+  flex: 1;
+  justify-content: flex-start;
+}
+
+.status-center {
+  flex: 0 1 auto;
+  justify-content: center;
+}
+
+.status-right {
+  flex: 1;
+  justify-content: flex-end;
+}
+
+.status-item {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  border-radius: 4px;
+  transition: all 0.2s ease;
+  white-space: nowrap;
+}
+
+.status-item:hover {
+  background: rgba(205, 214, 244, 0.1);
+  color: #cdd6f4;
+}
+
+.status-icon {
+  font-size: 10px;
+  opacity: 0.8;
+}
+
+.status-text {
+  font-weight: 500;
+  letter-spacing: 0.2px;
+}
+
+.status-separator {
+  width: 1px;
+  height: 16px;
+  background: rgba(205, 214, 244, 0.2);
+  margin: 0 4px;
+}
+
+/* Status colors */
+.status-good { color: #a6e3a1; }
+.status-warning { color: #f9e2af; }
+.status-error { color: #f38ba8; }
+
+/* Processing indicator */
+.status-item.processing {
+  background: rgba(116, 199, 236, 0.1);
+  border: 1px solid rgba(116, 199, 236, 0.2);
+  border-radius: 6px;
+  padding: 4px 8px;
+  gap: 6px;
+  color: #74c7ec;
+}
+
+.processing-spinner-small {
+  width: 10px;
+  height: 10px;
+  border: 1.5px solid rgba(116, 199, 236, 0.2);
+  border-top: 1.5px solid #74c7ec;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+}
+
+.progress-bar-small {
+  width: 40px;
+  height: 2px;
+  background: rgba(17, 17, 27, 0.8);
+  border-radius: 1px;
+  overflow: hidden;
+}
+
+.progress-fill-small {
+  height: 100%;
+  background: #74c7ec;
+  border-radius: 1px;
+  transition: width 0.3s ease;
+}
+
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+/* Special status items */
+.cursor-coords {
+  font-family: 'JetBrains Mono', 'Consolas', monospace;
+  font-size: 10px;
+}
+
+.time {
+  font-family: 'JetBrains Mono', 'Consolas', monospace;
+  color: #89b4fa;
+}
+
+/* Responsive design */
+@media (max-width: 768px) {
+  .modern-status-bar {
+    padding: 4px 12px;
+    font-size: 10px;
+    gap: 8px;
+  }
+  
+  .status-section {
+    gap: 8px;
+  }
+  
+  .status-item {
+    padding: 1px 4px;
+  }
+  
+  /* Hide less important items on mobile */
+  .status-item:nth-child(n+3) {
+    display: none;
+  }
+  
+  .status-right .status-item:nth-child(-n+2) {
+    display: flex;
+  }
+}
+
+@media (max-width: 480px) {
+  .status-center {
+    display: none;
+  }
+  
+  .status-right .status-item:first-child {
+    display: none;
+  }
+}
+
+/* Accessibility */
+@media (prefers-reduced-motion: reduce) {
+  .processing-spinner-small {
+    animation: none;
+    border: 1.5px solid #74c7ec;
+  }
+  
+  .progress-fill-small {
+    transition: none;
+  }
+  
+  .status-item {
+    transition: none;
+  }
+}
+
+/* High contrast mode */
+@media (prefers-contrast: high) {
+  .modern-status-bar {
+    background: #000;
+    border-top-color: #fff;
+    color: #fff;
+  }
+  
+  .status-item:hover {
+    background: #333;
+  }
+  
+  .status-separator {
+    background: #666;
+  }
+}
