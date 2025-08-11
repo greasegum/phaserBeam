@@ -1,5 +1,5 @@
 /**
- * Modern beam inspection app with original functionality restored
+ * Professional engineering beam inspection app - matches reference drawing style
  */
 
 import React, { useState, useEffect } from 'react'
@@ -20,7 +20,7 @@ export const MinimalApp: React.FC = () => {
   const [appMode, setAppMode] = useState<AppMode>('edit')
   const [gridOrigin, setGridOrigin] = useState<'left' | 'right'>('left')
   const [showTopFlange, setShowTopFlange] = useState<boolean>(true)
-  const [elevationView, setElevationView] = useState<'N' | 'S' | 'E' | 'W'>('N')
+  const [elevationView, setElevationView] = useState<'N' | 'S' | 'E' | 'W'>('E')
   const [selectedAnnotationTool, setSelectedAnnotationTool] = useState<AnnotationType>('linear-dimension')
   const [ordinateOriginSide, setOrdinateOriginSide] = useState<'left' | 'right'>('left')
   const [showBeamEndDimensions, setShowBeamEndDimensions] = useState(true)
@@ -53,7 +53,7 @@ export const MinimalApp: React.FC = () => {
         left: 0,
         width: '100vw',
         height: '100vh',
-        background: 'linear-gradient(135deg, #1e1e2e 0%, #2a2a3e 50%, #1e1e2e 100%)',
+        background: 'white',
         zIndex: 1000
       }}>
         <SetupPopup onComplete={handleSetupComplete} />
@@ -65,170 +65,209 @@ export const MinimalApp: React.FC = () => {
     <div style={{
       width: '100vw',
       height: '100vh',
-      background: '#f5f5f5',
+      background: 'white',
       display: 'flex',
-      flexDirection: 'column'
+      flexDirection: 'column',
+      fontFamily: 'Arial, sans-serif'
     }}>
-      {/* Modern Header */}
+      {/* Professional Engineering Drawing Header */}
       <header style={{
-        background: 'rgba(30, 30, 46, 0.95)',
-        backdropFilter: 'blur(20px)',
-        borderBottom: '1px solid rgba(205, 214, 244, 0.1)',
-        padding: '12px 20px',
-        color: '#cdd6f4',
+        background: 'white',
+        borderBottom: '2px solid #000',
+        padding: '20px 40px',
+        color: '#000',
         display: 'flex',
-        justifyContent: 'space-between',
-        alignItems: 'center',
+        flexDirection: 'column',
         zIndex: 100
       }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '20px' }}>
+        {/* Main Title - Centered like engineering drawing */}
+        <div style={{
+          textAlign: 'center',
+          marginBottom: '16px'
+        }}>
           <h1 style={{
-            fontSize: '20px',
+            fontSize: '16px',
             margin: 0,
-            background: 'linear-gradient(135deg, #74c7ec, #89b4fa)',
-            backgroundClip: 'text',
-            WebkitBackgroundClip: 'text',
-            WebkitTextFillColor: 'transparent',
-            fontWeight: '700'
+            fontWeight: 'bold',
+            color: '#000',
+            letterSpacing: '1px'
           }}>
-            🔧 BeamAnalyzer
+            {selectedBeam ? `${selectedBeam.name}, ${elevationView} Elevation` : 'BEAM INSPECTION'}
           </h1>
-          {selectedBeam && (
-            <span style={{ color: '#a6adc8', fontSize: '14px' }}>
-              {selectedBeam.name} • {beamLength}" ({(beamLength/12).toFixed(1)} ft)
-            </span>
-          )}
         </div>
 
-        <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
-          {/* Mode Selector */}
-          <select
-            value={appMode}
-            onChange={(e) => setAppMode(e.target.value as AppMode)}
-            style={{
-              background: 'rgba(49, 50, 68, 0.8)',
-              border: '1px solid rgba(116, 199, 236, 0.3)',
-              borderRadius: '8px',
-              color: '#cdd6f4',
-              padding: '6px 12px',
-              fontSize: '14px'
-            }}
-          >
-            <option value="edit">Edit Mode</option>
-            <option value="view">View Mode</option>
-            <option value="annotation">Annotation Mode</option>
-          </select>
+        {/* Controls Row */}
+        <div style={{
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          fontSize: '12px'
+        }}>
+          <div style={{ display: 'flex', gap: '20px' }}>
+            {/* Mode Controls */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <span style={{ fontWeight: 'bold' }}>MODE:</span>
+              <select
+                value={appMode}
+                onChange={(e) => setAppMode(e.target.value as AppMode)}
+                style={{
+                  border: '1px solid #333',
+                  padding: '4px 8px',
+                  fontSize: '11px',
+                  fontFamily: 'Arial, sans-serif'
+                }}
+              >
+                <option value="edit">EDIT</option>
+                <option value="view">VIEW</option>
+                <option value="annotation">ANNOTATION</option>
+              </select>
+            </div>
 
-          {/* Defect Type for Edit Mode */}
-          {appMode === 'edit' && (
-            <select
-              value={selectedDefectType}
-              onChange={(e) => setSelectedDefectType(e.target.value as DefectType)}
+            {/* Defect Type for Edit Mode */}
+            {appMode === 'edit' && (
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <span style={{ fontWeight: 'bold' }}>DEFECT:</span>
+                <select
+                  value={selectedDefectType}
+                  onChange={(e) => setSelectedDefectType(e.target.value as DefectType)}
+                  style={{
+                    border: '1px solid #333',
+                    padding: '4px 8px',
+                    fontSize: '11px',
+                    fontFamily: 'Arial, sans-serif'
+                  }}
+                >
+                  <option value="section-loss">SECTION LOSS</option>
+                  <option value="crack">CRACK</option>
+                  <option value="corrosion">CORROSION</option>
+                  <option value="deformation">DEFORMATION</option>
+                </select>
+              </div>
+            )}
+          </div>
+
+          <div style={{ display: 'flex', gap: '16px' }}>
+            <button
+              onClick={() => setGridCells([])}
               style={{
-                background: 'rgba(49, 50, 68, 0.8)',
-                border: '1px solid rgba(116, 199, 236, 0.3)',
-                borderRadius: '8px',
-                color: '#cdd6f4',
-                padding: '6px 12px',
-                fontSize: '14px'
+                border: '1px solid #333',
+                background: 'white',
+                padding: '4px 12px',
+                fontSize: '11px',
+                cursor: 'pointer',
+                fontFamily: 'Arial, sans-serif',
+                fontWeight: 'bold'
               }}
             >
-              <option value="section-loss">Section Loss</option>
-              <option value="crack">Crack</option>
-              <option value="corrosion">Corrosion</option>
-              <option value="deformation">Deformation</option>
-            </select>
-          )}
-
-          {/* Clear Button */}
-          <button
-            onClick={() => setGridCells([])}
-            style={{
-              background: 'rgba(243, 139, 168, 0.2)',
-              border: '1px solid rgba(243, 139, 168, 0.4)',
-              borderRadius: '8px',
-              color: '#f38ba8',
-              padding: '6px 12px',
-              fontSize: '14px',
-              cursor: 'pointer'
-            }}
-          >
-            Clear All
-          </button>
-
-          {/* New Inspection Button */}
-          <button
-            onClick={() => setShowSetup(true)}
-            style={{
-              background: 'rgba(116, 199, 236, 0.2)',
-              border: '1px solid rgba(116, 199, 236, 0.4)',
-              borderRadius: '8px',
-              color: '#74c7ec',
-              padding: '6px 12px',
-              fontSize: '14px',
-              cursor: 'pointer'
-            }}
-          >
-            New Inspection
-          </button>
+              CLEAR ALL
+            </button>
+            
+            <button
+              onClick={() => setShowSetup(true)}
+              style={{
+                border: '1px solid #333',
+                background: 'white',
+                padding: '4px 12px',
+                fontSize: '11px',
+                cursor: 'pointer',
+                fontFamily: 'Arial, sans-serif',
+                fontWeight: 'bold'
+              }}
+            >
+              NEW INSPECTION
+            </button>
+          </div>
         </div>
       </header>
 
-      {/* Main Canvas Area */}
+      {/* Main Drawing Canvas Area - White background like engineering drawing */}
       <main style={{ 
         flex: 1, 
         position: 'relative',
         overflow: 'auto',
-        background: '#f0f0f0'
+        background: 'white'
       }}>
         {selectedBeam && (
-          <PhaserCanvas 
-            beamProfile={selectedBeam}
-            onCellChange={handleCellChange}
-            editMode={appMode === 'edit'}
-            beamLength={beamLength}
-            showGrid={true}
-            gridOrigin={gridOrigin}
-            showTopFlange={showTopFlange}
-            gridCells={gridCells}
-            elevationView={elevationView}
-            appMode={appMode}
-            selectedAnnotationTool={selectedAnnotationTool}
-            onSelectAnnotationTool={setSelectedAnnotationTool}
-            ordinateOriginSide={ordinateOriginSide}
-            onToggleOrdinateOrigin={() => setOrdinateOriginSide(ordinateOriginSide === 'left' ? 'right' : 'left')}
-            showBeamEndDimensions={showBeamEndDimensions}
-            showBottomOrdinate={showBottomOrdinate}
-            spanLength={spanLength}
-            zoom={currentZoom}
-            selectedDefectType={selectedDefectType}
-          />
+          <div style={{ 
+            width: '100%', 
+            height: '100%',
+            background: 'white',
+            position: 'relative'
+          }}>
+            <PhaserCanvas 
+              beamProfile={selectedBeam}
+              onCellChange={handleCellChange}
+              editMode={appMode === 'edit'}
+              beamLength={beamLength}
+              showGrid={true}
+              gridOrigin={gridOrigin}
+              showTopFlange={showTopFlange}
+              gridCells={gridCells}
+              elevationView={elevationView}
+              appMode={appMode}
+              selectedAnnotationTool={selectedAnnotationTool}
+              onSelectAnnotationTool={setSelectedAnnotationTool}
+              ordinateOriginSide={ordinateOriginSide}
+              onToggleOrdinateOrigin={() => setOrdinateOriginSide(ordinateOriginSide === 'left' ? 'right' : 'left')}
+              showBeamEndDimensions={showBeamEndDimensions}
+              showBottomOrdinate={showBottomOrdinate}
+              spanLength={spanLength}
+              zoom={currentZoom}
+              selectedDefectType={selectedDefectType}
+            />
+          </div>
         )}
       </main>
 
-      {/* Modern Status Bar */}
+      {/* Professional Engineering Drawing Footer */}
       <footer style={{
-        background: 'rgba(30, 30, 46, 0.95)',
-        backdropFilter: 'blur(20px)',
-        borderTop: '1px solid rgba(205, 214, 244, 0.1)',
-        padding: '8px 20px',
-        color: '#a6adc8',
-        fontSize: '12px',
+        background: 'white',
+        borderTop: '2px solid #000',
+        padding: '12px 40px',
+        color: '#000',
+        fontSize: '11px',
         display: 'flex',
         justifyContent: 'space-between',
         alignItems: 'center',
-        zIndex: 100
+        fontFamily: 'Arial, sans-serif'
       }}>
-        <span>
-          {appMode === 'edit' && `Click cells to mark ${selectedDefectType.replace('-', ' ')}`}
-          {appMode === 'view' && 'View mode - Ready for export'}
-          {appMode === 'annotation' && 'Click to add annotations'}
-        </span>
-        
-        <div style={{ display: 'flex', gap: '20px' }}>
-          <span>Marked cells: {gridCells.length}</span>
-          <span>Zoom: {Math.round(currentZoom * 100)}%</span>
-          <span style={{ color: '#74c7ec' }}>✅ Modern UI Active</span>
+        {/* Left Side - Original Section Properties */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+          <div style={{ fontWeight: 'bold', marginBottom: '4px' }}>Original Section Properties:</div>
+          {selectedBeam && (
+            <>
+              <div>Profile = {selectedBeam.name}</div>
+              <div>Web = {(selectedBeam.webThickness || 0.5).toFixed(2)}"</div>
+              <div>Flange = {(selectedBeam.flangeThickness || 0.65).toFixed(2)}"</div>
+              <div>Length = {(beamLength / 12).toFixed(0)}.00"</div>
+            </>
+          )}
+        </div>
+
+        {/* Center - Instructions */}
+        <div style={{ textAlign: 'center', maxWidth: '400px' }}>
+          {appMode === 'edit' && (
+            <>
+              <div style={{ fontWeight: 'bold', marginBottom: '4px' }}>Instructions:</div>
+              <div>Click grid cells to mark {selectedDefectType.replace('-', ' ')} areas.</div>
+              <div>Use CLEAR ALL to remove all markings.</div>
+            </>
+          )}
+          {appMode === 'view' && (
+            <div style={{ fontWeight: 'bold' }}>VIEW MODE - Ready for export and analysis</div>
+          )}
+        </div>
+
+        {/* Right Side - Status */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '2px', textAlign: 'right' }}>
+          <div>
+            <span style={{ fontWeight: 'bold' }}>Area of S.L.:</span>
+          </div>
+          <div>Marked cells: {gridCells.length}</div>
+          <div>Total length: {beamLength}"</div>
+          <div style={{ fontSize: '10px', color: '#666' }}>
+            Scale: {Math.round(currentZoom * 100)}%
+          </div>
         </div>
       </footer>
     </div>
