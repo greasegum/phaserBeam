@@ -52,22 +52,71 @@ export {
 } from './BezierRendering'
 export type { EdgeConstraints } from './BezierRendering'
 
-// Unified contour processing entry point
+// Unified contour processing entry point with enhancement support
 import { MarchingSquaresEngine, ProcessingResult } from './engine/MarchingSquaresEngine'
 import { MarchingSquaresConfig } from './configuration/MarchingSquaresConfig'
 import { EdgeConstraint } from './algorithms/SmoothingAlgorithm'
+import { enhanceScalarField } from './ScalarFieldEnhancements'
+import { EnhancementConfig } from './configuration/EnhancementConfig'
+import { logger } from '../utils/Result'
+
 /**
- * Process a scalar grid into contours using unified core pipeline.
+ * Extended configuration for enhanced processing
+ */
+export interface EnhancedProcessingConfig extends Partial<MarchingSquaresConfig> {
+  /** Enhancement settings for improved contour quality */
+  enhancement?: EnhancementConfig
+}
+
+/**
+ * Process a scalar grid into contours using unified core pipeline with optional enhancement.
+ * NEW: Now supports advanced algorithms from ScalarFieldEnhancements!
  * @param grid 2D array of scalar values
- * @param config Partial marching squares configuration
+ * @param config Configuration including optional enhancement
  * @param constraints Optional edge constraints for smoothing
  * @returns ProcessingResult containing contours and metrics
  */
 export function processGrid(
   grid: number[][],
+  config: EnhancedProcessingConfig = {},
+  constraints?: EdgeConstraint[]
+): ProcessingResult {
+  let processedGrid = grid
+  
+  // Apply enhancement if configured (integrates orphaned algorithms!)
+  if (config.enhancement?.enabled && config.enhancement.algorithm !== 'none') {
+    const enhancementStart = performance.now()
+    logger.info('Applying grid enhancement in core pipeline', { 
+      algorithm: config.enhancement.algorithm,
+      strength: config.enhancement.strength 
+    })
+    
+    processedGrid = enhanceScalarField(
+      grid,
+      config.enhancement.algorithm,
+      {
+        strength: config.enhancement.strength,
+        iterations: config.enhancement.iterations,
+        preserveEdges: config.enhancement.preserveEdges,
+        ...config.enhancement.algorithmParams[config.enhancement.algorithm]
+      }
+    )
+    
+    const enhancementTime = performance.now() - enhancementStart
+    logger.debug('Grid enhancement completed in core', { enhancementTime: enhancementTime.toFixed(2) })
+  }
+  
+  const engine = new MarchingSquaresEngine(config)
+  return engine.process(processedGrid, constraints)
+}
+
+/**
+ * Legacy function for compatibility - delegates to enhanced processGrid
+ */
+export function processGridBasic(
+  grid: number[][],
   config: Partial<MarchingSquaresConfig> = {},
   constraints?: EdgeConstraint[]
 ): ProcessingResult {
-  const engine = new MarchingSquaresEngine(config)
-  return engine.process(grid, constraints)
+  return processGrid(grid, config, constraints)
 }

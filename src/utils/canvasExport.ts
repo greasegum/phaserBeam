@@ -1,23 +1,20 @@
 import Phaser from 'phaser'
+import { logger } from './Result'
 
 export function exportCanvasAsPNG(scene: Phaser.Scene, filename: string = 'beam-inspection.png') {
-  console.log('[CanvasExport] Starting PNG export')
-  console.log('[CanvasExport] Scene:', scene)
-  console.log('[CanvasExport] Filename:', filename)
+  logger.info('Starting PNG export', { scene: scene.scene.key, filename })
   
   try {
     // Use Phaser's built-in screenshot functionality
     const game = scene.game
-    console.log('[CanvasExport] Game:', game)
-    
     if (!game) {
-      console.error('[CanvasExport] No game instance found')
+      logger.error('No game instance found for PNG export')
       return
     }
     
     // Take a screenshot using Phaser's built-in method
     game.renderer.snapshot((snapshot: HTMLImageElement | Phaser.Display.Color) => {
-      console.log('[CanvasExport] Screenshot captured:', snapshot)
+      logger.debug('Screenshot captured for PNG export')
       
       // Check if we got an image (not a color)
       if (snapshot instanceof HTMLImageElement) {
@@ -28,7 +25,7 @@ export function exportCanvasAsPNG(scene: Phaser.Scene, filename: string = 'beam-
         exportCanvas.width = snapshot.width
         exportCanvas.height = snapshot.height
         
-        console.log('[CanvasExport] Export canvas dimensions:', exportCanvas.width, 'x', exportCanvas.height)
+        logger.debug('Export canvas created', { width: exportCanvas.width, height: exportCanvas.height })
         
         // Fill with white background
         ctx.fillStyle = '#ffffff'
@@ -37,11 +34,11 @@ export function exportCanvasAsPNG(scene: Phaser.Scene, filename: string = 'beam-
         // Draw the screenshot
         ctx.drawImage(snapshot, 0, 0)
         
-        console.log('[CanvasExport] Screenshot drawn to export canvas')
+        logger.debug('Screenshot drawn to export canvas')
         
         // Convert to data URL
         const dataURL = exportCanvas.toDataURL('image/png')
-        console.log('[CanvasExport] Data URL generated, length:', dataURL.length)
+        logger.debug('Data URL generated for PNG export', { dataUrlLength: dataURL.length })
         
         if (dataURL.length < 100) {
           console.error('[CanvasExport] Data URL too short, export may have failed')
@@ -56,7 +53,7 @@ export function exportCanvasAsPNG(scene: Phaser.Scene, filename: string = 'beam-
         link.click()
         document.body.removeChild(link)
         
-        console.log('[CanvasExport] PNG export completed successfully')
+        logger.info('PNG export completed successfully', { filename })
       } else {
         console.error('[CanvasExport] Screenshot returned a color instead of an image')
       }
@@ -105,6 +102,6 @@ export function exportCanvasAsSVG(scene: Phaser.Scene, filename: string = 'beam-
 export function exportCanvasAsPDF(scene: Phaser.Scene, filename: string = 'beam-inspection.pdf') {
   // PDF export would require a library like jsPDF
   // This is a placeholder for future implementation
-  console.log('PDF export not yet implemented')
+  logger.warn('PDF export not yet implemented')
   return false
 }

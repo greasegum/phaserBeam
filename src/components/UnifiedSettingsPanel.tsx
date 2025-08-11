@@ -1,5 +1,6 @@
 import React, { useState } from 'react'
 import { UnifiedAlgorithmPanel } from './panels/UnifiedAlgorithmPanel'
+import { EnhancementConfigPanel } from './panels/EnhancementConfigPanel'
 import { UnifiedConfigManager } from '../core/configuration/UnifiedConfigManager'
 
 interface UnifiedSettingsPanelProps {
@@ -13,7 +14,7 @@ export const UnifiedSettingsPanel: React.FC<UnifiedSettingsPanelProps> = ({
   onConfigChange,
   onClose
 }) => {
-  const [activeSection, setActiveSection] = useState<'algorithms' | 'rendering' | 'grid' | 'export'>('algorithms')
+  const [activeSection, setActiveSection] = useState<'algorithms' | 'enhancement' | 'rendering' | 'grid' | 'export'>('algorithms')
 
   const renderSectionButton = (id: string, label: string, icon: string) => (
     <button
@@ -107,6 +108,7 @@ export const UnifiedSettingsPanel: React.FC<UnifiedSettingsPanelProps> = ({
           flexWrap: 'wrap'
         }}>
           {renderSectionButton('algorithms', 'Algorithms', '🎛️')}
+          {renderSectionButton('enhancement', 'Enhancement', '🔬')}
           {renderSectionButton('rendering', 'Rendering', '🎨')}
           {renderSectionButton('grid', 'Grid', '📐')}
           {renderSectionButton('export', 'Export', '📤')}
@@ -123,6 +125,18 @@ export const UnifiedSettingsPanel: React.FC<UnifiedSettingsPanelProps> = ({
             configManager={configManager}
             onConfigChange={onConfigChange}
           />
+        )}
+
+        {activeSection === 'enhancement' && (
+          <div style={{ padding: '24px' }}>
+            <EnhancementConfigPanel
+              config={configManager.getConfig().enhancement}
+              onConfigChange={(updates) => {
+                configManager.updateEnhancementSettings(updates)
+                onConfigChange?.(configManager.getConfig())
+              }}
+            />
+          </div>
         )}
 
         {activeSection === 'rendering' && (
